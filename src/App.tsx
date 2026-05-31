@@ -20,54 +20,12 @@ docs: string[]; risk: string; materials: Material; labourDays: number; equipment
 }
 
 const mockTenders: Tender[] = [
-{
-id: 1, portal: "BMC", title: "Reconstruction of Internal Roads at Kurla Ward",
-type: "Roads & Infrastructure", value: "₹1.85 Cr", emd: "₹3.70 L",
-valueNum: 18500000, deadline: "12 days", location: "Kurla, Mumbai", status: "new",
-summary: "Reconstruction and resurfacing of internal roads across 4 sectors in Kurla Ward. Includes storm water drain repair alongside road work.",
-docs: ["Registration Certificate", "ITR (3 years)", "Experience Certificate", "Solvency Certificate"],
-risk: "low", materials: { cement: 380, steel: 8, pipes: 0, sand: 45, misc: 12 }, labourDays: 120, equipmentDays: 45,
-},
-{
-id: 2, portal: "BMC", title: "Sewerage Network Upgradation — Andheri East Zone",
-type: "Sewerage", value: "₹4.20 Cr", emd: "₹8.40 L",
-valueNum: 42000000, deadline: "18 days", location: "Andheri East, Mumbai", status: "new",
-summary: "Laying of new sewerage lines, manholes, and junction chambers in Andheri East. Involves trench cutting in developed area with traffic management.",
-docs: ["Registration Certificate", "Similar Work Experience (₹2Cr+)", "Solvency Certificate", "GST Registration"],
-risk: "medium", materials: { cement: 420, steel: 15, pipes: 180, sand: 60, misc: 20 }, labourDays: 200, equipmentDays: 90,
-},
-{
-id: 3, portal: "MMRDA", title: "Construction of Footpaths & Drains — BKC Expansion",
-type: "Civil", value: "₹92 L", emd: "₹1.84 L",
-valueNum: 9200000, deadline: "7 days", location: "Bandra Kurla Complex", status: "urgent",
-summary: "Construction of RCC footpaths, drainage channels, and utility ducting in BKC Phase 3 expansion area. Fast-track project with strict timeline.",
-docs: ["Registration Certificate", "ITR (2 years)", "Completion Certificates"],
-risk: "low", materials: { cement: 180, steel: 6, pipes: 20, sand: 25, misc: 8 }, labourDays: 60, equipmentDays: 20,
-},
-{
-id: 4, portal: "PWD Maharashtra", title: "Repair of Sanitary Installations — Govt. Buildings Worli",
-type: "Sanitary", value: "₹38 L", emd: "₹76,000",
-valueNum: 3800000, deadline: "21 days", location: "Worli, Mumbai", status: "open",
-summary: "Annual maintenance and repair of sanitary fittings, plumbing, and water supply systems across 6 government buildings in Worli.",
-docs: ["Registration Certificate", "Plumbing License", "GST Registration"],
-risk: "low", materials: { cement: 40, steel: 2, pipes: 35, sand: 8, misc: 10 }, labourDays: 30, equipmentDays: 5,
-},
-{
-id: 5, portal: "GeM", title: "Stormwater Drain Construction — Malad West",
-type: "Civil", value: "₹2.60 Cr", emd: "₹5.20 L",
-valueNum: 26000000, deadline: "15 days", location: "Malad West, Mumbai", status: "new",
-summary: "Construction of box drains and stormwater channels to address flooding. Includes dewatering, excavation, and RCC work in densely populated area.",
-docs: ["Class I Contractor License", "ITR (3 years)", "Bank Solvency", "Experience Certificate"],
-risk: "high", materials: { cement: 520, steel: 22, pipes: 80, sand: 70, misc: 18 }, labourDays: 180, equipmentDays: 80,
-},
-{
-id: 6, portal: "CPPP", title: "Civil Works — Municipal School Renovation Dharavi",
-type: "Civil", value: "₹55 L", emd: "₹1.10 L",
-valueNum: 5500000, deadline: "25 days", location: "Dharavi, Mumbai", status: "open",
-summary: "Renovation of 3 municipal school buildings including civil repairs, waterproofing, and toilet block upgradation.",
-docs: ["Registration Certificate", "ITR (2 years)", "GST Registration"],
-risk: "low", materials: { cement: 120, steel: 4, pipes: 15, sand: 18, misc: 6 }, labourDays: 45, equipmentDays: 12,
-},
+{ id: 1, portal: "BMC", title: "Reconstruction of Internal Roads at Kurla Ward", type: "Roads & Infrastructure", value: "₹1.85 Cr", emd: "₹3.70 L", valueNum: 18500000, deadline: "12 days", location: "Kurla, Mumbai", status: "new", summary: "Reconstruction and resurfacing of internal roads across 4 sectors in Kurla Ward. Includes storm water drain repair alongside road work.", docs: ["Registration Certificate", "ITR (3 years)", "Experience Certificate", "Solvency Certificate"], risk: "low", materials: { cement: 380, steel: 8, pipes: 0, sand: 45, misc: 12 }, labourDays: 120, equipmentDays: 45 },
+{ id: 2, portal: "BMC", title: "Sewerage Network Upgradation — Andheri East Zone", type: "Sewerage", value: "₹4.20 Cr", emd: "₹8.40 L", valueNum: 42000000, deadline: "18 days", location: "Andheri East, Mumbai", status: "new", summary: "Laying of new sewerage lines, manholes, and junction chambers in Andheri East. Involves trench cutting in developed area with traffic management.", docs: ["Registration Certificate", "Similar Work Experience (₹2Cr+)", "Solvency Certificate", "GST Registration"], risk: "medium", materials: { cement: 420, steel: 15, pipes: 180, sand: 60, misc: 20 }, labourDays: 200, equipmentDays: 90 },
+{ id: 3, portal: "MMRDA", title: "Construction of Footpaths & Drains — BKC Expansion", type: "Civil", value: "₹92 L", emd: "₹1.84 L", valueNum: 9200000, deadline: "7 days", location: "Bandra Kurla Complex", status: "urgent", summary: "Construction of RCC footpaths, drainage channels, and utility ducting in BKC Phase 3 expansion area. Fast-track project with strict timeline.", docs: ["Registration Certificate", "ITR (2 years)", "Completion Certificates"], risk: "low", materials: { cement: 180, steel: 6, pipes: 20, sand: 25, misc: 8 }, labourDays: 60, equipmentDays: 20 },
+{ id: 4, portal: "PWD Maharashtra", title: "Repair of Sanitary Installations — Govt. Buildings Worli", type: "Sanitary", value: "₹38 L", emd: "₹76,000", valueNum: 3800000, deadline: "21 days", location: "Worli, Mumbai", status: "open", summary: "Annual maintenance and repair of sanitary fittings, plumbing, and water supply systems across 6 government buildings in Worli.", docs: ["Registration Certificate", "Plumbing License", "GST Registration"], risk: "low", materials: { cement: 40, steel: 2, pipes: 35, sand: 8, misc: 10 }, labourDays: 30, equipmentDays: 5 },
+{ id: 5, portal: "GeM", title: "Stormwater Drain Construction — Malad West", type: "Civil", value: "₹2.60 Cr", emd: "₹5.20 L", valueNum: 26000000, deadline: "15 days", location: "Malad West, Mumbai", status: "new", summary: "Construction of box drains and stormwater channels to address flooding. Includes dewatering, excavation, and RCC work in densely populated area.", docs: ["Class I Contractor License", "ITR (3 years)", "Bank Solvency", "Experience Certificate"], risk: "high", materials: { cement: 520, steel: 22, pipes: 80, sand: 70, misc: 18 }, labourDays: 180, equipmentDays: 80 },
+{ id: 6, portal: "CPPP", title: "Civil Works — Municipal School Renovation Dharavi", type: "Civil", value: "₹55 L", emd: "₹1.10 L", valueNum: 5500000, deadline: "25 days", location: "Dharavi, Mumbai", status: "open", summary: "Renovation of 3 municipal school buildings including civil repairs, waterproofing, and toilet block upgradation.", docs: ["Registration Certificate", "ITR (2 years)", "GST Registration"], risk: "low", materials: { cement: 120, steel: 4, pipes: 15, sand: 18, misc: 6 }, labourDays: 45, equipmentDays: 12 },
 ];
 
 const RATES = { cement: 420, steel: 58500, pipes: 2200, sand: 2200, misc: 1000, labour_skilled: 850, labour_unskilled: 600, jcb: 18000, mixer: 1200, pump: 2500 };
@@ -265,16 +223,21 @@ ACTION IN NEXT 48 HOURS
 Under 250 words. Direct like a senior contractor advising a colleague.`;
 
 try {
-const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent", {
+const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
 method: "POST",
 headers: {
 "Content-Type": "application/json",
-"X-goog-api-key": "AQ.Ab8RN6JblTtggTF9BEHOhfbaAcH8NJzw9kvLFv6Z-HP3YT_IRg"
+"Authorization": "Bearer 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",
+"HTTP-Referer": "https://tenderradar-mumbai.vercel.app",
+"X-Title": "TenderRadar Mumbai"
 },
-body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+body: JSON.stringify({
+model: "meta-llama/llama-3.1-8b-instruct:free",
+messages: [{ role: "user", content: prompt }]
+})
 });
 const data = await response.json();
-const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "Analysis unavailable.";
+const text = data.choices?.[0]?.message?.content || "Analysis unavailable.";
 setAiSummary(text);
 setGenerated(true);
 } catch {
@@ -378,10 +341,15 @@ return (
 export default function TenderRadar() {
 const [selected, setSelected] = useState<Tender | null>(null);
 const [activeFilter, setActiveFilter] = useState("All");
+const [portalFilter, setPortalFilter] = useState("All");
 const [scanning, setScanning] = useState(false);
 const [scanProgress, setScanProgress] = useState(0);
 const [lastScan, setLastScan] = useState("Today, 6:00 AM");
-const filtered = activeFilter === "All" ? mockTenders : mockTenders.filter((t: Tender) => t.type === activeFilter);
+
+const filtered = mockTenders
+.filter((t: Tender) => activeFilter === "All" || t.type === activeFilter)
+.filter((t: Tender) => portalFilter === "All" || t.portal === portalFilter);
+
 const handleScan = () => {
 setScanning(true);
 setScanProgress(0);
@@ -392,6 +360,7 @@ return p + 7;
 });
 }, 160);
 };
+
 return (
 <div style={{ minHeight: "100vh", background: "#f1f5f9", fontFamily: "'DM Sans', 'Segoe UI', sans-serif", color: "#0f172a" }}>
 <div style={{ background: "#fff", borderBottom: "1.5px solid #e2e8f0", padding: "16px 28px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", boxShadow: "0 1px 8px rgba(0,0,0,0.05)" }}>
@@ -414,14 +383,18 @@ return (
 </div>
 </div>
 {scanning && <div style={{ height: "3px", background: "#e0f2fe" }}><div style={{ height: "100%", width: `${scanProgress}%`, background: "linear-gradient(90deg, #0369a1, #0ea5e9)", transition: "width 0.18s" }} /></div>}
+
+{/* Portal filter buttons - now clickable */}
 <div style={{ background: "#fff", borderBottom: "1.5px solid #e2e8f0", padding: "10px 28px", display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+<button onClick={() => setPortalFilter("All")} style={{ background: portalFilter === "All" ? "#0369a1" : "#f1f5f9", color: portalFilter === "All" ? "#fff" : "#64748b", border: "none", borderRadius: "20px", padding: "4px 13px", fontSize: "11px", fontWeight: "700", cursor: "pointer" }}>All Portals</button>
 {PORTALS.map(p => (
-<span key={p} style={{ background: portalBg[p], color: portalColors[p], borderRadius: "20px", padding: "4px 13px", fontSize: "11px", fontWeight: "700", display: "flex", alignItems: "center", gap: "5px" }}>
-<span style={{ width: "6px", height: "6px", borderRadius: "50%", background: portalColors[p], display: "inline-block" }} />{p}
-</span>
+<button key={p} onClick={() => setPortalFilter(p)} style={{ background: portalFilter === p ? portalColors[p] : portalBg[p], color: portalFilter === p ? "#fff" : portalColors[p], border: "none", borderRadius: "20px", padding: "4px 13px", fontSize: "11px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "5px" }}>
+<span style={{ width: "6px", height: "6px", borderRadius: "50%", background: portalFilter === p ? "#fff" : portalColors[p], display: "inline-block" }} />{p}
+</button>
 ))}
 <span style={{ marginLeft: "auto", color: "#94a3b8", fontSize: "12px", fontWeight: "600" }}>{filtered.length} tenders found today</span>
 </div>
+
 <div style={{ display: "grid", gridTemplateColumns: selected ? "1fr 1fr" : "1fr", minHeight: "calc(100vh - 160px)" }}>
 <div style={{ padding: "22px 28px", overflowY: "auto" }}>
 <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
