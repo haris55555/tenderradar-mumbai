@@ -223,21 +223,31 @@ ACTION IN NEXT 48 HOURS
 Under 250 words. Direct like a senior contractor advising a colleague.`;
 
 try {
-const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+const response = await fetch(
+"https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3",
+{
 method: "POST",
 headers: {
 "Content-Type": "application/json",
-"Authorization": "Bearer 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",
-"HTTP-Referer": "https://tenderradar-mumbai.vercel.app",
-"X-Title": "TenderRadar Mumbai"
+"Authorization": "Bearer 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"
 },
 body: JSON.stringify({
-model: "meta-llama/llama-3.1-8b-instruct:free",
-messages: [{ role: "user", content: prompt }]
+inputs: prompt,
+parameters: { max_new_tokens: 500, temperature: 0.7, return_full_text: false }
 })
-});
+}
+);
 const data = await response.json();
-const text = data.choices?.[0]?.message?.content || "Analysis unavailable.";
+let text = "";
+if (Array.isArray(data) && data[0]?.generated_text) {
+text = data[0].generated_text;
+} else if (data?.generated_text) {
+text = data.generated_text;
+} else if (data?.error) {
+text = "Model is loading, please try again in 20 seconds.";
+} else {
+text = "Analysis unavailable.";
+}
 setAiSummary(text);
 setGenerated(true);
 } catch {
@@ -292,12 +302,17 @@ return (
 </div>
 {!generated ? (
 <button onClick={generateAnalysis} disabled={loading} style={{ width: "100%", background: loading ? "#f1f5f9" : "linear-gradient(135deg, #0369a1, #0ea5e9)", border: loading ? "1.5px solid #e2e8f0" : "none", color: loading ? "#94a3b8" : "#fff", borderRadius: "10px", padding: "14px", fontSize: "14px", fontWeight: "700", cursor: loading ? "not-allowed" : "pointer" }}>
-{loading ? "🤖 Analysing tender..." : "🤖 Get AI Expert Analysis"}
+{loading ? "🤖 Analysing tender... (may take 20 seconds)" : "🤖 Get AI Expert Analysis"}
 </button>
 ) : (
-<div style={{ background: "#f0f9ff", border: "1.5px solid #bae6fd", borderRadius: "12px", padding: "18px" }}>
+<div>
+<div style={{ background: "#f0f9ff", border: "1.5px solid #bae6fd", borderRadius: "12px", padding: "18px", marginBottom: "10px" }}>
 <div style={{ color: "#0369a1", fontSize: "11px", fontWeight: "800", marginBottom: "12px", letterSpacing: "1px" }}>🤖 AI EXPERT ANALYSIS</div>
 <p style={{ color: "#1e3a5f", fontSize: "13px", lineHeight: "1.75", margin: 0, whiteSpace: "pre-wrap" }}>{aiSummary}</p>
+</div>
+<button onClick={() => { setGenerated(false); setAiSummary(""); }} style={{ width: "100%", background: "#f1f5f9", border: "1.5px solid #e2e8f0", color: "#64748b", borderRadius: "10px", padding: "10px", fontSize: "13px", fontWeight: "600", cursor: "pointer" }}>
+🔄 Regenerate Analysis
+</button>
 </div>
 )}
 </div>
@@ -383,8 +398,6 @@ return (
 </div>
 </div>
 {scanning && <div style={{ height: "3px", background: "#e0f2fe" }}><div style={{ height: "100%", width: `${scanProgress}%`, background: "linear-gradient(90deg, #0369a1, #0ea5e9)", transition: "width 0.18s" }} /></div>}
-
-{/* Portal filter buttons - now clickable */}
 <div style={{ background: "#fff", borderBottom: "1.5px solid #e2e8f0", padding: "10px 28px", display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
 <button onClick={() => setPortalFilter("All")} style={{ background: portalFilter === "All" ? "#0369a1" : "#f1f5f9", color: portalFilter === "All" ? "#fff" : "#64748b", border: "none", borderRadius: "20px", padding: "4px 13px", fontSize: "11px", fontWeight: "700", cursor: "pointer" }}>All Portals</button>
 {PORTALS.map(p => (
@@ -394,7 +407,6 @@ return (
 ))}
 <span style={{ marginLeft: "auto", color: "#94a3b8", fontSize: "12px", fontWeight: "600" }}>{filtered.length} tenders found today</span>
 </div>
-
 <div style={{ display: "grid", gridTemplateColumns: selected ? "1fr 1fr" : "1fr", minHeight: "calc(100vh - 160px)" }}>
 <div style={{ padding: "22px 28px", overflowY: "auto" }}>
 <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
