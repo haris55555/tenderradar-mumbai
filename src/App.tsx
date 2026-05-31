@@ -3,84 +3,76 @@ import { useState } from "react";
 const PORTALS = ["BMC", "GeM", "CPPP", "PWD Maharashtra", "MMRDA", "MSRDC"];
 const WORK_TYPES = ["All", "Civil", "Roads & Infrastructure", "Sanitary", "Sewerage"];
 
-const portalColors = {
+const portalColors: Record<string, string> = {
 BMC: "#0369a1", GeM: "#065f46", CPPP: "#6d28d9",
 "PWD Maharashtra": "#92400e", MMRDA: "#9f1239", MSRDC: "#c2410c",
 };
-const portalBg = {
+const portalBg: Record<string, string> = {
 BMC: "#e0f2fe", GeM: "#d1fae5", CPPP: "#ede9fe",
 "PWD Maharashtra": "#fef3c7", MMRDA: "#ffe4e6", MSRDC: "#ffedd5",
 };
 
-const mockTenders = [
+interface Material { cement: number; steel: number; pipes: number; sand: number; misc: number; }
+interface Tender {
+id: number; portal: string; title: string; type: string; value: string; emd: string;
+valueNum: number; deadline: string; location: string; status: string; summary: string;
+docs: string[]; risk: string; materials: Material; labourDays: number; equipmentDays: number;
+}
+
+const mockTenders: Tender[] = [
 {
-id: 1, portal: "BMC",
-title: "Reconstruction of Internal Roads at Kurla Ward",
+id: 1, portal: "BMC", title: "Reconstruction of Internal Roads at Kurla Ward",
 type: "Roads & Infrastructure", value: "₹1.85 Cr", emd: "₹3.70 L",
 valueNum: 18500000, deadline: "12 days", location: "Kurla, Mumbai", status: "new",
 summary: "Reconstruction and resurfacing of internal roads across 4 sectors in Kurla Ward. Includes storm water drain repair alongside road work.",
 docs: ["Registration Certificate", "ITR (3 years)", "Experience Certificate", "Solvency Certificate"],
-risk: "low", materials: { cement: 380, steel: 8, pipes: 0, sand: 45, misc: 12 },
-labourDays: 120, equipmentDays: 45,
+risk: "low", materials: { cement: 380, steel: 8, pipes: 0, sand: 45, misc: 12 }, labourDays: 120, equipmentDays: 45,
 },
 {
-id: 2, portal: "BMC",
-title: "Sewerage Network Upgradation — Andheri East Zone",
+id: 2, portal: "BMC", title: "Sewerage Network Upgradation — Andheri East Zone",
 type: "Sewerage", value: "₹4.20 Cr", emd: "₹8.40 L",
 valueNum: 42000000, deadline: "18 days", location: "Andheri East, Mumbai", status: "new",
 summary: "Laying of new sewerage lines, manholes, and junction chambers in Andheri East. Involves trench cutting in developed area with traffic management.",
 docs: ["Registration Certificate", "Similar Work Experience (₹2Cr+)", "Solvency Certificate", "GST Registration"],
-risk: "medium", materials: { cement: 420, steel: 15, pipes: 180, sand: 60, misc: 20 },
-labourDays: 200, equipmentDays: 90,
+risk: "medium", materials: { cement: 420, steel: 15, pipes: 180, sand: 60, misc: 20 }, labourDays: 200, equipmentDays: 90,
 },
 {
-id: 3, portal: "MMRDA",
-title: "Construction of Footpaths & Drains — BKC Expansion",
+id: 3, portal: "MMRDA", title: "Construction of Footpaths & Drains — BKC Expansion",
 type: "Civil", value: "₹92 L", emd: "₹1.84 L",
 valueNum: 9200000, deadline: "7 days", location: "Bandra Kurla Complex", status: "urgent",
 summary: "Construction of RCC footpaths, drainage channels, and utility ducting in BKC Phase 3 expansion area. Fast-track project with strict timeline.",
 docs: ["Registration Certificate", "ITR (2 years)", "Completion Certificates"],
-risk: "low", materials: { cement: 180, steel: 6, pipes: 20, sand: 25, misc: 8 },
-labourDays: 60, equipmentDays: 20,
+risk: "low", materials: { cement: 180, steel: 6, pipes: 20, sand: 25, misc: 8 }, labourDays: 60, equipmentDays: 20,
 },
 {
-id: 4, portal: "PWD Maharashtra",
-title: "Repair of Sanitary Installations — Govt. Buildings Worli",
+id: 4, portal: "PWD Maharashtra", title: "Repair of Sanitary Installations — Govt. Buildings Worli",
 type: "Sanitary", value: "₹38 L", emd: "₹76,000",
 valueNum: 3800000, deadline: "21 days", location: "Worli, Mumbai", status: "open",
 summary: "Annual maintenance and repair of sanitary fittings, plumbing, and water supply systems across 6 government buildings in Worli.",
 docs: ["Registration Certificate", "Plumbing License", "GST Registration"],
-risk: "low", materials: { cement: 40, steel: 2, pipes: 35, sand: 8, misc: 10 },
-labourDays: 30, equipmentDays: 5,
+risk: "low", materials: { cement: 40, steel: 2, pipes: 35, sand: 8, misc: 10 }, labourDays: 30, equipmentDays: 5,
 },
 {
-id: 5, portal: "GeM",
-title: "Stormwater Drain Construction — Malad West",
+id: 5, portal: "GeM", title: "Stormwater Drain Construction — Malad West",
 type: "Civil", value: "₹2.60 Cr", emd: "₹5.20 L",
 valueNum: 26000000, deadline: "15 days", location: "Malad West, Mumbai", status: "new",
 summary: "Construction of box drains and stormwater channels to address flooding. Includes dewatering, excavation, and RCC work in densely populated area.",
 docs: ["Class I Contractor License", "ITR (3 years)", "Bank Solvency", "Experience Certificate"],
-risk: "high", materials: { cement: 520, steel: 22, pipes: 80, sand: 70, misc: 18 },
-labourDays: 180, equipmentDays: 80,
+risk: "high", materials: { cement: 520, steel: 22, pipes: 80, sand: 70, misc: 18 }, labourDays: 180, equipmentDays: 80,
 },
 {
-id: 6, portal: "CPPP",
-title: "Civil Works — Municipal School Renovation Dharavi",
+id: 6, portal: "CPPP", title: "Civil Works — Municipal School Renovation Dharavi",
 type: "Civil", value: "₹55 L", emd: "₹1.10 L",
 valueNum: 5500000, deadline: "25 days", location: "Dharavi, Mumbai", status: "open",
 summary: "Renovation of 3 municipal school buildings including civil repairs, waterproofing, and toilet block upgradation.",
 docs: ["Registration Certificate", "ITR (2 years)", "GST Registration"],
-risk: "low", materials: { cement: 120, steel: 4, pipes: 15, sand: 18, misc: 6 },
-labourDays: 45, equipmentDays: 12,
+risk: "low", materials: { cement: 120, steel: 4, pipes: 15, sand: 18, misc: 6 }, labourDays: 45, equipmentDays: 12,
 },
 ];
 
-const RATES = {
-cement: 420, steel: 58500, pipes: 2200, sand: 2200, misc: 1000,
-labour_skilled: 850, labour_unskilled: 600, jcb: 18000, mixer: 1200, pump: 2500,
-};
+const RATES = { cement: 420, steel: 58500, pipes: 2200, sand: 2200, misc: 1000, labour_skilled: 850, labour_unskilled: 600, jcb: 18000, mixer: 1200, pump: 2500 };
 
-function calcCosts(tender) {
+function calcCosts(tender: Tender) {
 const mat_cement = tender.materials.cement * RATES.cement;
 const mat_steel = tender.materials.steel * RATES.steel;
 const mat_pipes = tender.materials.pipes * RATES.pipes;
@@ -109,46 +101,40 @@ const margin = Math.round((profit / tender.valueNum) * 100);
 return { mat_cement, mat_steel, mat_pipes, mat_sand, mat_misc, totalMaterials, lab_skilled, lab_unskilled, lab_supervisor, totalLabour, eq_jcb, eq_mixer, eq_pump, totalEquipment, siteOverhead, transport, compliance, subtotal, gst, tds, labourCess, retention, totalCost, profit, margin };
 }
 
-function fmt(n) {
+function fmt(n: number): string {
 if (n >= 10000000) return "₹" + (n / 10000000).toFixed(2) + " Cr";
 if (n >= 100000) return "₹" + (n / 100000).toFixed(1) + " L";
 if (n >= 1000) return "₹" + (n / 1000).toFixed(0) + "K";
 return "₹" + n;
 }
 
-const riskConfig = {
+const riskConfig: Record<string, { color: string; bg: string; border: string; label: string }> = {
 low: { color: "#166534", bg: "#dcfce7", border: "#bbf7d0", label: "Low Risk" },
 medium: { color: "#92400e", bg: "#fef3c7", border: "#fde68a", label: "Medium Risk" },
 high: { color: "#991b1b", bg: "#fee2e2", border: "#fecaca", label: "High Risk" },
 };
-const statusConfig = {
+const statusConfig: Record<string, { color: string; bg: string; label: string }> = {
 new: { color: "#1d4ed8", bg: "#dbeafe", label: "New" },
 urgent: { color: "#b91c1c", bg: "#fee2e2", label: "Urgent" },
 open: { color: "#6d28d9", bg: "#ede9fe", label: "Open" },
 };
 
-function Badge({ children, color, bg, border }) {
-return (
-<span style={{ background: bg, color, border: `1px solid ${border || bg}`, borderRadius: "5px", padding: "2px 9px", fontSize: "11px", fontWeight: "700" }}>
-{children}
-</span>
-);
+function Badge({ children, color, bg, border }: { children: React.ReactNode; color: string; bg: string; border?: string }) {
+return <span style={{ background: bg, color, border: `1px solid ${border || bg}`, borderRadius: "5px", padding: "2px 9px", fontSize: "11px", fontWeight: "700" }}>{children}</span>;
 }
 
-function CostRow({ label, value, indent = false, bold = false }) {
+function CostRow({ label, value, indent = false, bold = false }: { label: string; value: number; indent?: boolean; bold?: boolean }) {
 return (
 <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid #f1f5f9" }}>
-<span style={{ color: bold ? "#0f172a" : "#475569", fontSize: "12px", fontWeight: bold ? "700" : "500", paddingLeft: indent ? "16px" : "0" }}>
-{indent ? "└ " : ""}{label}
-</span>
+<span style={{ color: bold ? "#0f172a" : "#475569", fontSize: "12px", fontWeight: bold ? "700" : "500", paddingLeft: indent ? "16px" : "0" }}>{indent ? "└ " : ""}{label}</span>
 <span style={{ color: bold ? "#0f172a" : "#64748b", fontSize: "12px", fontWeight: bold ? "700" : "500" }}>{fmt(value)}</span>
 </div>
 );
 }
 
-function FinancialPanel({ tender }) {
+function FinancialPanel({ tender }: { tender: Tender }) {
 const c = calcCosts(tender);
-const [open, setOpen] = useState("materials");
+const [open, setOpen] = useState<string | null>("materials");
 const sections = [
 { key: "materials", icon: "📦", label: "Materials", total: c.totalMaterials, rows: [{ label: `Cement (${tender.materials.cement} bags × ₹420)`, value: c.mat_cement }, { label: `Steel & TMT (${tender.materials.steel} MT)`, value: c.mat_steel }, { label: "Pipes & Fittings", value: c.mat_pipes }, { label: "Sand & Aggregates", value: c.mat_sand }, { label: "Miscellaneous", value: c.mat_misc }] },
 { key: "labour", icon: "👷", label: "Labour", total: c.totalLabour, rows: [{ label: "Skilled Labour (Mason, Bar Bender)", value: c.lab_skilled }, { label: "Unskilled Labour (Mazdoor)", value: c.lab_unskilled }, { label: "Supervisor / Foreman", value: c.lab_supervisor }] },
@@ -236,27 +222,18 @@ return (
 );
 }
 
-function DetailPanel({ tender, onClose }) {
+function DetailPanel({ tender, onClose }: { tender: Tender; onClose: () => void }) {
 const [aiSummary, setAiSummary] = useState("");
 const [loading, setLoading] = useState(false);
 const [generated, setGenerated] = useState(false);
-const [activeTab, setActiveTab] = useState("overview");
+const [activeTab, setActiveTab] = useState<"overview" | "financial">("overview");
 const risk = riskConfig[tender.risk];
 const c = calcCosts(tender);
 
 const generateAnalysis = async () => {
 setLoading(true);
 setAiSummary("");
-try {
-const response = await fetch("https://api.anthropic.com/v1/messages", {
-method: "POST",
-headers: { "Content-Type": "application/json" },
-body: JSON.stringify({
-model: "claude-sonnet-4-20250514",
-max_tokens: 800,
-messages: [{
-role: "user",
-content: `You are a senior advisor helping a Mumbai-based construction contractor evaluate a government tender. Give a sharp, practical assessment in plain conversational English.
+const prompt = `You are a senior advisor helping a Mumbai-based construction contractor evaluate a government tender. Give a sharp, practical assessment in plain conversational English.
 
 Tender: ${tender.title}
 Portal: ${tender.portal}
@@ -285,12 +262,19 @@ WATCH OUT FOR
 ACTION IN NEXT 48 HOURS
 (step by step checklist to apply)
 
-Under 250 words. Direct like a senior contractor advising a colleague.`
-}]
-})
+Under 250 words. Direct like a senior contractor advising a colleague.`;
+
+try {
+const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent", {
+method: "POST",
+headers: {
+"Content-Type": "application/json",
+"X-goog-api-key": "AQ.Ab8RN6JblTtggTF9BEHOhfbaAcH8NJzw9kvLFv6Z-HP3YT_IRg"
+},
+body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
 });
 const data = await response.json();
-const text = data.content?.find(b => b.type === "text")?.text || "Analysis unavailable.";
+const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "Analysis unavailable.";
 setAiSummary(text);
 setGenerated(true);
 } catch {
@@ -308,7 +292,7 @@ return (
 </div>
 <h2 style={{ color: "#0f172a", fontSize: "16px", fontWeight: "800", lineHeight: "1.4", marginBottom: "16px" }}>{tender.title}</h2>
 <div style={{ display: "flex", gap: "8px", marginBottom: "20px" }}>
-{["overview", "financial"].map(tab => (
+{(["overview", "financial"] as const).map(tab => (
 <button key={tab} onClick={() => setActiveTab(tab)} style={{ background: activeTab === tab ? "#0369a1" : "#f1f5f9", color: activeTab === tab ? "#fff" : "#64748b", border: "none", borderRadius: "8px", padding: "8px 18px", fontSize: "13px", fontWeight: "700", cursor: "pointer" }}>
 {tab === "overview" ? "📋 Overview" : "💰 Financial Analysis"}
 </button>
@@ -331,7 +315,7 @@ return (
 <div style={{ background: "#f8fafc", borderRadius: "10px", padding: "14px", marginBottom: "14px" }}>
 <div style={{ color: "#94a3b8", fontSize: "10px", fontWeight: "700", letterSpacing: "1px", marginBottom: "10px" }}>DOCUMENTS REQUIRED</div>
 <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-{tender.docs.map(doc => (
+{tender.docs.map((doc: string) => (
 <span key={doc} style={{ background: "#ede9fe", color: "#5b21b6", borderRadius: "6px", padding: "4px 10px", fontSize: "11px", fontWeight: "600" }}>{doc}</span>
 ))}
 </div>
@@ -361,7 +345,7 @@ return (
 );
 }
 
-function TenderCard({ tender, onSelect, selected }) {
+function TenderCard({ tender, onSelect, selected }: { tender: Tender; onSelect: (t: Tender) => void; selected: boolean }) {
 const risk = riskConfig[tender.risk];
 const status = statusConfig[tender.status];
 const c = calcCosts(tender);
@@ -392,13 +376,12 @@ return (
 }
 
 export default function TenderRadar() {
-const [selected, setSelected] = useState(null);
+const [selected, setSelected] = useState<Tender | null>(null);
 const [activeFilter, setActiveFilter] = useState("All");
 const [scanning, setScanning] = useState(false);
 const [scanProgress, setScanProgress] = useState(0);
 const [lastScan, setLastScan] = useState("Today, 6:00 AM");
-const filtered = activeFilter === "All" ? mockTenders : mockTenders.filter(t => t.type === activeFilter);
-
+const filtered = activeFilter === "All" ? mockTenders : mockTenders.filter((t: Tender) => t.type === activeFilter);
 const handleScan = () => {
 setScanning(true);
 setScanProgress(0);
@@ -409,7 +392,6 @@ return p + 7;
 });
 }, 160);
 };
-
 return (
 <div style={{ minHeight: "100vh", background: "#f1f5f9", fontFamily: "'DM Sans', 'Segoe UI', sans-serif", color: "#0f172a" }}>
 <div style={{ background: "#fff", borderBottom: "1.5px solid #e2e8f0", padding: "16px 28px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", boxShadow: "0 1px 8px rgba(0,0,0,0.05)" }}>
@@ -443,7 +425,7 @@ return (
 <div style={{ display: "grid", gridTemplateColumns: selected ? "1fr 1fr" : "1fr", minHeight: "calc(100vh - 160px)" }}>
 <div style={{ padding: "22px 28px", overflowY: "auto" }}>
 <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
-{[{ label: "Total Tenders", value: filtered.length, bg: "#f0f9ff", color: "#0369a1" }, { label: "Urgent", value: filtered.filter(t => t.status === "urgent").length, bg: "#fef2f2", color: "#b91c1c" }, { label: "Low Risk", value: filtered.filter(t => t.risk === "low").length, bg: "#f0fdf4", color: "#166534" }].map(s => (
+{[{ label: "Total Tenders", value: filtered.length, bg: "#f0f9ff", color: "#0369a1" }, { label: "Urgent", value: filtered.filter((t: Tender) => t.status === "urgent").length, bg: "#fef2f2", color: "#b91c1c" }, { label: "Low Risk", value: filtered.filter((t: Tender) => t.risk === "low").length, bg: "#f0fdf4", color: "#166534" }].map(s => (
 <div key={s.label} style={{ background: s.bg, borderRadius: "12px", padding: "14px", textAlign: "center", border: "1.5px solid #e2e8f0" }}>
 <div style={{ color: s.color, fontSize: "26px", fontWeight: "900" }}>{s.value}</div>
 <div style={{ color: "#94a3b8", fontSize: "11px", fontWeight: "600", marginTop: "2px" }}>{s.label}</div>
@@ -456,7 +438,7 @@ return (
 ))}
 </div>
 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-{filtered.map(t => <TenderCard key={t.id} tender={t} onSelect={setSelected} selected={selected?.id === t.id} />)}
+{filtered.map((t: Tender) => <TenderCard key={t.id} tender={t} onSelect={setSelected} selected={selected?.id === t.id} />)}
 </div>
 </div>
 {selected && (
