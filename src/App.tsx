@@ -181,81 +181,8 @@ return (
 }
 
 function DetailPanel({ tender, onClose }: { tender: Tender; onClose: () => void }) {
-const [aiSummary, setAiSummary] = useState("");
-const [loading, setLoading] = useState(false);
-const [generated, setGenerated] = useState(false);
 const [activeTab, setActiveTab] = useState<"overview" | "financial">("overview");
 const risk = riskConfig[tender.risk];
-const c = calcCosts(tender);
-
-const generateAnalysis = async () => {
-setLoading(true);
-setAiSummary("");
-const prompt = `You are a senior advisor helping a Mumbai-based construction contractor evaluate a government tender. Give a sharp, practical assessment in plain conversational English.
-
-Tender: ${tender.title}
-Portal: ${tender.portal}
-Value: ${tender.value}
-EMD: ${tender.emd}
-Deadline: ${tender.deadline}
-Location: ${tender.location}
-Work Type: ${tender.type}
-Summary: ${tender.summary}
-Estimated Total Cost: ${fmt(c.totalCost)}
-Estimated Profit: ${fmt(c.profit)}
-Profit Margin: ${c.margin}%
-Risk Level: ${tender.risk}
-
-Give your response in exactly these 4 sections:
-
-WHAT THE WORK IS
-(2 sentences, plain language)
-
-IS THIS WORTH BIDDING?
-(honest view on the ${c.margin}% margin)
-
-WATCH OUT FOR
-(2-3 Mumbai-specific risk points)
-
-ACTION IN NEXT 48 HOURS
-(step by step checklist to apply)
-
-Under 250 words. Direct like a senior contractor advising a colleague.`;
-
-try {
-const response = await fetch(
-"https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3",
-{
-method: "POST",
-headers: {
-"Content-Type": "application/json",
-"Authorization": "Bearer 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"
-},
-body: JSON.stringify({
-inputs: prompt,
-parameters: { max_new_tokens: 500, temperature: 0.7, return_full_text: false }
-})
-}
-);
-const data = await response.json();
-let text = "";
-if (Array.isArray(data) && data[0]?.generated_text) {
-text = data[0].generated_text;
-} else if (data?.generated_text) {
-text = data.generated_text;
-} else if (data?.error) {
-text = "Model is loading, please try again in 20 seconds.";
-} else {
-text = "Analysis unavailable.";
-}
-setAiSummary(text);
-setGenerated(true);
-} catch {
-setAiSummary("Could not generate analysis. Please try again.");
-setGenerated(true);
-}
-setLoading(false);
-};
 
 return (
 <div style={{ background: "#fff", borderRadius: "16px", border: "1.5px solid #e2e8f0", padding: "24px", height: "100%", overflowY: "auto", boxSizing: "border-box", boxShadow: "0 4px 24px rgba(0,0,0,0.06)" }}>
@@ -293,28 +220,13 @@ return (
 ))}
 </div>
 </div>
-<div style={{ background: risk.bg, border: `1px solid ${risk.border}`, borderRadius: "10px", padding: "12px", marginBottom: "20px" }}>
+<div style={{ background: risk.bg, border: `1px solid ${risk.border}`, borderRadius: "10px", padding: "12px" }}>
 <span style={{ color: risk.color, fontSize: "13px", fontWeight: "700" }}>
 {tender.risk === "low" && "✓ LOW RISK — Strong candidate, recommended to bid"}
 {tender.risk === "medium" && "⚠ MEDIUM RISK — Evaluate cash flow before committing"}
 {tender.risk === "high" && "✕ HIGH RISK — Complex execution, bid only if well resourced"}
 </span>
 </div>
-{!generated ? (
-<button onClick={generateAnalysis} disabled={loading} style={{ width: "100%", background: loading ? "#f1f5f9" : "linear-gradient(135deg, #0369a1, #0ea5e9)", border: loading ? "1.5px solid #e2e8f0" : "none", color: loading ? "#94a3b8" : "#fff", borderRadius: "10px", padding: "14px", fontSize: "14px", fontWeight: "700", cursor: loading ? "not-allowed" : "pointer" }}>
-{loading ? "🤖 Analysing tender... (may take 20 seconds)" : "🤖 Get AI Expert Analysis"}
-</button>
-) : (
-<div>
-<div style={{ background: "#f0f9ff", border: "1.5px solid #bae6fd", borderRadius: "12px", padding: "18px", marginBottom: "10px" }}>
-<div style={{ color: "#0369a1", fontSize: "11px", fontWeight: "800", marginBottom: "12px", letterSpacing: "1px" }}>🤖 AI EXPERT ANALYSIS</div>
-<p style={{ color: "#1e3a5f", fontSize: "13px", lineHeight: "1.75", margin: 0, whiteSpace: "pre-wrap" }}>{aiSummary}</p>
-</div>
-<button onClick={() => { setGenerated(false); setAiSummary(""); }} style={{ width: "100%", background: "#f1f5f9", border: "1.5px solid #e2e8f0", color: "#64748b", borderRadius: "10px", padding: "10px", fontSize: "13px", fontWeight: "600", cursor: "pointer" }}>
-🔄 Regenerate Analysis
-</button>
-</div>
-)}
 </div>
 ) : (
 <FinancialPanel tender={tender} />
