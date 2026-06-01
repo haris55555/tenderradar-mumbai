@@ -27,12 +27,15 @@ const SAMPLE_TENDERS: Tender[] = [
 { id: 6, portal: "CPPP", title: "Civil Works — Municipal School Renovation Dharavi", type: "Civil", value: "₹55 L", emd: "₹1.10 L", valueNum: 5500000, deadline: "25 days", location: "Dharavi, Mumbai", status: "open", summary: "Renovation of 3 municipal school buildings including civil repairs and waterproofing.", docs: ["Registration Certificate", "ITR (2 years)", "GST Registration"], risk: "low" },
 ];
 
+const AICREDITS_KEY = "sk-live-d42243cc807dbb226103665abd51b4a7d311dea0ca749054b89eacf71c5fc232";
+const APIFY_TOKEN = "apify_api_Jn12wqlpm5VlUAh2Spqkynw8vOdGX22RYrAg";
+const ACTOR_ID = "YrQuEkowkNCLdk4j2";
+
 function detectType(title: string): string {
 const t = title.toLowerCase();
-if (t.includes("road") || t.includes("highway") || t.includes("bridge") || t.includes("flyover")) return "Roads & Infrastructure";
-if (t.includes("sewer") || t.includes("drainage") || t.includes("drain")) return "Sewerage";
+if (t.includes("road") || t.includes("highway") || t.includes("bridge") || t.includes("flyover") || t.includes("pavement")) return "Roads & Infrastructure";
+if (t.includes("sewer") || t.includes("drainage") || t.includes("drain") || t.includes("sewage")) return "Sewerage";
 if (t.includes("sanit") || t.includes("toilet") || t.includes("plumb") || t.includes("water supply")) return "Sanitary";
-if (t.includes("civil") || t.includes("construction") || t.includes("building") || t.includes("renovation")) return "Civil";
 return "Civil";
 }
 
@@ -44,7 +47,7 @@ return "high";
 
 function detectPortal(org: string): string {
 const o = org.toLowerCase();
-if (o.includes("bmc") || o.includes("brihanmumbai")) return "BMC";
+if (o.includes("bmc") || o.includes("brihanmumbai") || o.includes("mumbai municipal")) return "BMC";
 if (o.includes("mmrda")) return "MMRDA";
 if (o.includes("msrdc")) return "MSRDC";
 if (o.includes("pwd") || o.includes("public works")) return "PWD Maharashtra";
@@ -76,9 +79,11 @@ return <span style={{ background: bg, color, border: `1px solid ${border || bg}`
 
 function DetailPanel({ tender, onClose }: { tender: Tender; onClose: () => void }) {
 const [activeTab, setActiveTab] = useState<"overview" | "financial">("overview");
+const [aiSummary, setAiSummary] = useState("");
+const [loading, setLoading] = useState(false);
+const [generated, setGenerated] = useState(false);
 const risk = riskConfig[tender.risk];
 
-const emdNum = tender.valueNum * 0.02;
 const materialCost = tender.valueNum * 0.45;
 const labourCost = tender.valueNum * 0.18;
 const equipmentCost = tender.valueNum * 0.08;
@@ -94,6 +99,65 @@ const raStages = [
 { stage: "RA Bill 3 (75%)", spend: Math.round(totalCost * 0.25), receive: Math.round(tender.valueNum * 0.28) },
 { stage: "Final Bill (100%)", spend: Math.round(totalCost * 0.1), receive: Math.round(tender.valueNum * 0.18) },
 ];
+
+const generateAnalysis = async () => {
+setLoading(true);
+setAiSummary("");
+try {
+const response = await fetch("https://api.aicredits.in/v1/chat/completions", {
+method: "POST",
+headers: {
+"Content-Type": "application/json",
+"Authorization": `Bearer ${AICREDITS_KEY}`
+},
+body: JSON.stringify({
+model: "claude-sonnet-4-5",
+max_tokens: 800,
+messages: [{
+role: "user",
+content: `You are a senior advisor helping a Mumbai-based construction contractor evaluate a government tender.
+
+Tender: ${tender.title}
+Portal: ${tender.portal}
+Value: ${tender.value}
+EMD: ${tender.emd}
+Deadline: ${tender.deadline}
+Location: ${tender.location}
+Work Type: ${tender.type}
+Summary: ${tender.summary}
+Estimated Total Cost: ${fmt(totalCost)}
+Estimated Profit: ${fmt(profit)}
+Profit Margin: ${margin}%
+Risk Level: ${tender.risk}
+
+Give your response in exactly these 4 sections:
+
+WHAT THE WORK IS
+(2 sentences, plain language)
+
+IS THIS WORTH BIDDING?
+(honest view on the ${margin}% margin)
+
+WATCH OUT FOR
+(2-3 Mumbai-specific risk points)
+
+ACTION IN NEXT 48 HOURS
+(step by step checklist to apply)
+
+Under 250 words. Direct like a senior contractor advising a colleague.`
+}]
+})
+});
+const data = await response.json();
+const text = data.choices?.[0]?.message?.content || "Analysis unavailable.";
+setAiSummary(text);
+setGenerated(true);
+} catch {
+setAiSummary("Could not generate analysis. Please try again.");
+setGenerated(true);
+}
+setLoading(false);
+};
 
 return (
 <div style={{ background: "#fff", borderRadius: "16px", border: "1.5px solid #e2e8f0", padding: "24px", height: "100%", overflowY: "auto", boxSizing: "border-box", boxShadow: "0 4px 24px rgba(0,0,0,0.06)" }}>
@@ -131,13 +195,28 @@ return (
 ))}
 </div>
 </div>
-<div style={{ background: risk.bg, border: `1px solid ${risk.border}`, borderRadius: "10px", padding: "12px" }}>
+<div style={{ background: risk.bg, border: `1px solid ${risk.border}`, borderRadius: "10px", padding: "12px", marginBottom: "16px" }}>
 <span style={{ color: risk.color, fontSize: "13px", fontWeight: "700" }}>
 {tender.risk === "low" && "✓ LOW RISK — Strong candidate, recommended to bid"}
 {tender.risk === "medium" && "⚠ MEDIUM RISK — Evaluate cash flow before committing"}
 {tender.risk === "high" && "✕ HIGH RISK — Complex execution, bid only if well resourced"}
 </span>
 </div>
+{!generated ? (
+<button onClick={generateAnalysis} disabled={loading} style={{ width: "100%", background: loading ? "#f1f5f9" : "linear-gradient(135deg, #0369a1, #0ea5e9)", border: loading ? "1.5px solid #e2e8f0" : "none", color: loading ? "#94a3b8" : "#fff", borderRadius: "10px", padding: "14px", fontSize: "14px", fontWeight: "700", cursor: loading ? "not-allowed" : "pointer" }}>
+{loading ? "🤖 Analysing tender..." : "🤖 Get AI Expert Analysis"}
+</button>
+) : (
+<div>
+<div style={{ background: "#f0f9ff", border: "1.5px solid #bae6fd", borderRadius: "12px", padding: "18px", marginBottom: "10px" }}>
+<div style={{ color: "#0369a1", fontSize: "11px", fontWeight: "800", marginBottom: "12px", letterSpacing: "1px" }}>🤖 AI EXPERT ANALYSIS</div>
+<p style={{ color: "#1e3a5f", fontSize: "13px", lineHeight: "1.75", margin: 0, whiteSpace: "pre-wrap" }}>{aiSummary}</p>
+</div>
+<button onClick={() => { setGenerated(false); setAiSummary(""); }} style={{ width: "100%", background: "#f1f5f9", border: "1.5px solid #e2e8f0", color: "#64748b", borderRadius: "10px", padding: "10px", fontSize: "13px", fontWeight: "600", cursor: "pointer" }}>
+🔄 Regenerate Analysis
+</button>
+</div>
+)}
 </div>
 ) : (
 <div>
@@ -152,11 +231,11 @@ return (
 <div style={{ marginBottom: "16px" }}>
 <div style={{ color: "#64748b", fontSize: "11px", fontWeight: "700", letterSpacing: "1px", marginBottom: "8px" }}>EXECUTION COST BIFURCATION</div>
 {[
-{ icon: "📦", label: "Materials", value: materialCost },
-{ icon: "👷", label: "Labour", value: labourCost },
-{ icon: "🚜", label: "Equipment & Machinery", value: equipmentCost },
-{ icon: "🏗", label: "Site Overheads & Others", value: overheadCost },
-{ icon: "💰", label: "Taxes & Deductions", value: taxCost },
+{ icon: "📦", label: "Materials (45%)", value: materialCost },
+{ icon: "👷", label: "Labour (18%)", value: labourCost },
+{ icon: "🚜", label: "Equipment & Machinery (8%)", value: equipmentCost },
+{ icon: "🏗", label: "Site Overheads (6%)", value: overheadCost },
+{ icon: "💰", label: "Taxes & Deductions (5%)", value: taxCost },
 ].map(item => (
 <div key={item.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "#f8fafc", borderRadius: "8px", marginBottom: "6px", border: "1px solid #e2e8f0" }}>
 <span style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>{item.icon} {item.label}</span>
@@ -245,9 +324,6 @@ const [scanProgress, setScanProgress] = useState(0);
 const [lastScan, setLastScan] = useState("Loading...");
 const [isLive, setIsLive] = useState(false);
 
-const APIFY_TOKEN = "apify_api_Jn12wqlpm5VlUAh2Spqkynw8vOdGX22RYrAg";
-const ACTOR_ID = "YrQuEkowkNCLdk4j2";
-
 const fetchLiveTenders = async () => {
 setScanning(true);
 setScanProgress(0);
@@ -270,13 +346,13 @@ id: i + 1,
 portal: detectPortal(item.organisation || ""),
 title: item.title || "Government Tender",
 type: detectType(item.title || ""),
-value: valueText || "Value N/A",
+value: valueText || "See Portal",
 emd: fmt(valueNum * 0.02),
 valueNum: valueNum || 5000000,
 deadline: item.deadline || "Check portal",
 location: "Maharashtra",
 status: "new",
-summary: `${item.title}. Organisation: ${item.organisation || "Government of Maharashtra"}. Closing: ${item.deadline || "Check portal"}.`,
+summary: `${item.title}. Organisation: ${item.organisation || "Government of Maharashtra"}. Reference: ${item.organisation || ""}. Deadline: ${item.deadline || "Check portal"}.`,
 docs: ["Registration Certificate", "ITR (3 years)", "Experience Certificate", "GST Registration"],
 risk: detectRisk(valueNum),
 };
@@ -284,22 +360,20 @@ risk: detectRisk(valueNum),
 if (mapped.length > 0) {
 setTenders(mapped);
 setIsLive(true);
-setLastScan("Just now — Live data ✓");
+setLastScan("Just now — 🟢 Live data");
 } else {
-setLastScan("Just now — Using sample data");
+setLastScan("Just now — Sample data");
 }
 }
 }
 } catch {
-setLastScan("Just now — Using sample data");
+setLastScan("Just now — Sample data");
 }
 setScanProgress(100);
 setTimeout(() => setScanning(false), 500);
 };
 
-useEffect(() => {
-fetchLiveTenders();
-}, []);
+useEffect(() => { fetchLiveTenders(); }, []);
 
 const filtered = tenders
 .filter((t: Tender) => activeFilter === "All" || t.type === activeFilter)
@@ -372,3 +446,4 @@ TenderRadar <span style={{ color: "#0369a1" }}>Mumbai</span>
 </div>
 );
 }
+
