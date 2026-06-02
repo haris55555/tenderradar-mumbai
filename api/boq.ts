@@ -2,79 +2,46 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 const AICREDITS_KEY = "sk-live-d42243cc807dbb226103665abd51b4a7d311dea0ca749054b89eacf71c5fc232";
 
-async function fetchTenderPage(url: string): Promise<string> {
-  try {
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      }
-    });
-    return await response.text();
-  } catch {
-    return '';
-  }
-}
-
-function extractPDFLinks(html: string, baseUrl: string): string[] {
-  const links: string[] = [];
-  const patterns = [
-    /href=["']([^"']*\.pdf[^"']*)/gi,
-    /href=["']([^"']*boq[^"']*)/gi,
-    /href=["']([^"']*document[^"']*)/gi,
-    /href=["']([^"']*tender[^"']*download[^"']*)/gi,
-  ];
-  
-  patterns.forEach(pattern => {
-    let match;
-    while ((match = pattern.exec(html)) !== null) {
-      let link = match[1];
-      if (!link.startsWith('http')) {
-        try {
-          link = new URL(link, baseUrl).href;
-        } catch {
-          continue;
-        }
-      }
-      if (!links.includes(link)) links.push(link);
-    }
-  });
-  
-  return links.slice(0, 3);
-}
-
 async function fetchPDFText(pdfUrl: string): Promise<string> {
   try {
     const response = await fetch(pdfUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0' }
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/pdf,*/*',
+      },
+      signal: AbortSignal.timeout(8000)
     });
+    
+    if (!response.ok) return '';
+    
     const buffer = await response.arrayBuffer();
     const bytes = new Uint8Array(buffer);
-    
-    // Extract text from PDF binary
-    let text = '';
     const decoder = new TextDecoder('latin1');
     const raw = decoder.decode(bytes);
     
-    // Extract readable text between PDF stream markers
-    const streamPattern = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+    // Extract text from PDF
+    let text = '';
+    
+    // Method 1: Extract text objects
+    const textPattern = /\(([^)]{2,150})\)/g;
     let match;
-    while ((match = streamPattern.exec(raw)) !== null) {
-      const cleaned = match[1]
-        .replace(/[^\x20-\x7E\n\r]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-      if (cleaned.length > 50) text += cleaned + '\n';
-    }
-    
-    // Also extract text objects
-    const textPattern = /\(([^)]{3,200})\)/g;
     while ((match = textPattern.exec(raw)) !== null) {
-      const t = match[1].replace(/[^\x20-\x7E]/g, '').trim();
-      if (t.length > 3) text += t + ' ';
+      const t = match[1]
+        .replace(/\\n/g, ' ')
+        .replace(/\\r/g, ' ')
+        .replace(/[^\x20-\x7E]/g, '')
+        .trim();
+      if (t.length > 2) text += t + ' ';
     }
     
-    return text.substring(0, 5000);
+    // Method 2: Extract from BT/ET blocks
+    const btPattern = /BT([\s\S]*?)ET/g;
+    while ((match = btPattern.exec(raw)) !== null) {
+      const block = match[1].replace(/[^\x20-\x7E\n]/g, ' ').trim();
+      if (block.length > 10) text += block + '\n';
+    }
+    
+    return text.substring(0, 8000);
   } catch {
     return '';
   }
@@ -105,64 +72,73 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { tenderTitle, tenderValue, tenderType, organisation, refNo, tenderUrl } = req.body;
+    const { tenderTitle, tenderValue, tenderType, organisation, refNo, pdfUrl } = req.body;
 
     let pdfText = '';
-    let pdfFound = false;
+    let dataSource = 'pwd_estimation';
 
-    // Step 1: Try to fetch actual BOQ PDF if URL provided
-    if (tenderUrl) {
-      const html = await fetchTenderPage(tenderUrl);
-      if (html) {
-        const pdfLinks = extractPDFLinks(html, tenderUrl);
-        for (const pdfLink of pdfLinks) {
-          const text = await fetchPDFText(pdfLink);
-          if (text.length > 200) {
-            pdfText = text;
-            pdfFound = true;
-            break;
-          }
-        }
+    // Try to read actual PDF if URL provided
+    if (pdfUrl && pdfUrl.startsWith('http')) {
+      pdfText = await fetchPDFText(pdfUrl);
+      if (pdfText.length > 200) {
+        dataSource = 'actual_pdf';
       }
     }
 
-    // Step 2: Build AI prompt
+    const mumRates = `Current Mumbai Market Rates (June 2026):
+- Cement OPC 53 Grade: ₹420/bag (50kg)
+- TMT Steel Fe500D: ₹58,500/MT  
+- River Sand (Zone II): ₹2,200/MT
+- 20mm Coarse Aggregate: ₹1,850/MT
+- 40mm Coarse Aggregate: ₹1,650/MT
+- Brickwork CM 1:6: ₹3,200/Cum
+- PCC M15 (1:2:4): ₹4,200/Cum
+- RCC M25: ₹6,800/Cum
+- RCC M30: ₹7,400/Cum
+- Earthwork excavation: ₹185/Cum
+- Plastering 12mm CM 1:6: ₹165/Sqm
+- Waterproofing treatment: ₹285/Sqm
+- Vitrified tile flooring: ₹850/Sqm
+- Painting two coats: ₹85/Sqm
+- Mason (Mistri): ₹850/day
+- Bar Bender: ₹800/day  
+- Carpenter: ₹850/day
+- Mazdoor (Unskilled): ₹600/day
+- Supervisor/Foreman: ₹1,200/day
+- JCB Excavator: ₹18,000/day
+- Concrete Mixer (1 bag): ₹1,200/day
+- Dewatering Pump: ₹2,500/day
+- Compactor/Roller: ₹4,500/day
+- Tipper/Dumper: ₹3,500/day`;
+
     let prompt = '';
-    
-    if (pdfFound && pdfText) {
-      prompt = `You are an expert quantity surveyor. Extract BOQ data from this actual tender PDF text and calculate real costs using Mumbai market rates.
+
+    if (dataSource === 'actual_pdf' && pdfText) {
+      prompt = `You are an expert quantity surveyor for Mumbai government construction projects.
 
 TENDER DETAILS:
 Title: ${tenderTitle}
 Organisation: ${organisation}
+Reference No: ${refNo || 'N/A'}
 Type: ${tenderType}
 
-ACTUAL PDF TEXT FROM TENDER:
+ACTUAL PDF CONTENT FROM TENDER DOCUMENT:
 ${pdfText}
 
-Extract real BOQ line items from the PDF text above. Use these current Mumbai market rates:
-- Cement OPC 53: ₹420/bag (50kg)
-- TMT Steel Fe500: ₹58,500/MT
-- River Sand: ₹2,200/MT  
-- 20mm Aggregate: ₹1,850/MT
-- Brickwork CM 1:6: ₹3,200/Cum
-- PCC M15: ₹4,200/Cum
-- RCC M25: ₹6,800/Cum
-- Earthwork excavation: ₹185/Cum
-- Plastering 12mm: ₹165/Sqm
-- Mason (Mistri): ₹850/day
-- Mazdoor: ₹600/day
-- JCB Excavator: ₹18,000/day
-- Concrete Mixer: ₹1,200/day
+${mumRates}
 
-If PDF text contains BOQ items with quantities — use those exact quantities.
-If PDF text is unclear — estimate based on tender type and value.
+INSTRUCTIONS:
+1. Extract BOQ line items from the PDF content above
+2. Use the Mumbai market rates provided
+3. Calculate actual costs based on quantities found in PDF
+4. If PDF has unclear quantities, estimate based on tender scope
 
-Respond ONLY in this exact JSON format:
+Respond ONLY in this exact JSON (no other text):
 {
   "dataSource": "actual_pdf",
+  "tenderValue": 0,
   "boqItems": [
-    {"item": "item name", "unit": "unit", "quantity": 0, "rate": 0, "amount": 0}
+    {"item": "description", "unit": "Cum/Sqm/MT/Nos/LS", "quantity": 0, "rate": 0, "amount": 0}
   ],
   "materialCost": 0,
   "labourCost": 0,
@@ -170,49 +146,33 @@ Respond ONLY in this exact JSON format:
   "overheadCost": 0,
   "contingency": 0,
   "totalCost": 0,
-  "tenderValue": 0,
   "profitMargin": 0,
   "estimatedProfit": 0,
-  "keyMaterials": ["material1", "material2"],
+  "keyMaterials": ["item1", "item2", "item3"],
   "majorEquipment": ["equip1", "equip2"],
   "executionDays": 0,
   "riskFactors": ["risk1", "risk2", "risk3"]
 }`;
     } else {
-      // No PDF found — use PWD Schedule of Rates estimation
-      prompt = `You are an expert quantity surveyor for Mumbai construction projects.
+      prompt = `You are an expert quantity surveyor for Mumbai government construction projects.
 
 TENDER DETAILS:
 Title: ${tenderTitle}
-Organisation: ${organisation || 'Government of Maharashtra'}
-Reference: ${refNo || 'N/A'}
+Organisation: ${organisation || 'BMC Mumbai / Government of Maharashtra'}
+Reference No: ${refNo || 'N/A'}
 Tender Value: ${tenderValue || 'Not specified'}
 Work Type: ${tenderType || 'Civil'}
 
-No BOQ PDF was accessible. Provide a detailed estimation based on:
-1. Maharashtra PWD Schedule of Rates 2024-25
-2. Current Mumbai market rates
-3. Similar past projects in Maharashtra
+${mumRates}
 
-Current Mumbai market rates:
-- Cement OPC 53: ₹420/bag (50kg)
-- TMT Steel Fe500: ₹58,500/MT
-- River Sand: ₹2,200/MT
-- 20mm Aggregate: ₹1,850/MT
-- Brickwork CM 1:6: ₹3,200/Cum
-- PCC M15: ₹4,200/Cum
-- RCC M25: ₹6,800/Cum
-- Earthwork excavation: ₹185/Cum
-- Plastering 12mm: ₹165/Sqm
-- Mason (Mistri): ₹850/day
-- Mazdoor: ₹600/day
-- JCB Excavator: ₹18,000/day
+Based on the tender title and Maharashtra PWD Schedule of Rates 2024-25, provide realistic BOQ estimation.
 
-Respond ONLY in this exact JSON format:
+Respond ONLY in this exact JSON (no other text):
 {
   "dataSource": "pwd_estimation",
+  "tenderValue": 0,
   "boqItems": [
-    {"item": "item name", "unit": "unit", "quantity": 0, "rate": 0, "amount": 0}
+    {"item": "description", "unit": "Cum/Sqm/MT/Nos/LS", "quantity": 0, "rate": 0, "amount": 0}
   ],
   "materialCost": 0,
   "labourCost": 0,
@@ -220,10 +180,9 @@ Respond ONLY in this exact JSON format:
   "overheadCost": 0,
   "contingency": 0,
   "totalCost": 0,
-  "tenderValue": 0,
   "profitMargin": 0,
   "estimatedProfit": 0,
-  "keyMaterials": ["material1", "material2"],
+  "keyMaterials": ["item1", "item2", "item3"],
   "majorEquipment": ["equip1", "equip2"],
   "executionDays": 0,
   "riskFactors": ["risk1", "risk2", "risk3"]
@@ -237,7 +196,6 @@ Respond ONLY in this exact JSON format:
     try {
       boqData = JSON.parse(cleaned);
     } catch {
-      // Try to extract JSON from response
       const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         boqData = JSON.parse(jsonMatch[0]);
@@ -246,17 +204,19 @@ Respond ONLY in this exact JSON format:
       }
     }
 
-    return res.status(200).json({ 
-      success: true, 
+    return res.status(200).json({
+      success: true,
       boq: boqData,
-      pdfFound,
-      message: pdfFound ? 'Real BOQ data extracted from tender PDF' : 'Estimated based on PWD Schedule of Rates 2024-25'
+      pdfRead: dataSource === 'actual_pdf',
+      message: dataSource === 'actual_pdf' 
+        ? '✅ Real BOQ extracted from actual tender PDF' 
+        : '📊 Estimated using Maharashtra PWD Schedule of Rates 2024-25'
     });
 
   } catch (error) {
-    return res.status(500).json({ 
-      error: 'BOQ analysis failed', 
-      details: String(error) 
+    return res.status(500).json({
+      error: 'BOQ analysis failed',
+      details: String(error)
     });
   }
 }
