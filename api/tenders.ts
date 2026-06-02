@@ -50,7 +50,9 @@ function detectPortal(org: string, title: string, existingPortal?: string): stri
 function parseDeadline(deadline: string): string {
   if (!deadline || deadline === 'Check Portal') return 'Check Portal';
   try {
-    const date = new Date(deadline);
+    // Fix BMC date format "30 March, 202620260330" remove trailing 8 digits
+    const cleaned = deadline.replace(/(\d{4})\d{6,8}$/, '$1').trim();
+    const date = new Date(cleaned);
     if (!isNaN(date.getTime())) {
       const days = Math.ceil((date.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
       if (days < 0) return 'Expired';
