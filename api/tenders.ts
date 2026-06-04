@@ -3,10 +3,20 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 const APIFY_TOKEN = "apify_api_Jn12wqlpm5VlUAh2Spqkynw8vOdGX22RYrAg";
 const BMC_ACTOR_ID = "YrQuEkowkNCLdk4j2";
 
+function fixBMCDate(deadline: string): string {
+  if (!deadline || deadline === 'Check Portal') return deadline;
+  // Fix "30 March, 20262" -> "30 March, 2026" (5-digit year)
+  let fixed = deadline.replace(/(\d{2})\s+(\w+),?\s+(\d{5,})/g, (match, day, month, year) => {
+    return `${day} ${month}, ${year.substring(0, 4)}`;
+  });
+  // Fix "30 March, 202620260330" -> "30 March, 2026" (trailing digits)
+  fixed = fixed.replace(/(\d{4})\d{4,8}$/, '$1').trim();
+  return fixed;
+}
+
 function cleanDeadline(deadline: string): string {
   if (!deadline || deadline === 'Check Portal') return 'Check Portal';
-  // Fix BMC date format "30 March, 202620260330" — remove trailing 6-8 digits after year
-  const cleaned = deadline.replace(/(\d{4})\d{6,8}$/, '$1').trim();
+  const cleaned = fixBMCDate(deadline);
   try {
     const date = new Date(cleaned);
     if (!isNaN(date.getTime())) {
@@ -22,7 +32,7 @@ function cleanDeadline(deadline: string): string {
 
 function isExpired(deadline: string): boolean {
   if (!deadline) return false;
-  const cleaned = deadline.replace(/(\d{4})\d{6,8}$/, '$1').trim();
+  const cleaned = fixBMCDate(deadline);
   try {
     const date = new Date(cleaned);
     if (!isNaN(date.getTime())) {
