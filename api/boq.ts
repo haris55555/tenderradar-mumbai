@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const GEMINI_KEY = "AQ.Ab8RN6I3_JiQ9G2mS6K9wUlI2qnXCYNr-TGSEDHmDlObuBemZA";
+const GEMINI_KEY = "AQ.Ab8RN6JOnzExxgmVFPRfAqx_NTSoOD0uriGqGBNDMLBFtqNoNw";
 const AICREDITS_KEY = "sk-live-d42243cc807dbb226103665abd51b4a7d311dea0ca749054b89eacf71c5fc232";
 
 async function downloadPDFAsBase64(pdfUrl: string): Promise<string> {
