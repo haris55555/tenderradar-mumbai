@@ -11,36 +11,23 @@ async function fetchPDFText(pdfUrl: string): Promise<string> {
       },
       signal: AbortSignal.timeout(8000)
     });
-    
     if (!response.ok) return '';
-    
     const buffer = await response.arrayBuffer();
     const bytes = new Uint8Array(buffer);
     const decoder = new TextDecoder('latin1');
     const raw = decoder.decode(bytes);
-    
-    // Extract text from PDF
     let text = '';
-    
-    // Method 1: Extract text objects
     const textPattern = /\(([^)]{2,150})\)/g;
     let match;
     while ((match = textPattern.exec(raw)) !== null) {
-      const t = match[1]
-        .replace(/\\n/g, ' ')
-        .replace(/\\r/g, ' ')
-        .replace(/[^\x20-\x7E]/g, '')
-        .trim();
+      const t = match[1].replace(/\\n/g, ' ').replace(/\\r/g, ' ').replace(/[^\x20-\x7E]/g, '').trim();
       if (t.length > 2) text += t + ' ';
     }
-    
-    // Method 2: Extract from BT/ET blocks
     const btPattern = /BT([\s\S]*?)ET/g;
     while ((match = btPattern.exec(raw)) !== null) {
       const block = match[1].replace(/[^\x20-\x7E\n]/g, ' ').trim();
       if (block.length > 10) text += block + '\n';
     }
-    
     return text.substring(0, 8000);
   } catch {
     return '';
@@ -77,100 +64,72 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let pdfText = '';
     let dataSource = 'pwd_estimation';
 
-    // Try to read actual PDF if URL provided
     if (pdfUrl && pdfUrl.startsWith('http')) {
       pdfText = await fetchPDFText(pdfUrl);
-      if (pdfText.length > 200) {
-        dataSource = 'actual_pdf';
-      }
+      if (pdfText.length > 200) dataSource = 'actual_pdf';
     }
 
     const mumRates = `Current Mumbai Market Rates (June 2026):
 - Cement OPC 53 Grade: ₹420/bag (50kg)
-- TMT Steel Fe500D: ₹58,500/MT  
+- TMT Steel Fe500D: ₹58,500/MT
 - River Sand (Zone II): ₹2,200/MT
 - 20mm Coarse Aggregate: ₹1,850/MT
-- 40mm Coarse Aggregate: ₹1,650/MT
 - Brickwork CM 1:6: ₹3,200/Cum
-- PCC M15 (1:2:4): ₹4,200/Cum
+- PCC M15: ₹4,200/Cum
 - RCC M25: ₹6,800/Cum
-- RCC M30: ₹7,400/Cum
 - Earthwork excavation: ₹185/Cum
-- Plastering 12mm CM 1:6: ₹165/Sqm
-- Waterproofing treatment: ₹285/Sqm
-- Vitrified tile flooring: ₹850/Sqm
-- Painting two coats: ₹85/Sqm
+- Plastering 12mm: ₹165/Sqm
+- Waterproofing: ₹285/Sqm
 - Mason (Mistri): ₹850/day
-- Bar Bender: ₹800/day  
-- Carpenter: ₹850/day
-- Mazdoor (Unskilled): ₹600/day
-- Supervisor/Foreman: ₹1,200/day
+- Bar Bender: ₹800/day
+- Mazdoor: ₹600/day
+- Supervisor: ₹1,200/day
 - JCB Excavator: ₹18,000/day
-- Concrete Mixer (1 bag): ₹1,200/day
-- Dewatering Pump: ₹2,500/day
-- Compactor/Roller: ₹4,500/day
-- Tipper/Dumper: ₹3,500/day`;
+- Concrete Mixer: ₹1,200/day
+- Dewatering Pump: ₹2,500/day`;
 
-    let prompt = '';
+    const basePrompt = `You are an expert quantity surveyor and bid strategist for Mumbai government construction projects.
 
-    if (dataSource === 'actual_pdf' && pdfText) {
-      prompt = `You are an expert quantity surveyor for Mumbai government construction projects.
-
-TENDER DETAILS:
-Title: ${tenderTitle}
-Organisation: ${organisation}
-Reference No: ${refNo || 'N/A'}
-Type: ${tenderType}
-
-ACTUAL PDF CONTENT FROM TENDER DOCUMENT:
-${pdfText}
-
-${mumRates}
-
-INSTRUCTIONS:
-1. Extract BOQ line items from the PDF content above
-2. Use the Mumbai market rates provided
-3. Calculate actual costs based on quantities found in PDF
-4. If PDF has unclear quantities, estimate based on tender scope
-
-Respond ONLY in this exact JSON (no other text):
-{
-  "dataSource": "actual_pdf",
-  "tenderValue": 0,
-  "boqItems": [
-    {"item": "description", "unit": "Cum/Sqm/MT/Nos/LS", "quantity": 0, "rate": 0, "amount": 0}
-  ],
-  "materialCost": 0,
-  "labourCost": 0,
-  "equipmentCost": 0,
-  "overheadCost": 0,
-  "contingency": 0,
-  "totalCost": 0,
-  "profitMargin": 0,
-  "estimatedProfit": 0,
-  "keyMaterials": ["item1", "item2", "item3"],
-  "majorEquipment": ["equip1", "equip2"],
-  "executionDays": 0,
-  "riskFactors": ["risk1", "risk2", "risk3"]
-}`;
-    } else {
-      prompt = `You are an expert quantity surveyor for Mumbai government construction projects.
+IMPORTANT CONTEXT:
+- "Tender Value" = Department's estimated cost (what govt thinks it costs)
+- "Winning Bid" = What contractor quotes (typically 8-13% BELOW tender value to win)
+- "Execution Cost" = Actual cost to do the work (always LESS than winning bid)
+- "Profit" = Winning Bid minus Execution Cost (NOT tender value minus execution cost)
+- "Working Capital" = Money contractor needs upfront before first RA bill payment
 
 TENDER DETAILS:
 Title: ${tenderTitle}
 Organisation: ${organisation || 'BMC Mumbai / Government of Maharashtra'}
-Reference No: ${refNo || 'N/A'}
-Tender Value: ${tenderValue || 'Not specified'}
+Reference: ${refNo || 'N/A'}
+Tender Value (Dept Estimate): ${tenderValue || 'Not specified'}
 Work Type: ${tenderType || 'Civil'}
+
+${dataSource === 'actual_pdf' ? `ACTUAL PDF CONTENT:\n${pdfText}` : ''}
 
 ${mumRates}
 
-Based on the tender title and Maharashtra PWD Schedule of Rates 2024-25, provide realistic BOQ estimation.
+Calculate realistic figures:
+1. departmentEstimate = tender value as given
+2. expectedWinningBid = departmentEstimate × 0.88 (contractor bids 12% below to win)
+3. executionCost = expectedWinningBid × 0.85 (85% of bid goes to actual execution)
+4. expectedProfit = expectedWinningBid - executionCost
+5. profitMargin = (expectedProfit / expectedWinningBid) × 100
+6. workingCapitalNeeded = executionCost × 0.18 (need 18% upfront before first RA payment)
+7. raCycledays = 60 (standard govt payment cycle)
+8. bidRecommendation = "YES" if profitMargin > 10%, "REVIEW" if 7-10%, "NO" if below 7%
 
 Respond ONLY in this exact JSON (no other text):
 {
-  "dataSource": "pwd_estimation",
-  "tenderValue": 0,
+  "dataSource": "${dataSource}",
+  "departmentEstimate": 0,
+  "expectedWinningBid": 0,
+  "executionCost": 0,
+  "expectedProfit": 0,
+  "profitMargin": 0,
+  "workingCapitalNeeded": 0,
+  "raCycleDays": 60,
+  "bidRecommendation": "YES",
+  "bidRecommendationReason": "reason in one line",
   "boqItems": [
     {"item": "description", "unit": "Cum/Sqm/MT/Nos/LS", "quantity": 0, "rate": 0, "amount": 0}
   ],
@@ -179,44 +138,34 @@ Respond ONLY in this exact JSON (no other text):
   "equipmentCost": 0,
   "overheadCost": 0,
   "contingency": 0,
-  "totalCost": 0,
-  "profitMargin": 0,
-  "estimatedProfit": 0,
   "keyMaterials": ["item1", "item2", "item3"],
   "majorEquipment": ["equip1", "equip2"],
   "executionDays": 0,
   "riskFactors": ["risk1", "risk2", "risk3"]
 }`;
-    }
 
-    const aiResponse = await analyzeWithAI(prompt);
+    const aiResponse = await analyzeWithAI(basePrompt);
     const cleaned = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
-    
+
     let boqData;
     try {
       boqData = JSON.parse(cleaned);
     } catch {
       const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        boqData = JSON.parse(jsonMatch[0]);
-      } else {
-        throw new Error('Could not parse AI response');
-      }
+      if (jsonMatch) boqData = JSON.parse(jsonMatch[0]);
+      else throw new Error('Could not parse AI response');
     }
 
     return res.status(200).json({
       success: true,
       boq: boqData,
       pdfRead: dataSource === 'actual_pdf',
-      message: dataSource === 'actual_pdf' 
-        ? '✅ Real BOQ extracted from actual tender PDF' 
+      message: dataSource === 'actual_pdf'
+        ? '✅ Real BOQ extracted from actual tender PDF'
         : '📊 Estimated using Maharashtra PWD Schedule of Rates 2024-25'
     });
 
   } catch (error) {
-    return res.status(500).json({
-      error: 'BOQ analysis failed',
-      details: String(error)
-    });
+    return res.status(500).json({ error: 'BOQ analysis failed', details: String(error) });
   }
 }
