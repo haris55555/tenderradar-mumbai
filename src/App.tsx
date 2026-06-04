@@ -15,12 +15,25 @@ BMC: "#e0f2fe", GeM: "#d1fae5", CPPP: "#ede9fe",
 interface BOQItem { item: string; unit: string; quantity: number; rate: number; amount: number; }
 interface BOQData {
 dataSource: string;
+departmentEstimate: number;
+expectedWinningBid: number;
+executionCost: number;
+expectedProfit: number;
+profitMargin: number;
+workingCapitalNeeded: number;
+raCycleDays: number;
+bidRecommendation: string;
+bidRecommendationReason: string;
 boqItems: BOQItem[];
-materialCost: number; labourCost: number; equipmentCost: number;
-overheadCost: number; contingency: number; totalCost: number;
-profitMargin: number; estimatedProfit: number;
-keyMaterials: string[]; majorEquipment: string[];
-executionDays: number; riskFactors: string[];
+materialCost: number;
+labourCost: number;
+equipmentCost: number;
+overheadCost: number;
+contingency: number;
+keyMaterials: string[];
+majorEquipment: string[];
+executionDays: number;
+riskFactors: string[];
 }
 
 interface Tender {
@@ -37,10 +50,8 @@ const SAMPLE_TENDERS: Tender[] = [
 
 function cleanDeadline(deadline: string): string {
 if (!deadline) return 'Check Portal';
-if (deadline === 'Check Portal' || deadline === 'Today' ||
-deadline === 'Tomorrow' || deadline === 'Expired') return deadline;
+if (deadline === 'Check Portal' || deadline === 'Today' || deadline === 'Tomorrow' || deadline === 'Expired') return deadline;
 if (deadline.includes(' days')) return deadline;
-// Remove trailing duplicate date numbers e.g. "30 March, 202620260330"
 const cleaned = deadline.replace(/(\d{4})\d{6,8}$/, '$1').trim();
 try {
 const date = new Date(cleaned);
@@ -77,27 +88,73 @@ function Badge({ children, color, bg, border }: { children: React.ReactNode; col
 return <span style={{ background: bg, color, border: `1px solid ${border || bg}`, borderRadius: "5px", padding: "2px 9px", fontSize: "11px", fontWeight: "700" }}>{children}</span>;
 }
 
-function BOQPanel({ boq, message }: { boq: BOQData; message: string }) {
-const isReal = boq.dataSource === 'actual_pdf';
+function DecisionCard({ boq }: { boq: BOQData }) {
+const recColor = boq.bidRecommendation === 'YES' ? '#166534' : boq.bidRecommendation === 'REVIEW' ? '#92400e' : '#991b1b';
+const recBg = boq.bidRecommendation === 'YES' ? '#dcfce7' : boq.bidRecommendation === 'REVIEW' ? '#fef3c7' : '#fee2e2';
+const recIcon = boq.bidRecommendation === 'YES' ? '✅' : boq.bidRecommendation === 'REVIEW' ? '⚠️' : '❌';
+
 return (
-<div style={{ background: isReal ? "#f0fdf4" : "#f8fafc", border: `1.5px solid ${isReal ? "#bbf7d0" : "#e2e8f0"}`, borderRadius: "12px", padding: "18px", marginBottom: "16px" }}>
-<div style={{ color: isReal ? "#166534" : "#64748b", fontSize: "12px", fontWeight: "800", marginBottom: "14px", letterSpacing: "1px" }}>
-{message}
+<div style={{ background: recBg, border: `2px solid ${recColor}`, borderRadius: "14px", padding: "20px", marginBottom: "16px" }}>
+<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+<div>
+<div style={{ color: recColor, fontSize: "11px", fontWeight: "800", letterSpacing: "1px", marginBottom: "4px" }}>BID DECISION</div>
+<div style={{ color: recColor, fontSize: "24px", fontWeight: "900" }}>{recIcon} {boq.bidRecommendation}</div>
 </div>
-<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "16px" }}>
+<div style={{ textAlign: "right" }}>
+<div style={{ color: "#94a3b8", fontSize: "10px", fontWeight: "700" }}>PROFIT MARGIN</div>
+<div style={{ color: recColor, fontSize: "28px", fontWeight: "900" }}>{boq.profitMargin}%</div>
+</div>
+</div>
+<p style={{ color: recColor, fontSize: "13px", fontWeight: "600", margin: "0 0 16px 0" }}>{boq.bidRecommendationReason}</p>
+<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
 {[
-{ label: "Total Cost", value: fmt(boq.totalCost), bg: "#fef2f2", color: "#991b1b" },
-{ label: "Est. Profit", value: fmt(boq.estimatedProfit), bg: "#f0fdf4", color: "#166534" },
-{ label: "Margin", value: boq.profitMargin + "%", bg: "#fffbeb", color: "#92400e" }
+{ label: "Dept Estimate", value: fmt(boq.departmentEstimate), sub: "Govt's budget" },
+{ label: "Your Bid", value: fmt(boq.expectedWinningBid), sub: "Quote this to win" },
+{ label: "Execution Cost", value: fmt(boq.executionCost), sub: "Your actual spend" },
 ].map(item => (
-<div key={item.label} style={{ background: item.bg, borderRadius: "8px", padding: "10px", textAlign: "center" }}>
-<div style={{ color: "#94a3b8", fontSize: "10px", fontWeight: "700", marginBottom: "3px" }}>{item.label}</div>
-<div style={{ color: item.color, fontSize: "14px", fontWeight: "800" }}>{item.value}</div>
+<div key={item.label} style={{ background: "rgba(255,255,255,0.7)", borderRadius: "10px", padding: "10px", textAlign: "center" }}>
+<div style={{ color: "#94a3b8", fontSize: "10px", fontWeight: "700", marginBottom: "2px" }}>{item.label}</div>
+<div style={{ color: "#0f172a", fontSize: "13px", fontWeight: "800" }}>{item.value}</div>
+<div style={{ color: "#94a3b8", fontSize: "10px", marginTop: "2px" }}>{item.sub}</div>
 </div>
 ))}
 </div>
-<div style={{ marginBottom: "14px" }}>
-<div style={{ color: "#64748b", fontSize: "11px", fontWeight: "700", letterSpacing: "1px", marginBottom: "8px" }}>EXECUTION COST BIFURCATION</div>
+</div>
+);
+}
+
+function WorkingCapitalCard({ boq }: { boq: BOQData }) {
+return (
+<div style={{ background: "#f0f9ff", border: "1.5px solid #bae6fd", borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
+<div style={{ color: "#0369a1", fontSize: "11px", fontWeight: "800", letterSpacing: "1px", marginBottom: "12px" }}>💰 WORKING CAPITAL ANALYSIS</div>
+<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+{[
+{ label: "Working Capital Needed", value: fmt(boq.workingCapitalNeeded), color: "#991b1b", sub: "Need this upfront" },
+{ label: "RA Payment Cycle", value: `${boq.raCycleDays} days`, color: "#0369a1", sub: "Govt pays every" },
+{ label: "Expected Profit", value: fmt(boq.expectedProfit), color: "#166534", sub: "After all costs" },
+{ label: "Execution Timeline", value: `${boq.executionDays} days`, color: "#6d28d9", sub: "To complete work" },
+].map(item => (
+<div key={item.label} style={{ background: "#fff", borderRadius: "8px", padding: "10px", border: "1px solid #e2e8f0" }}>
+<div style={{ color: "#94a3b8", fontSize: "10px", fontWeight: "700", marginBottom: "2px" }}>{item.label}</div>
+<div style={{ color: item.color, fontSize: "15px", fontWeight: "800" }}>{item.value}</div>
+<div style={{ color: "#94a3b8", fontSize: "10px", marginTop: "2px" }}>{item.sub}</div>
+</div>
+))}
+</div>
+</div>
+);
+}
+
+function BOQPanel({ boq, message }: { boq: BOQData; message: string }) {
+const isReal = boq.dataSource === 'actual_pdf';
+return (
+<div>
+<DecisionCard boq={boq} />
+<WorkingCapitalCard boq={boq} />
+<div style={{ background: isReal ? "#f0fdf4" : "#f8fafc", border: `1.5px solid ${isReal ? "#bbf7d0" : "#e2e8f0"}`, borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
+<div style={{ color: isReal ? "#166534" : "#64748b", fontSize: "11px", fontWeight: "800", marginBottom: "12px" }}>{message}</div>
+<div style={{ marginBottom: "12px" }}>
+<div style={{ color: "#64748b", fontSize: "11px", fontWeight: "700", letterSpacing: "1px", marginBottom: "8px" }}>COST BIFURCATION</div>
 {[
 { icon: "📦", label: "Materials", value: boq.materialCost },
 { icon: "👷", label: "Labour", value: boq.labourCost },
@@ -105,18 +162,18 @@ return (
 { icon: "🏗", label: "Overheads", value: boq.overheadCost },
 { icon: "⚡", label: "Contingency", value: boq.contingency },
 ].map(item => (
-<div key={item.label} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "#fff", borderRadius: "8px", marginBottom: "4px", border: "1px solid #e2e8f0" }}>
+<div key={item.label} style={{ display: "flex", justifyContent: "space-between", padding: "7px 10px", background: "#fff", borderRadius: "7px", marginBottom: "4px", border: "1px solid #e2e8f0" }}>
 <span style={{ fontSize: "12px", fontWeight: "600", color: "#0f172a" }}>{item.icon} {item.label}</span>
 <span style={{ fontSize: "12px", fontWeight: "800", color: "#0369a1" }}>{fmt(item.value)}</span>
 </div>
 ))}
 <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 12px", background: "#0369a1", borderRadius: "8px", marginTop: "6px" }}>
 <span style={{ color: "#fff", fontSize: "12px", fontWeight: "800" }}>TOTAL EXECUTION COST</span>
-<span style={{ color: "#fff", fontSize: "12px", fontWeight: "800" }}>{fmt(boq.totalCost)}</span>
+<span style={{ color: "#fff", fontSize: "12px", fontWeight: "800" }}>{fmt(boq.executionCost)}</span>
 </div>
 </div>
 {boq.boqItems && boq.boqItems.length > 0 && (
-<div style={{ marginBottom: "14px" }}>
+<div style={{ marginBottom: "12px" }}>
 <div style={{ color: "#64748b", fontSize: "11px", fontWeight: "700", letterSpacing: "1px", marginBottom: "8px" }}>BOQ LINE ITEMS</div>
 <div style={{ background: "#fff", borderRadius: "8px", overflow: "hidden", border: "1px solid #e2e8f0" }}>
 <div style={{ display: "grid", gridTemplateColumns: "3fr 1fr 1fr 1fr 1fr", padding: "8px 12px", background: "#f1f5f9" }}>
@@ -125,7 +182,7 @@ return (
 ))}
 </div>
 {boq.boqItems.slice(0, 10).map((item, i) => (
-<div key={i} style={{ display: "grid", gridTemplateColumns: "3fr 1fr 1fr 1fr 1fr", padding: "8px 12px", borderBottom: "1px solid #f1f5f9" }}>
+<div key={i} style={{ display: "grid", gridTemplateColumns: "3fr 1fr 1fr 1fr 1fr", padding: "7px 12px", borderBottom: "1px solid #f1f5f9" }}>
 <span style={{ color: "#334155", fontSize: "11px" }}>{item.item}</span>
 <span style={{ color: "#64748b", fontSize: "11px" }}>{item.unit}</span>
 <span style={{ color: "#64748b", fontSize: "11px" }}>{item.quantity}</span>
@@ -136,7 +193,7 @@ return (
 </div>
 </div>
 )}
-<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "12px" }}>
+<div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "10px" }}>
 <div style={{ background: "#fff", borderRadius: "8px", padding: "10px", border: "1px solid #e2e8f0" }}>
 <div style={{ color: "#64748b", fontSize: "10px", fontWeight: "700", marginBottom: "6px" }}>KEY MATERIALS</div>
 {(boq.keyMaterials || []).map((m, i) => <div key={i} style={{ color: "#334155", fontSize: "11px", marginBottom: "2px" }}>• {m}</div>)}
@@ -146,12 +203,13 @@ return (
 {(boq.majorEquipment || []).map((e, i) => <div key={i} style={{ color: "#334155", fontSize: "11px", marginBottom: "2px" }}>• {e}</div>)}
 </div>
 </div>
-<div style={{ background: "#fffbeb", borderRadius: "8px", padding: "10px", border: "1px solid #fde68a", marginBottom: "8px" }}>
+<div style={{ background: "#fffbeb", borderRadius: "8px", padding: "10px", border: "1px solid #fde68a" }}>
 <div style={{ color: "#92400e", fontSize: "10px", fontWeight: "700", marginBottom: "6px" }}>⚠ RISK FACTORS</div>
 {(boq.riskFactors || []).map((r, i) => <div key={i} style={{ color: "#92400e", fontSize: "11px", marginBottom: "2px" }}>• {r}</div>)}
 </div>
-<div style={{ color: "#94a3b8", fontSize: "10px" }}>
-{isReal ? "✅ Based on actual tender PDF document" : "📊 Based on Maharashtra PWD Schedule of Rates 2024-25. Actual costs may vary by ±15%."}
+<div style={{ color: "#94a3b8", fontSize: "10px", marginTop: "8px" }}>
+{isReal ? "✅ Extracted from actual tender PDF" : "📊 Estimated using Maharashtra PWD Schedule of Rates 2024-25. Accuracy ±15%."}
+</div>
 </div>
 </div>
 );
@@ -230,14 +288,16 @@ alert("BOQ analysis failed. Please try again.");
 setBoqLoading(false);
 };
 
-const totalCost = boqData?.totalCost || tender.valueNum * 0.82;
-const profit = boqData?.estimatedProfit || tender.valueNum * 0.18;
-
-const raStages = [
-{ stage: "RA Bill 1 (25%)", spend: Math.round(totalCost * 0.3), receive: Math.round(tender.valueNum * 0.22) },
-{ stage: "RA Bill 2 (50%)", spend: Math.round(totalCost * 0.35), receive: Math.round(tender.valueNum * 0.24) },
-{ stage: "RA Bill 3 (75%)", spend: Math.round(totalCost * 0.25), receive: Math.round(tender.valueNum * 0.28) },
-{ stage: "Final Bill (100%)", spend: Math.round(totalCost * 0.1), receive: Math.round(tender.valueNum * 0.18) },
+const raStages = boqData ? [
+{ stage: "RA Bill 1 (25% complete)", spend: Math.round(boqData.executionCost * 0.25), receive: Math.round(boqData.expectedWinningBid * 0.22) },
+{ stage: "RA Bill 2 (50% complete)", spend: Math.round(boqData.executionCost * 0.25), receive: Math.round(boqData.expectedWinningBid * 0.23) },
+{ stage: "RA Bill 3 (75% complete)", spend: Math.round(boqData.executionCost * 0.25), receive: Math.round(boqData.expectedWinningBid * 0.23) },
+{ stage: "Final Bill (100% complete)", spend: Math.round(boqData.executionCost * 0.25), receive: Math.round(boqData.expectedWinningBid * 0.27) },
+] : [
+{ stage: "RA Bill 1 (25% complete)", spend: Math.round(tender.valueNum * 0.82 * 0.25), receive: Math.round(tender.valueNum * 0.88 * 0.22) },
+{ stage: "RA Bill 2 (50% complete)", spend: Math.round(tender.valueNum * 0.82 * 0.25), receive: Math.round(tender.valueNum * 0.88 * 0.23) },
+{ stage: "RA Bill 3 (75% complete)", spend: Math.round(tender.valueNum * 0.82 * 0.25), receive: Math.round(tender.valueNum * 0.88 * 0.23) },
+{ stage: "Final Bill (100% complete)", spend: Math.round(tender.valueNum * 0.82 * 0.25), receive: Math.round(tender.valueNum * 0.88 * 0.27) },
 ];
 
 return (
@@ -248,12 +308,12 @@ return (
 </div>
 <h2 style={{ color: "#0f172a", fontSize: "15px", fontWeight: "800", lineHeight: "1.4", marginBottom: "16px" }}>{tender.title}</h2>
 <button onClick={generateBOQ} disabled={boqLoading} style={{ width: "100%", background: boqLoading ? "#f1f5f9" : boqData ? "#166534" : "linear-gradient(135deg, #166534, #16a34a)", border: "none", color: boqLoading ? "#94a3b8" : "#fff", borderRadius: "10px", padding: "14px", fontSize: "14px", fontWeight: "700", cursor: boqLoading ? "not-allowed" : "pointer", marginBottom: "12px" }}>
-{boqLoading ? "📊 Reading BOQ..." : boqData ? "✅ BOQ Complete — View Financial Tab" : "📊 Get Real BOQ Analysis & Cost Calculation"}
+{boqLoading ? "📊 Analysing BOQ & Calculating Bid..." : boqData ? "✅ BOQ Complete — View Financial Tab" : "📊 Get BOQ Analysis & Bid Decision"}
 </button>
 <div style={{ display: "flex", gap: "8px", marginBottom: "20px" }}>
 {(["overview", "financial"] as const).map(tab => (
 <button key={tab} onClick={() => setActiveTab(tab)} style={{ background: activeTab === tab ? "#0369a1" : "#f1f5f9", color: activeTab === tab ? "#fff" : "#64748b", border: "none", borderRadius: "8px", padding: "8px 18px", fontSize: "13px", fontWeight: "700", cursor: "pointer" }}>
-{tab === "overview" ? "📋 Overview" : "💰 Financial Analysis"}
+{tab === "overview" ? "📋 Overview" : "💰 Financial & Bid Analysis"}
 </button>
 ))}
 </div>
@@ -314,7 +374,7 @@ return (
 ) : (
 <div style={{ textAlign: "center", padding: "40px 20px" }}>
 <div style={{ fontSize: "40px", marginBottom: "16px" }}>📊</div>
-<p style={{ color: "#64748b", fontSize: "14px", marginBottom: "16px" }}>Click "Get Real BOQ Analysis" above to see actual cost calculations</p>
+<p style={{ color: "#64748b", fontSize: "14px" }}>Click "Get BOQ Analysis & Bid Decision" above</p>
 </div>
 )}
 <div style={{ marginBottom: "16px" }}>
@@ -334,8 +394,14 @@ return (
 </div>
 );
 })}
+<div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", padding: "10px 14px", background: "#f0fdf4" }}>
+<span style={{ color: "#166534", fontSize: "11px", fontWeight: "800" }}>TOTAL</span>
+<span style={{ color: "#991b1b", fontSize: "11px", fontWeight: "800" }}>{fmt(boqData?.executionCost || tender.valueNum * 0.82)}</span>
+<span style={{ color: "#166534", fontSize: "11px", fontWeight: "800" }}>{fmt(boqData?.expectedWinningBid || tender.valueNum * 0.88)}</span>
+<span style={{ color: "#166534", fontSize: "11px", fontWeight: "800" }}>+{fmt(boqData?.expectedProfit || tender.valueNum * 0.06)}</span>
 </div>
-<p style={{ color: "#94a3b8", fontSize: "11px", marginTop: "6px" }}>⚠ Payments shown after standard deductions</p>
+</div>
+<p style={{ color: "#94a3b8", fontSize: "11px", marginTop: "6px" }}>⚠ After TDS 2%, Labour Cess 1%, Retention 5%</p>
 </div>
 <div>
 <div style={{ color: "#64748b", fontSize: "11px", fontWeight: "700", letterSpacing: "1px", marginBottom: "8px" }}>MUMBAI MATERIAL RATES (TODAY)</div>
@@ -365,8 +431,9 @@ function TenderCard({ tender, onSelect, selected }: { tender: Tender; onSelect: 
 const risk = riskConfig[tender.risk];
 const status = statusConfig[tender.status];
 const deadline = cleanDeadline(tender.deadline);
+const isExpired = deadline === 'Expired';
 return (
-<div onClick={() => onSelect(tender)} style={{ background: selected ? "#f0f9ff" : "#fff", border: selected ? "1.5px solid #0ea5e9" : "1.5px solid #e2e8f0", borderRadius: "14px", padding: "18px 20px", cursor: "pointer", transition: "all 0.18s", boxShadow: selected ? "0 4px 20px rgba(14,165,233,0.12)" : "0 1px 4px rgba(0,0,0,0.05)" }}>
+<div onClick={() => onSelect(tender)} style={{ background: selected ? "#f0f9ff" : "#fff", border: selected ? "1.5px solid #0ea5e9" : "1.5px solid #e2e8f0", borderRadius: "14px", padding: "18px 20px", cursor: "pointer", transition: "all 0.18s", boxShadow: selected ? "0 4px 20px rgba(14,165,233,0.12)" : "0 1px 4px rgba(0,0,0,0.05)", opacity: isExpired ? 0.6 : 1 }}>
 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px", flexWrap: "wrap", gap: "6px" }}>
 <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
 <Badge color={portalColors[tender.portal]} bg={portalBg[tender.portal]}>{tender.portal}</Badge>
@@ -377,9 +444,9 @@ return (
 <p style={{ color: "#0f172a", fontSize: "14px", fontWeight: "700", lineHeight: "1.45", marginBottom: "12px" }}>{tender.title}</p>
 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "10px" }}>
 {[
-{ label: "VALUE", value: tender.value, bg: "#f8fafc", color: "#0f172a" },
+{ label: "DEPT ESTIMATE", value: tender.value, bg: "#f8fafc", color: "#0f172a" },
 { label: "EMD", value: tender.emd, bg: "#fffbeb", color: "#92400e" },
-{ label: "DEADLINE", value: deadline, bg: "#fef2f2", color: "#991b1b" }
+{ label: "DEADLINE", value: deadline, bg: isExpired ? "#fef2f2" : "#f0fdf4", color: isExpired ? "#991b1b" : "#166534" }
 ].map(item => (
 <div key={item.label} style={{ background: item.bg, borderRadius: "8px", padding: "8px 10px" }}>
 <div style={{ color: "#94a3b8", fontSize: "10px", fontWeight: "700", marginBottom: "2px" }}>{item.label}</div>
@@ -389,7 +456,7 @@ return (
 </div>
 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
 <span style={{ color: "#64748b", fontSize: "12px" }}>📍 {tender.location}</span>
-<span style={{ background: "#f0fdf4", color: "#166534", fontSize: "11px", fontWeight: "700", padding: "3px 8px", borderRadius: "6px" }}>📊 BOQ Available</span>
+<span style={{ background: "#f0fdf4", color: "#166534", fontSize: "11px", fontWeight: "700", padding: "3px 8px", borderRadius: "6px" }}>📊 BOQ + Bid Analysis</span>
 </div>
 </div>
 );
@@ -439,7 +506,8 @@ useEffect(() => { fetchTenders(); }, []);
 
 const filtered = tenders
 .filter(t => activeFilter === "All" || t.type === activeFilter)
-.filter(t => portalFilter === "All" || t.portal === portalFilter);
+.filter(t => portalFilter === "All" || t.portal === portalFilter)
+.filter(t => cleanDeadline(t.deadline) !== 'Expired');
 
 return (
 <div style={{ minHeight: "100vh", background: "#f1f5f9", fontFamily: "'DM Sans', 'Segoe UI', sans-serif", color: "#0f172a" }}>
@@ -453,7 +521,7 @@ TenderRadar <span style={{ color: "#0369a1" }}>Mumbai</span>
 </h1>
 </div>
 <p style={{ color: "#94a3b8", fontSize: "12px", margin: 0 }}>
-Real-time tender discovery with BOQ analysis · BMC · CPPP · PWD · MMRDA · MSRDC
+Real-time tender discovery · BOQ Analysis · Bid Decision Tool
 {isLive && ` · BMC: ${counts.bmc} · PWD: ${counts.pwd} · CPPP: ${counts.cppp}`}
 </p>
 </div>
@@ -476,13 +544,13 @@ Real-time tender discovery with BOQ analysis · BMC · CPPP · PWD · MMRDA · M
 <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: portalFilter === p ? "#fff" : portalColors[p], display: "inline-block" }} />{p}
 </button>
 ))}
-<span style={{ marginLeft: "auto", color: "#94a3b8", fontSize: "12px", fontWeight: "600" }}>{filtered.length} tenders</span>
+<span style={{ marginLeft: "auto", color: "#94a3b8", fontSize: "12px", fontWeight: "600" }}>{filtered.length} active tenders</span>
 </div>
 <div style={{ display: "grid", gridTemplateColumns: selected ? "1fr 1fr" : "1fr", minHeight: "calc(100vh - 160px)" }}>
 <div style={{ padding: "22px 28px", overflowY: "auto" }}>
 <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
 {[
-{ label: "Total Tenders", value: filtered.length, bg: "#f0f9ff", color: "#0369a1" },
+{ label: "Active Tenders", value: filtered.length, bg: "#f0f9ff", color: "#0369a1" },
 { label: "Urgent", value: filtered.filter(t => t.status === "urgent").length, bg: "#fef2f2", color: "#b91c1c" },
 { label: "Low Risk", value: filtered.filter(t => t.risk === "low").length, bg: "#f0fdf4", color: "#166534" }
 ].map(s => (
