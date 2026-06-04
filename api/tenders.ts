@@ -119,6 +119,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (item.deadline) {
           const deadlineClean = item.deadline.replace(/(\d{4})\d{6,8}$/, '$1').trim();
           const deadlineDate = new Date(deadlineClean);
+          const deadlineClean2 = item.deadline.replace(/(\d{4})\d{6,8}$/, "$1").trim();
+          const deadlineDate = new Date(deadlineClean2);
           if (!isNaN(deadlineDate.getTime()) && deadlineDate < today) return false;
         }
 
