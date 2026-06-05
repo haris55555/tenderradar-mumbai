@@ -612,7 +612,8 @@ Real-time tender discovery · BOQ Analysis · Bid Decision Tool
 ))}
 </div>
 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-{filtered.map(t => <TenderCard key={t.id} tender={t} onSelect={setSelected} selected={selected?.id === t.id} />)}
+{filtered.map(t => <TenderCard key={t.id} tender={t} onSelect={(t) => { setSelected(t); setBOQData(null); setBoqMessage(''); setActiveTab('overview'); }}
+selected={selected?.id === t.id} />)}
 </div>
 </div>
 {selected && (
