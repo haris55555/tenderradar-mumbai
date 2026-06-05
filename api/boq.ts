@@ -5,7 +5,8 @@ const GEMINI_KEY = "AQ.Ab8RN6JOnzExxgmVFPRfAqx_NTSoOD0uriGqGBNDMLBFtqNoNw";
 const PWD_RATES: Record<string, number> = {
 'road': 2500000, 'bridge': 8000000, 'building': 3500000,
 'drain': 1800000, 'water': 2000000, 'sewer': 2200000,
-'electrical': 1500000, 'garden': 800000, 'default': 2000000
+'lift': 1200000, 'electrical': 1500000, 'garden': 800000,
+'pump': 900000, 'tank': 1100000, 'default': 2000000
 };
 
 const MATERIAL_RATES: Record<string, number> = {
@@ -30,7 +31,7 @@ headers: {
 'Accept': 'application/pdf,*/*',
 'Referer': 'https://portal.mcgm.gov.in/',
 },
-signal: AbortSignal.timeout(15000),
+signal: AbortSignal.timeout(5000),
 });
 if (!res.ok) return '';
 const buf = await res.arrayBuffer();
@@ -58,7 +59,7 @@ If no BOQ found return: {"extractionSuccess":false,"boqItems":[]}` }
 }],
 generationConfig: { temperature: 0, maxOutputTokens: 2000 }
 }),
-signal: AbortSignal.timeout(30000),
+signal: AbortSignal.timeout(6000),
 }
 );
 const data = await res.json();
@@ -79,14 +80,14 @@ body: JSON.stringify({
 contents: [{
 parts: [{
 text: `You are a Maharashtra PWD contractor. Analyze tender:
-Title: ${title}, Type: ${type}, Org: ${org}, Value: ${value}
+Title: ${title}, Type: ${type}, Org: ${org}, Value: ₹${value}
 Return ONLY JSON (no markdown):
-{"boqItems":[{"item":"Earthwork Excavation","quantity":500,"unit":"Cum","rate":280,"amount":140000}],"materialCost":0,"labourCost":0,"equipmentCost":0,"overheadCost":0,"contingency":0,"keyMaterials":["Cement","Steel","Sand"],"majorEquipment":["JCB","Mixer"],"executionDays":120,"riskFactors":["Monsoon","Utility shifting"],"bidRecommendationReason":"Good margin tender"}`
+{"boqItems":[{"item":"specific item for this tender","quantity":100,"unit":"Sqm","rate":850,"amount":85000}],"materialCost":0,"labourCost":0,"equipmentCost":0,"overheadCost":0,"contingency":0,"keyMaterials":["Cement","Steel","Sand"],"majorEquipment":["JCB","Mixer"],"executionDays":120,"riskFactors":["Monsoon","Utility shifting"],"bidRecommendationReason":"specific reason for this tender"}`
 }]
 }],
-generationConfig: { temperature: 0.2, maxOutputTokens: 1500 }
+generationConfig: { temperature: 0.3, maxOutputTokens: 1500 }
 }),
-signal: AbortSignal.timeout(20000),
+signal: AbortSignal.timeout(8000),
 }
 );
 const data = await res.json();
@@ -124,7 +125,48 @@ if (!deptEstimate || deptEstimate < 100000) {
 deptEstimate = estimateTenderValue(tenderTitle || '', organisation || '');
 }
 
-// Step 2: Try Gemini PDF reading
+// Step 2: Try PDF (fast timeout - won't block)
 let boqItems: any[] = [];
 let dataSource = 'pwd_estimation';
-let geminiSuccess
+let geminiSuccess = false;
+let executionCostFromBOQ = 0;
+
+if (pdfUrl && pdfUrl.startsWith('http')) {
+const pdfBase64 = await downloadPDF(pdfUrl);
+if (pdfBase64.length > 500) {
+const geminiText = await readPDFWithGemini(pdfBase64);
+if (geminiText) {
+try {
+const cleaned = geminiText.replace(/```json/g, '').replace(/```/g, '').trim();
+const parsed = JSON.parse(cleaned.match(/\{[\s\S]*\}/)?.[0] || '{}');
+if (parsed.boqItems && parsed.boqItems.length > 0) {
+boqItems = parsed.boqItems.map((item: any) => {
+const rate = item.rate || MATERIAL_RATES[item.item] || MATERIAL_RATES['default'];
+const amount = item.amount || Math.round(item.quantity * rate);
+return { ...item, rate, amount };
+});
+// FORMULA FIX: sum real BOQ items
+executionCostFromBOQ = boqItems.reduce((sum: number, i: any) => sum + (i.amount || 0), 0);
+dataSource = 'actual_pdf';
+geminiSuccess = true;
+if (parsed.tenderValue && parsed.tenderValue > 100000) {
+deptEstimate = parsed.tenderValue;
+}
+}
+} catch {}
+}
+}
+}
+
+// Step 3: AI estimation (always runs - gives per-tender values)
+const aiResponse = await estimateWithAI(tenderTitle || '', tenderType || '', organisation || '', deptEstimate);
+let aiData: any = {};
+try {
+const cleaned = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+aiData = JSON.parse(cleaned.match(/\{[\s\S]*\}/)?.[0] || '{}');
+} catch {}
+
+// Step 4: Calculate financials
+const expectedWinningBid = Math.round(deptEstimate * 0.92);
+
+//
