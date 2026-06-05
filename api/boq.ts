@@ -110,9 +110,13 @@ Return ONLY valid JSON (no markdown, no explanation):
 }),
 signal: AbortSignal.timeout(8000),
 });
+
 const data = await response.json();
-return data.choices?.[0]?.message?.content || '{}';
-} catch {
+const text = data.choices?.[0]?.message?.content || '{}';
+console.log('AICredits response:', text.substring(0, 300));
+return text;
+} catch (e) {
+console.log('AICredits error:', e);
 return '{}';
 }
 }
@@ -126,6 +130,8 @@ if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allo
 
 try {
 const { tenderTitle, tenderValue, tenderValueNum, tenderType, organisation, pdfUrl } = req.body;
+
+console.log('BOQ request:', { tenderTitle, tenderValue, tenderValueNum });
 
 // Step 1: Get department estimate
 let deptEstimate = 0;
@@ -143,7 +149,9 @@ if (!deptEstimate || deptEstimate < 100000) {
 deptEstimate = estimateTenderValue(tenderTitle || '', organisation || '');
 }
 
-// Step 2: Try PDF (fast timeout - won't block)
+console.log('Dept estimate:', deptEstimate);
+
+// Step 2: Try PDF (fast timeout)
 let boqItems: any[] = [];
 let dataSource = 'pwd_estimation';
 let geminiSuccess = false;
@@ -172,15 +180,19 @@ if (parsed.tenderValue && parsed.tenderValue > 100000) deptEstimate = parsed.ten
 }
 }
 
-// Step 3: AICredits estimation with forced real rates
+// Step 3: AICredits estimation
 const aiResponse = await estimateWithAI(tenderTitle || '', tenderType || '', organisation || '', deptEstimate);
 let aiData: any = {};
 try {
 const cleaned = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
-aiData = JSON.parse(cleaned.match(/\{[\s\S]*\}/)?.[0] || '{}');
-} catch {}
+const jsonStr = cleaned.match(/\{[\s\S]*\}/)?.[0] || '{}';
+aiData = JSON.parse(jsonStr);
+console.log('BOQ items count:', aiData.boqItems?.length, 'first item:', JSON.stringify(aiData.boqItems?.[0]));
+} catch (e) {
+console.log('Parse error:', e, 'Response was:', aiResponse.substring(0, 200));
+}
 
-// Step 4: Calculate financials using real BOQ sums
+// Step 4: Calculate financials
 const expectedWinningBid = Math.round(deptEstimate * 0.92);
 
 let executionCost = 0;
@@ -191,8 +203,10 @@ executionCost = aiData.boqItems.reduce((sum: number, i: any) => {
 const amount = i.amount || (i.quantity * i.rate) || 0;
 return sum + amount;
 }, 0);
+console.log('Execution cost from BOQ:', executionCost);
 }
 if (!executionCost || executionCost < 100000) {
+console.log('Falling back to 85% formula');
 executionCost = Math.round(expectedWinningBid * 0.85);
 }
 
@@ -232,6 +246,7 @@ message: geminiSuccess
 });
 
 } catch (error) {
+console.log('Handler error:', error);
 return res.status(500).json({ error: 'BOQ analysis failed', details: String(error) });
 }
 }
