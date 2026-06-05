@@ -1,7 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const GEMINI_KEY = "AQ.Ab8RN6L1vKnlXLNlM3_GFeaD3SsHmoPdJaRw5wFWpYlHNzyfXw";
-
+const GEMINI_KEY = process.env.GEMINI_KEY || '';
 const PWD_RATES: Record<string, number> = {
 'road': 2500000, 'bridge': 8000000, 'building': 3500000,
 'drain': 1800000, 'water': 2000000, 'sewer': 2200000,
