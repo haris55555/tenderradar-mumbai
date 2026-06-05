@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 const GEMINI_KEY = process.env.GEMINI_KEY || '';
+const AICREDITS_KEY = "sk-live-d42243cc807dbb226103665abd51b4a7d311dea0ca749054b89eacf71c5fc232";
 
 const PWD_RATES: Record<string, number> = {
 'road': 2500000, 'bridge': 8000000, 'building': 3500000,
@@ -25,7 +26,7 @@ headers: {
 'Accept': 'application/pdf,*/*',
 'Referer': 'https://portal.mcgm.gov.in/',
 },
-signal: AbortSignal.timeout(4000),
+signal: AbortSignal.timeout(5000),
 });
 if (!res.ok) return '';
 const buf = await res.arrayBuffer();
@@ -38,22 +39,22 @@ return '';
 async function readPDFWithGemini(pdfBase64: string): Promise<string> {
 try {
 const res = await fetch(
-`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
+`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
 {
 method: 'POST',
 headers: { 'Content-Type': 'application/json' },
 body: JSON.stringify({
 contents: [{
 parts: [
-{ text: `Extract BOQ from this tender PDF. Return ONLY JSON:
-{"tenderValue":0,"boqItems":[{"item":"description","unit":"Cum","quantity":100,"rate":7200,"amount":720000}],"extractionSuccess":true}
-If no BOQ: {"extractionSuccess":false,"tenderValue":0,"boqItems":[]}` },
+{ text: `Extract ALL BOQ line items from this document. Return ONLY this JSON:
+{"tenderValue":0,"boqItems":[{"item":"description","unit":"Cum","quantity":0,"rate":0,"amount":0}],"extractionSuccess":true}
+If no BOQ found: {"extractionSuccess":false,"tenderValue":0,"boqItems":[]}` },
 { inline_data: { mime_type: 'application/pdf', data: pdfBase64 } }
 ]
 }],
 generationConfig: { temperature: 0.1, maxOutputTokens: 2000 }
 }),
-signal: AbortSignal.timeout(4000),
+signal: AbortSignal.timeout(6000),
 }
 );
 const data = await res.json();
@@ -63,19 +64,161 @@ return '';
 }
 }
 
-async function estimateWithGemini(title: string, type: string, org: string, value: number): Promise<string> {
+async function estimateWithAI(title: string, type: string, org: string, value: number): Promise<string> {
 try {
-const targetCost = Math.round(value * 0.85);
-const res = await fetch(
-`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
-{
-method: 'POST',
-headers: { 'Content-Type': 'application/json' },
+const response = await fetch("https://api.aicredits.in/v1/chat/completions", {
+method: "POST",
+headers: {
+"Content-Type": "application/json",
+"Authorization": `Bearer ${AICREDITS_KEY}`
+},
 body: JSON.stringify({
-contents: [{
-parts: [{
-text: `You are an expert quantity surveyor for Mumbai BMC government construction.
+model: "claude-haiku-4-5",
+max_tokens: 1500,
+messages: [{
+role: "user",
+content: `You are an expert quantity surveyor for Mumbai BMC government construction projects.
 Tender: ${title}
+Organisation: ${org}
 Type: ${type}
-Organisation
+Department Estimate: ₹${value}
 
+Provide realistic BOQ using Maharashtra PWD Schedule of Rates 2024-25.
+Return ONLY valid JSON (no markdown):
+{
+"boqItems": [{"item":"specific work item","quantity":100,"unit":"Sqm","rate":850,"amount":85000}],
+"materialCost": 0,
+"labourCost": 0,
+"equipmentCost": 0,
+"overheadCost": 0,
+"contingency": 0,
+"keyMaterials": ["Cement OPC 53","TMT Steel Fe500D","River Sand"],
+"majorEquipment": ["JCB Excavator","Concrete Mixer"],
+"executionDays": 120,
+"riskFactors": ["Urban area work","Monsoon delays","Utility shifting"],
+"bidRecommendationReason": "specific reason for this tender type"
+}`
+}]
+}),
+signal: AbortSignal.timeout(8000),
+});
+const data = await response.json();
+return data.choices?.[0]?.message?.content || '{}';
+} catch {
+return '{}';
+}
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+res.setHeader('Access-Control-Allow-Origin', '*');
+res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+if (req.method === 'OPTIONS') return res.status(200).end();
+if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+try {
+const { tenderTitle, tenderValue, tenderValueNum, tenderType, organisation, pdfUrl } = req.body;
+
+// Step 1: Get department estimate
+let deptEstimate = 0;
+if (tenderValueNum && tenderValueNum > 100000) deptEstimate = tenderValueNum;
+if (!deptEstimate) {
+const v = (tenderValue || '').replace(/,/g, '');
+if (v.includes('Cr')) deptEstimate = parseFloat(v) * 10000000;
+else if (v.includes('L')) deptEstimate = parseFloat(v) * 100000;
+else {
+const n = parseFloat(v.replace(/[^0-9.]/g, ''));
+if (n > 100000) deptEstimate = n;
+}
+}
+if (!deptEstimate || deptEstimate < 100000) {
+deptEstimate = estimateTenderValue(tenderTitle || '', organisation || '');
+}
+
+// Step 2: Try PDF (fast timeout)
+let boqItems: any[] = [];
+let dataSource = 'pwd_estimation';
+let geminiSuccess = false;
+let executionCostFromBOQ = 0;
+
+if (pdfUrl && pdfUrl.startsWith('http')) {
+const pdfBase64 = await downloadPDF(pdfUrl);
+if (pdfBase64.length > 500) {
+const geminiText = await readPDFWithGemini(pdfBase64);
+if (geminiText) {
+try {
+const cleaned = geminiText.replace(/```json/g, '').replace(/```/g, '').trim();
+const parsed = JSON.parse(cleaned.match(/\{[\s\S]*\}/)?.[0] || '{}');
+if (parsed.extractionSuccess && parsed.boqItems && parsed.boqItems.length > 0) {
+boqItems = parsed.boqItems;
+executionCostFromBOQ = boqItems.reduce((sum: number, i: any) => sum + (i.amount || 0), 0);
+dataSource = 'actual_pdf';
+geminiSuccess = true;
+if (parsed.tenderValue && parsed.tenderValue > 100000) deptEstimate = parsed.tenderValue;
+}
+} catch {}
+}
+}
+}
+
+// Step 3: AICredits estimation (fast, reliable)
+const aiResponse = await estimateWithAI(tenderTitle || '', tenderType || '', organisation || '', deptEstimate);
+let aiData: any = {};
+try {
+const cleaned = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+aiData = JSON.parse(cleaned.match(/\{[\s\S]*\}/)?.[0] || '{}');
+} catch {}
+
+// Step 4: Calculate financials
+const expectedWinningBid = Math.round(deptEstimate * 0.92);
+
+// KEY FIX: use real BOQ sum if PDF worked, else use AI BOQ sum
+let executionCost = 0;
+if (geminiSuccess && executionCostFromBOQ > 0) {
+executionCost = executionCostFromBOQ;
+} else if (aiData.boqItems && aiData.boqItems.length > 0) {
+executionCost = aiData.boqItems.reduce((sum: number, i: any) => sum + (i.amount || 0), 0);
+}
+if (!executionCost || executionCost < 100000) {
+executionCost = Math.round(expectedWinningBid * 0.85);
+}
+
+const expectedProfit = expectedWinningBid - executionCost;
+const profitMargin = Math.round((expectedProfit / expectedWinningBid) * 100);
+const workingCapitalNeeded = Math.round(executionCost * 0.3);
+const finalBoqItems = geminiSuccess ? boqItems : (aiData.boqItems || []);
+
+return res.status(200).json({
+success: true,
+boq: {
+dataSource,
+departmentEstimate: deptEstimate,
+expectedWinningBid,
+executionCost,
+expectedProfit,
+profitMargin,
+workingCapitalNeeded,
+raCycleDays: 60,
+bidRecommendation: profitMargin >= 10 ? 'YES' : profitMargin >= 7 ? 'REVIEW' : 'NO',
+bidRecommendationReason: aiData.bidRecommendationReason || `${profitMargin}% margin on ${tenderType} tender`,
+boqItems: finalBoqItems,
+materialCost: aiData.materialCost || Math.round(executionCost * 0.45),
+labourCost: aiData.labourCost || Math.round(executionCost * 0.25),
+equipmentCost: aiData.equipmentCost || Math.round(executionCost * 0.15),
+overheadCost: aiData.overheadCost || Math.round(executionCost * 0.10),
+contingency: aiData.contingency || Math.round(executionCost * 0.05),
+keyMaterials: aiData.keyMaterials || ['Cement OPC 53', 'TMT Steel Fe500D', 'River Sand'],
+majorEquipment: aiData.majorEquipment || ['JCB Excavator', 'Concrete Mixer'],
+executionDays: aiData.executionDays || 120,
+riskFactors: aiData.riskFactors || ['Urban area work', 'Monsoon delays', 'Utility shifting'],
+},
+pdfRead: geminiSuccess,
+message: geminiSuccess
+? `✅ Real BOQ extracted from tender PDF — ${boqItems.length} items found`
+: '📊 Estimated using Maharashtra PWD Schedule of Rates 2024-25'
+});
+
+} catch (error) {
+return res.status(500).json({ error: 'BOQ analysis failed', details: String(error) });
+}
+}
