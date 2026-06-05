@@ -290,9 +290,6 @@ useEffect(() => {
 if (tender.portal === 'BMC' && tender.value === 'See Portal') {
 enrichTender();
 }
-setBOQData(null);
-setBoqMessage('');
-setActiveTab('overview');
 }, [tender.id]);
 
 
