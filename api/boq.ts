@@ -74,7 +74,7 @@ headers: {
 },
 body: JSON.stringify({
 model: "claude-haiku-4-5",
-max_tokens: 1500,
+max_tokens: 500,
 messages: [{
 role: "user",
 content: `You are an expert quantity surveyor for Mumbai BMC government construction projects.
