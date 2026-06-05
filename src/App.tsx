@@ -272,26 +272,33 @@ return (
 );
 }
 
-function DetailPanel({ tender, onClose }: { tender: Tender; onClose: () => void }) {
+function DetailPanel({ tender, onClose, boqData, setBoqData, boqMessage, setBoqMessage }: {
+tender: Tender;
+onClose: () => void;
+boqData: BOQData | null;
+setBoqData: (d: BOQData | null) => void;
+boqMessage: string;
+setBoqMessage: (m: string) => void;
+}) {
 const [activeTab, setActiveTab] = useState<"overview" | "financial">("overview");
 const [aiSummary, setAiSummary] = useState("");
 const [aiLoading, setAiLoading] = useState(false);
 const [aiGenerated, setAiGenerated] = useState(false);
-const [boqData, setBoqData] = useState<BOQData | null>(null);
 const [boqLoading, setBoqLoading] = useState(false);
-const [boqMessage, setBoqMessage] = useState("");
 const [enrichData, setEnrichData] = useState<EnrichData | null>(null);
 const [enrichLoading, setEnrichLoading] = useState(false);
 const risk = riskConfig[tender.risk];
 const deadline = cleanDeadline(tender.deadline);
 
-// Auto-enrich tender when panel opens
 useEffect(() => {
+setActiveTab("overview");
+setAiSummary("");
+setAiGenerated(false);
+setEnrichData(null);
 if (tender.portal === 'BMC' && tender.value === 'See Portal') {
 enrichTender();
 }
 }, [tender.id]);
-
 
 const enrichTender = async () => {
 setEnrichLoading(true);
@@ -389,7 +396,6 @@ return (
 </div>
 <h2 style={{ color: "#0f172a", fontSize: "15px", fontWeight: "800", lineHeight: "1.4", marginBottom: "16px" }}>{tender.title}</h2>
 
-{/* Value enrichment status */}
 {enrichLoading && (
 <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: "8px", padding: "10px 14px", marginBottom: "12px", fontSize: "12px", color: "#0369a1" }}>
 🔍 Fetching real tender value from BMC portal...
@@ -523,6 +529,8 @@ const [scanProgress, setScanProgress] = useState(0);
 const [lastScan, setLastScan] = useState("Loading...");
 const [isLive, setIsLive] = useState(false);
 const [counts, setCounts] = useState({ bmc: 0, pwd: 0, cppp: 0 });
+const [boqData, setBoqData] = useState<BOQData | null>(null);
+const [boqMessage, setBoqMessage] = useState("");
 
 const fetchTenders = async () => {
 setScanning(true);
@@ -555,6 +563,12 @@ const filtered = tenders
 .filter(t => activeFilter === "All" || t.type === activeFilter)
 .filter(t => portalFilter === "All" || t.portal === portalFilter)
 .filter(t => cleanDeadline(t.deadline) !== 'Expired');
+
+const handleSelectTender = (t: Tender) => {
+setSelected(t);
+setBoqData(null);
+setBoqMessage("");
+};
 
 return (
 <div style={{ minHeight: "100vh", background: "#f1f5f9", fontFamily: "'DM Sans', 'Segoe UI', sans-serif", color: "#0f172a" }}>
@@ -613,13 +627,19 @@ Real-time tender discovery · BOQ Analysis · Bid Decision Tool
 ))}
 </div>
 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-{filtered.map(t => <TenderCard key={t.id} tender={t} onSelect={(t) => { setSelected(t); setBOQData(null); setBoqMessage(''); setActiveTab('overview'); }}
-selected={selected?.id === t.id} />)}
+{filtered.map(t => <TenderCard key={t.id} tender={t} onSelect={handleSelectTender} selected={selected?.id === t.id} />)}
 </div>
 </div>
 {selected && (
 <div style={{ padding: "22px 28px 22px 4px", overflowY: "auto" }}>
-<DetailPanel tender={selected} onClose={() => setSelected(null)} />
+<DetailPanel
+tender={selected}
+onClose={() => { setSelected(null); setBoqData(null); setBoqMessage(""); }}
+boqData={boqData}
+setBoqData={setBoqData}
+boqMessage={boqMessage}
+setBoqMessage={setBoqMessage}
+/>
 </div>
 )}
 </div>
