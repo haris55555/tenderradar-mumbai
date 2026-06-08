@@ -26,7 +26,7 @@ const EXCLUDE_KEYWORDS = [
 'nursing college', 'medical college',
 'walky talky', 'metal detector',
 'umbrella', 'raincoat', 'school bag',
-'canvas shoes', 'notebook'
+'canvas shoes', 'notebook', 'stationery'
 ];
 
 const CONSTRUCTION_KEYWORDS = [
@@ -70,23 +70,19 @@ const CONSTRUCTION_KEYWORDS = [
 'plumbing', 'sanitary work',
 'refurbishment', 'upgradation',
 'fabrication', 'installation',
-'sitc', 'supply installation',
+'sitc',
 'rewinding', 'overhauling of pump',
 'desilting', 'cleaning of sewer',
 'outfall', 'floodgate', 'penstock gate',
-'weigh bridge', 'weighbridge',
+'weighbridge', 'weigh bridge',
 'air pollution control',
 'solar', 'led light',
-'cctv surveillance', 'security system',
-'ac system', 'air conditioning',
-'generator', 'dg set',
 'fire alarm', 'fire safety',
 'water tank', 'overhead tank',
-'borewell', 'tubewell',
-'compound', 'premises',
 'municipal', 'ward office',
-'hospital work', 'ot work', 'operation theatre',
-'maternity home', 'dispensary work'
+'maternity home', 'dispensary work',
+'laying', 'replacement of',
+'rehabilitation', 'improvement of'
 ];
 
 function isConstructionTender(title: string): boolean {
@@ -153,6 +149,10 @@ t.includes('providing and fixing') || t.includes('overhauling')) return 'low';
 return 'medium';
 }
 
+function stripHtml(html: string): string {
+return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 let cachedTenders: any[] = [];
 let cacheTime = 0;
 const CACHE_DURATION = 6 * 60 * 60 * 1000;
@@ -174,45 +174,55 @@ signal: AbortSignal.timeout(15000),
 
 if (!res.ok) return [];
 const html = await res.text();
-
 const tenders: any[] = [];
 const today = new Date();
 
-const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-const rows = html.match(rowRegex) || [];
+// Find all table rows using a more robust approach
+// Split by <tr and process each chunk
+const trParts = html.split(/<tr[\s>]/i);
 
-for (const row of rows) {
-if (row.includes('<th') || row.includes('Department Name') || row.includes('Tender Description')) continue;
+for (let i = 1; i < trParts.length; i++) {
+const rowHtml = trParts[i];
 
-const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
-const cells: string[] = [];
-let cellMatch;
-while ((cellMatch = cellRegex.exec(row)) !== null) {
-cells.push(cellMatch[1]);
+// Extract all TD contents
+const tdMatches: string[] = [];
+const tdRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+let tdMatch;
+while ((tdMatch = tdRegex.exec(rowHtml)) !== null) {
+tdMatches.push(tdMatch[1]);
 }
 
-if (cells.length < 3) continue;
+if (tdMatches.length < 4) continue;
 
-const titleMatch = cells[1]?.match(/<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/i);
-if (!titleMatch) continue;
+const dept = stripHtml(tdMatches[0]);
+const cell1 = tdMatches[1];
+const bidNo = stripHtml(tdMatches[2]);
+const closingRaw = stripHtml(tdMatches[3]);
 
-const pdfUrl = titleMatch[1] || '';
-const title = titleMatch[2].replace(/<[^>]*>/g, '').trim();
+// Skip header rows
+if (dept === 'Department Name' || dept === '' ) continue;
+
+// Extract first anchor link (the main tender PDF)
+const anchorMatch = cell1.match(/<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
+if (!anchorMatch) continue;
+
+const pdfUrl = anchorMatch[1] || '';
+const title = stripHtml(anchorMatch[2]);
 
 if (!title || title.length < 10) continue;
 
-const dept = cells[0].replace(/<[^>]*>/g, '').trim();
-const bidNo = cells[2] ? cells[2].replace(/<[^>]*>/g, '').trim() : '';
-const closingRaw = cells[3] ? cells[3].replace(/<[^>]*>/g, '').trim() : '';
+// Fix and parse closing date
 const closingDate = closingRaw.replace(/\d{8}$/, '').trim();
-
 const closingDateObj = new Date(closingDate);
+
 if (isNaN(closingDateObj.getTime())) continue;
 if (closingDateObj <= today) continue;
 
 const fullPdfUrl = pdfUrl.startsWith('http')
 ? pdfUrl
-: 'https://portal.mcgm.gov.in' + pdfUrl;
+: pdfUrl.startsWith('/')
+? 'https://portal.mcgm.gov.in' + pdfUrl
+: '';
 
 tenders.push({
 title: title.substring(0, 200),
