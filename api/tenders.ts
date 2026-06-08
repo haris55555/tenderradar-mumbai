@@ -1,24 +1,32 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 const EXCLUDE_KEYWORDS = [
-'spare parts', 'spare part', 'battery', 'batteries', 'vehicle', 'tyre', 'tyres',
+'spare parts', 'spare part', 'battery', 'batteries', 'tyre', 'tyres',
 'furniture', 'computer', 'laptop', 'printer', 'stationery', 'paper',
 'uniform', 'garment', 'cloth', 'boot', 'shoe',
 'catering', 'food', 'canteen', 'refreshment',
 'security guard', 'housekeeping', 'sweeping',
 'pest control', 'rat', 'cockroach',
 'insurance', 'audit', 'legal', 'consultancy',
-'software', 'hardware', 'it service', 'website',
+'software', 'it service', 'website',
 'supply of material', 'supply of goods', 'purchase of',
 'procurement of goods', 'rate contract for supply',
-'ambulance', 'fire brigade vehicle', 'motor vehicle',
-'medical equipment', 'oxygen', 'medicine',
-'advertisement', 'printing', 'hording',
-'cctv', 'camera', 'biometric',
-'generator set', 'ups', 'inverter',
-'air conditioner', 'ac unit', 'refrigerator',
+'ambulance', 'motor vehicle',
+'oxygen', 'medicine', 'drug',
+'advertisement', 'hording',
+'biometric',
 'telephone', 'mobile', 'sim card',
-'boat', 'vessel', 'motor boat'
+'boat', 'vessel', 'motor boat',
+'xerox', 'photocopy', 'franking',
+'shroud', 'godhari', 'draw sheet',
+'laparoscopy', 'reagent', 'forceps',
+'ultrasonic suction', 'duodenoscope',
+'blood culture', 'autoanalyzer',
+'data entry operator',
+'nursing college', 'medical college',
+'walky talky', 'metal detector',
+'umbrella', 'raincoat', 'school bag',
+'canvas shoes', 'notebook'
 ];
 
 const CONSTRUCTION_KEYWORDS = [
@@ -37,7 +45,7 @@ const CONSTRUCTION_KEYWORDS = [
 'penstock', 'sluice', 'valve pit',
 'garden', 'park development', 'playground',
 'street light', 'streetlight', 'road light',
-'providing and fixing of safety railing',
+'providing and fixing',
 'providing fabricated',
 'allied work', 'allied works',
 'maintenance of road', 'maintenance of drain',
@@ -48,7 +56,37 @@ const CONSTRUCTION_KEYWORDS = [
 'departmental dewatering',
 'anti-flooding', 'anti flooding',
 'modak sagar', 'vihar lake', 'tulsi lake',
-'hydraulic', 'water works department'
+'hydraulic', 'water works',
+'lift', 'elevator', 'escalator',
+'horticulture', 'tree trimming', 'pruning',
+'cemetery', 'crematorium',
+'swimming pool',
+'fire station',
+'staff quarter', 'quarters',
+'compound wall', 'boundary wall',
+'flooring', 'tiling',
+'painting', 'whitewashing',
+'electrical work', 'wiring', 'electrification',
+'plumbing', 'sanitary work',
+'refurbishment', 'upgradation',
+'fabrication', 'installation',
+'sitc', 'supply installation',
+'rewinding', 'overhauling of pump',
+'desilting', 'cleaning of sewer',
+'outfall', 'floodgate', 'penstock gate',
+'weigh bridge', 'weighbridge',
+'air pollution control',
+'solar', 'led light',
+'cctv surveillance', 'security system',
+'ac system', 'air conditioning',
+'generator', 'dg set',
+'fire alarm', 'fire safety',
+'water tank', 'overhead tank',
+'borewell', 'tubewell',
+'compound', 'premises',
+'municipal', 'ward office',
+'hospital work', 'ot work', 'operation theatre',
+'maternity home', 'dispensary work'
 ];
 
 function isConstructionTender(title: string): boolean {
@@ -115,10 +153,9 @@ t.includes('providing and fixing') || t.includes('overhauling')) return 'low';
 return 'medium';
 }
 
-// Simple in-memory cache
 let cachedTenders: any[] = [];
 let cacheTime = 0;
-const CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 hours
+const CACHE_DURATION = 6 * 60 * 60 * 1000;
 
 async function fetchBMCTenders(): Promise<any[]> {
 try {
@@ -138,16 +175,13 @@ signal: AbortSignal.timeout(15000),
 if (!res.ok) return [];
 const html = await res.text();
 
-// Parse tender table from HTML
 const tenders: any[] = [];
 const today = new Date();
 
-// Match table rows with tender data
 const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
 const rows = html.match(rowRegex) || [];
 
 for (const row of rows) {
-// Skip header rows
 if (row.includes('<th') || row.includes('Department Name') || row.includes('Tender Description')) continue;
 
 const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
@@ -159,7 +193,6 @@ cells.push(cellMatch[1]);
 
 if (cells.length < 3) continue;
 
-// Extract title from anchor tag
 const titleMatch = cells[1]?.match(/<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/i);
 if (!titleMatch) continue;
 
@@ -168,22 +201,15 @@ const title = titleMatch[2].replace(/<[^>]*>/g, '').trim();
 
 if (!title || title.length < 10) continue;
 
-// Extract department
 const dept = cells[0].replace(/<[^>]*>/g, '').trim();
-
-// Extract bid number
 const bidNo = cells[2] ? cells[2].replace(/<[^>]*>/g, '').trim() : '';
-
-// Extract closing date
 const closingRaw = cells[3] ? cells[3].replace(/<[^>]*>/g, '').trim() : '';
 const closingDate = closingRaw.replace(/\d{8}$/, '').trim();
 
-// Parse and validate date
 const closingDateObj = new Date(closingDate);
 if (isNaN(closingDateObj.getTime())) continue;
 if (closingDateObj <= today) continue;
 
-// Build full PDF URL
 const fullPdfUrl = pdfUrl.startsWith('http')
 ? pdfUrl
 : 'https://portal.mcgm.gov.in' + pdfUrl;
@@ -214,7 +240,6 @@ res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 if (req.method === 'OPTIONS') return res.status(200).end();
 
 try {
-// Use cache if fresh
 const now = Date.now();
 if (cachedTenders.length > 0 && (now - cacheTime) < CACHE_DURATION) {
 return res.status(200).json({
@@ -226,12 +251,11 @@ pwdCount: 0,
 });
 }
 
-// Fetch fresh data
 const rawTenders = await fetchBMCTenders();
 
 const tenders = rawTenders
 .filter(item => {
-// if (!isConstructionTender(item.title)) return false;
+if (!isConstructionTender(item.title)) return false;
 if (isExpired(item.deadline)) return false;
 return true;
 })
@@ -266,7 +290,6 @@ risk: detectRisk(title),
 .filter(t => t.deadline !== 'Expired')
 .slice(0, 100);
 
-// Update cache
 if (tenders.length > 0) {
 cachedTenders = tenders;
 cacheTime = now;
@@ -281,7 +304,6 @@ pwdCount: 0,
 });
 
 } catch (error) {
-// Return cached data on error
 if (cachedTenders.length > 0) {
 return res.status(200).json({
 tenders: cachedTenders,
