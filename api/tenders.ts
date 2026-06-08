@@ -1,8 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const APIFY_TOKEN = "apify_api_Jn12wqlpm5VlUAh2Spqkynw8vOdGX22RYrAg";
-const BMC_ACTOR_ID = "YrQuEkowkNCLdk4j2";
-
 const EXCLUDE_KEYWORDS = [
 'spare parts', 'spare part', 'battery', 'batteries', 'vehicle', 'tyre', 'tyres',
 'furniture', 'computer', 'laptop', 'printer', 'stationery', 'paper',
@@ -118,27 +115,96 @@ t.includes('providing and fixing') || t.includes('overhauling')) return 'low';
 return 'medium';
 }
 
-interface ApifyItem {
-title?: string;
-organisation?: string;
-deadline?: string;
-value?: string;
-portal?: string;
-pdfUrl?: string;
-refNo?: string;
-url?: string;
-}
+// Simple in-memory cache
+let cachedTenders: any[] = [];
+let cacheTime = 0;
+const CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 hours
 
-async function fetchDataset(actorId: string): Promise<ApifyItem[]> {
+async function fetchBMCTenders(): Promise<any[]> {
 try {
 const res = await fetch(
-`https://api.apify.com/v2/acts/${actorId}/runs/last/dataset/items?token=${APIFY_TOKEN}&limit=200`,
-{ headers: { 'Content-Type': 'application/json' } }
+'https://portal.mcgm.gov.in/irj/portal/anonymous/qletenders_new?guest_user=english',
+{
+headers: {
+'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+'Accept-Language': 'en-US,en;q=0.5',
+'Referer': 'https://portal.mcgm.gov.in/',
+},
+signal: AbortSignal.timeout(15000),
+}
 );
+
 if (!res.ok) return [];
-const data = await res.json();
-return Array.isArray(data) ? data : [];
-} catch { return []; }
+const html = await res.text();
+
+// Parse tender table from HTML
+const tenders: any[] = [];
+const today = new Date();
+
+// Match table rows with tender data
+const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+const rows = html.match(rowRegex) || [];
+
+for (const row of rows) {
+// Skip header rows
+if (row.includes('<th') || row.includes('Department Name') || row.includes('Tender Description')) continue;
+
+const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+const cells: string[] = [];
+let cellMatch;
+while ((cellMatch = cellRegex.exec(row)) !== null) {
+cells.push(cellMatch[1]);
+}
+
+if (cells.length < 3) continue;
+
+// Extract title from anchor tag
+const titleMatch = cells[1]?.match(/<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/i);
+if (!titleMatch) continue;
+
+const pdfUrl = titleMatch[1] || '';
+const title = titleMatch[2].replace(/<[^>]*>/g, '').trim();
+
+if (!title || title.length < 10) continue;
+
+// Extract department
+const dept = cells[0].replace(/<[^>]*>/g, '').trim();
+
+// Extract bid number
+const bidNo = cells[2] ? cells[2].replace(/<[^>]*>/g, '').trim() : '';
+
+// Extract closing date
+const closingRaw = cells[3] ? cells[3].replace(/<[^>]*>/g, '').trim() : '';
+const closingDate = closingRaw.replace(/\d{8}$/, '').trim();
+
+// Parse and validate date
+const closingDateObj = new Date(closingDate);
+if (isNaN(closingDateObj.getTime())) continue;
+if (closingDateObj <= today) continue;
+
+// Build full PDF URL
+const fullPdfUrl = pdfUrl.startsWith('http')
+? pdfUrl
+: 'https://portal.mcgm.gov.in' + pdfUrl;
+
+tenders.push({
+title: title.substring(0, 200),
+organisation: ('BMC - ' + dept).substring(0, 100),
+deadline: closingDate,
+value: 'See Portal',
+portal: 'BMC',
+refNo: bidNo,
+pdfUrl: fullPdfUrl,
+url: 'https://portal.mcgm.gov.in/irj/portal/anonymous/qletenders_new?guest_user=english',
+});
+}
+
+return tenders;
+} catch (error) {
+console.error('BMC fetch error:', error);
+return [];
+}
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -148,21 +214,29 @@ res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 if (req.method === 'OPTIONS') return res.status(200).end();
 
 try {
-const bmcData = await fetchDataset(BMC_ACTOR_ID);
-if (bmcData.length === 0) {
-return res.status(200).json({ tenders: [], source: 'sample' });
+// Use cache if fresh
+const now = Date.now();
+if (cachedTenders.length > 0 && (now - cacheTime) < CACHE_DURATION) {
+return res.status(200).json({
+tenders: cachedTenders,
+source: 'cache',
+total: cachedTenders.length,
+bmcCount: cachedTenders.length,
+pwdCount: 0,
+});
 }
 
-const tenders = bmcData
-.filter((item: ApifyItem) => {
-const title = item.title || '';
-if (title.length < 10) return false;
-if (!isConstructionTender(title)) return false;
-if (item.deadline && isExpired(item.deadline)) return false;
+// Fetch fresh data
+const rawTenders = await fetchBMCTenders();
+
+const tenders = rawTenders
+.filter(item => {
+if (!isConstructionTender(item.title)) return false;
+if (isExpired(item.deadline)) return false;
 return true;
 })
-.map((item: ApifyItem, i: number) => {
-const title = (item.title || '').substring(0, 200);
+.map((item, i) => {
+const title = item.title;
 const org = item.organisation || 'BMC Mumbai';
 const deadline = cleanDeadline(item.deadline || '');
 const type = detectType(title);
@@ -192,8 +266,14 @@ risk: detectRisk(title),
 .filter(t => t.deadline !== 'Expired')
 .slice(0, 100);
 
+// Update cache
+if (tenders.length > 0) {
+cachedTenders = tenders;
+cacheTime = now;
+}
+
 return res.status(200).json({
-tenders,
+tenders: tenders.length > 0 ? tenders : cachedTenders,
 source: 'live',
 total: tenders.length,
 bmcCount: tenders.length,
@@ -201,6 +281,16 @@ pwdCount: 0,
 });
 
 } catch (error) {
+// Return cached data on error
+if (cachedTenders.length > 0) {
+return res.status(200).json({
+tenders: cachedTenders,
+source: 'cache',
+total: cachedTenders.length,
+bmcCount: cachedTenders.length,
+pwdCount: 0,
+});
+}
 return res.status(500).json({ error: String(error), tenders: [], source: 'error' });
 }
 }
