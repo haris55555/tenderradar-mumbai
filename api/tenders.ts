@@ -231,7 +231,7 @@ const rawTenders = await fetchBMCTenders();
 
 const tenders = rawTenders
 .filter(item => {
-if (!isConstructionTender(item.title)) return false;
+// if (!isConstructionTender(item.title)) return false;
 if (isExpired(item.deadline)) return false;
 return true;
 })
