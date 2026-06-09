@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 
 const PORTALS = ["BMC", "GeM", "CPPP", "PWD Maharashtra", "MMRDA", "MSRDC"];
-const WORK_TYPES = ["All", "Civil", "Roads & Infrastructure", "Sanitary", "Sewerage"];
+const WORK_TYPES = ["All", "Civil", "Roads & Infrastructure", "Sanitary", "Sewerage", "Electrical & Mechanical"];
 
 const portalColors: Record<string, string> = {
 BMC: "#0369a1", GeM: "#065f46", CPPP: "#6d28d9",
@@ -255,11 +255,11 @@ return (
 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
 {[
 { label: "Ultratech Cement OPC 53", value: "₹420/bag" },
-{ label: "TATA TMT Steel Fe500D", value: "₹58,500/MT" },
-{ label: "River Sand (Zone II)", value: "₹2,200/MT" },
-{ label: "20mm Aggregate", value: "₹1,850/MT" },
-{ label: "Mason (Mistri)", value: "₹850/day" },
-{ label: "JCB / Excavator", value: "₹18,000/day" }
+{ label: "TATA TMT Steel Fe500D", value: "₹63,500/MT" },
+{ label: "River Sand (Zone II)", value: "₹2,800/MT" },
+{ label: "20mm Aggregate", value: "₹1,950/MT" },
+{ label: "Mason (Mistri)", value: "₹1,050/day" },
+{ label: "JCB / Excavator", value: "₹21,000/day" }
 ].map(item => (
 <div key={item.label} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "8px 10px", display: "flex", justifyContent: "space-between" }}>
 <span style={{ color: "#64748b", fontSize: "11px" }}>{item.label}</span>
@@ -285,6 +285,7 @@ const [aiSummary, setAiSummary] = useState("");
 const [aiLoading, setAiLoading] = useState(false);
 const [aiGenerated, setAiGenerated] = useState(false);
 const [boqLoading, setBoqLoading] = useState(false);
+const [uploadLoading, setUploadLoading] = useState(false);
 const [enrichData, setEnrichData] = useState<EnrichData | null>(null);
 const [enrichLoading, setEnrichLoading] = useState(false);
 const risk = riskConfig[tender.risk];
@@ -388,6 +389,31 @@ alert("BOQ analysis failed. Please try again.");
 setBoqLoading(false);
 };
 
+const uploadBOQPDF = async (file: File) => {
+setUploadLoading(true);
+try {
+const formData = new FormData();
+formData.append('pdf', file);
+formData.append('tenderType', tender.type);
+formData.append('tenderTitle', tender.title);
+const response = await fetch('https://boq-service-pov7.onrender.com/api/boq-upload', {
+method: 'POST',
+body: formData,
+});
+const data = await response.json();
+if (data.success && data.boq) {
+setBoqData(data.boq);
+setBoqMessage(data.message);
+setActiveTab("financial");
+} else {
+alert("PDF analysis failed. Please try a different file.");
+}
+} catch {
+alert("PDF upload failed. Please try again.");
+}
+setUploadLoading(false);
+};
+
 return (
 <div style={{ background: "#fff", borderRadius: "16px", border: "1.5px solid #e2e8f0", padding: "24px", height: "100%", overflowY: "auto", boxSizing: "border-box", boxShadow: "0 4px 24px rgba(0,0,0,0.06)" }}>
 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
@@ -407,9 +433,43 @@ return (
 </div>
 )}
 
-<button onClick={generateBOQ} disabled={boqLoading || enrichLoading} style={{ width: "100%", background: boqLoading ? "#f1f5f9" : boqData ? "#166534" : "linear-gradient(135deg, #166534, #16a34a)", border: "none", color: boqLoading ? "#94a3b8" : "#fff", borderRadius: "10px", padding: "14px", fontSize: "14px", fontWeight: "700", cursor: boqLoading ? "not-allowed" : "pointer", marginBottom: "12px" }}>
+<button onClick={generateBOQ} disabled={boqLoading || uploadLoading || enrichLoading} style={{ width: "100%", background: boqLoading ? "#f1f5f9" : boqData ? "#166534" : "linear-gradient(135deg, #166534, #16a34a)", border: "none", color: boqLoading ? "#94a3b8" : "#fff", borderRadius: "10px", padding: "14px", fontSize: "14px", fontWeight: "700", cursor: boqLoading ? "not-allowed" : "pointer", marginBottom: "10px" }}>
 {boqLoading ? "📊 Calculating BOQ & Bid..." : boqData ? "✅ BOQ Complete — View Financial Tab" : enrichLoading ? "⏳ Loading tender value first..." : "📊 Get BOQ Analysis & Bid Decision"}
 </button>
+
+{/* PDF Upload Section */}
+<div style={{ marginBottom: "14px" }}>
+<input
+type="file"
+accept=".pdf"
+id={`boq-upload-${tender.id}`}
+style={{ display: 'none' }}
+onChange={(e) => {
+const file = e.target.files?.[0];
+if (file) uploadBOQPDF(file);
+e.target.value = '';
+}}
+/>
+<label
+htmlFor={`boq-upload-${tender.id}`}
+style={{
+display: 'block',
+width: '100%',
+background: uploadLoading ? '#f1f5f9' : 'transparent',
+border: '1.5px dashed #cbd5e1',
+color: uploadLoading ? '#94a3b8' : '#64748b',
+borderRadius: '10px',
+padding: '12px',
+fontSize: '12px',
+fontWeight: '600',
+cursor: uploadLoading ? 'not-allowed' : 'pointer',
+textAlign: 'center',
+boxSizing: 'border-box',
+}}
+>
+{uploadLoading ? '⏳ Reading BOQ PDF with Adobe AI...' : '📎 Upload BOQ PDF from MahaTenders → Get Real Calculations'}
+</label>
+</div>
 
 <div style={{ display: "flex", gap: "8px", marginBottom: "20px" }}>
 {(["overview", "financial"] as const).map(tab => (
@@ -476,7 +536,8 @@ return (
 ) : (
 <div style={{ textAlign: "center", padding: "40px 20px" }}>
 <div style={{ fontSize: "40px", marginBottom: "16px" }}>📊</div>
-<p style={{ color: "#64748b", fontSize: "14px" }}>Click "Get BOQ Analysis & Bid Decision" above</p>
+<p style={{ color: "#64748b", fontSize: "14px", marginBottom: "8px" }}>Click "Get BOQ Analysis & Bid Decision" above</p>
+<p style={{ color: "#94a3b8", fontSize: "12px" }}>Or upload BOQ PDF from MahaTenders for real calculations</p>
 </div>
 )}
 </div>
