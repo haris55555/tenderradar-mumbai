@@ -104,32 +104,6 @@ return { item: item.item, unit: item.unit, quantity, rate: item.rate, amount };
 });
 }
 
-async function downloadPDF(url) {
-try {
-console.log('Downloading PDF from:', url);
-// Try with different headers to bypass BMC blocking
-const response = await fetch(url, {
-headers: {
-'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-'Accept': 'application/pdf,*/*',
-'Accept-Language': 'en-IN,en;q=0.9',
-'Referer': 'https://portal.mcgm.gov.in/irj/portal/anonymous/qletenders_new?guest_user=english',
-'Origin': 'https://portal.mcgm.gov.in',
-'Connection': 'keep-alive',
-},
-signal: AbortSignal.timeout(25000)
-});
-console.log('PDF download status:', response.status);
-if (!response.ok) return null;
-const buffer = await response.arrayBuffer();
-console.log('PDF downloaded, size:', buffer.byteLength, 'bytes');
-return Buffer.from(buffer);
-} catch (e) {
-console.log('PDF download error:', e.message);
-return null;
-}
-}
-
 async function getAdobeToken() {
 try {
 const params = new URLSearchParams();
@@ -154,6 +128,31 @@ return data.access_token;
 return null;
 } catch (e) {
 console.log('Adobe token error:', e.message);
+return null;
+}
+}
+
+async function downloadPDF(url) {
+try {
+console.log('Downloading PDF from:', url);
+const response = await fetch(url, {
+headers: {
+'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+'Accept': 'application/pdf,*/*',
+'Accept-Language': 'en-IN,en;q=0.9',
+'Referer': 'https://portal.mcgm.gov.in/irj/portal/anonymous/qletenders_new?guest_user=english',
+'Origin': 'https://portal.mcgm.gov.in',
+'Connection': 'keep-alive',
+},
+signal: AbortSignal.timeout(25000)
+});
+console.log('PDF download status:', response.status);
+if (!response.ok) return null;
+const buffer = await response.arrayBuffer();
+console.log('PDF downloaded, size:', buffer.byteLength, 'bytes');
+return Buffer.from(buffer);
+} catch (e) {
+console.log('PDF download error:', e.message);
 return null;
 }
 }
@@ -230,17 +229,31 @@ return null;
 
 async function parseBOQFromExtractedText(text) {
 try {
-const prompt = `Extract BOQ items from this tender document text.
-Find any table with work items, quantities, units and rates.
+// Find BOQ section in extracted text
+let boqSection = text;
+const boqKeywords = ['bill of quantity', 'schedule of quantity', 'bill of quantities', 'schedule of quantities', 'boq', 'item no', 'sr no', 'description of work', 'particulars of item'];
+
+for (const keyword of boqKeywords) {
+const idx = text.toLowerCase().indexOf(keyword.toLowerCase());
+if (idx !== -1) {
+boqSection = text.substring(idx, idx + 6000);
+console.log('Found BOQ section using keyword:', keyword, 'at index:', idx);
+break;
+}
+}
+
+console.log('BOQ section sample:', boqSection.substring(0, 300));
+
+const prompt = `Extract BOQ items from this tender document section.
+Find work items with quantities, units and rates.
 
 Text:
-${text.substring(0, 8000)}
+${boqSection.substring(0, 5000)}
 
-Return ONLY valid JSON no markdown no explanation:
+Return ONLY valid JSON no markdown no extra text:
 {"extractionSuccess":true,"boqItems":[{"item":"work description","unit":"Cum","quantity":100,"rate":7200,"amount":720000}],"tenderValue":0}
 
-If no BOQ table found return:
-{"extractionSuccess":false,"boqItems":[],"tenderValue":0}`;
+If no BOQ found: {"extractionSuccess":false,"boqItems":[],"tenderValue":0}`;
 
 const response = await fetch(
 `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
@@ -257,7 +270,7 @@ signal: AbortSignal.timeout(20000)
 
 const data = await response.json();
 const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-console.log('Gemini response sample:', responseText.substring(0, 300));
+console.log('Gemini response:', responseText.substring(0, 500));
 
 let parsed = null;
 try {
