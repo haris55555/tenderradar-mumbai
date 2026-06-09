@@ -633,6 +633,7 @@ Real-time tender discovery · BOQ Analysis · Bid Decision Tool
 {selected && (
 <div style={{ padding: "22px 28px 22px 4px", overflowY: "auto" }}>
 <DetailPanel
+key={selected.id}
 tender={selected}
 onClose={() => { setSelected(null); setBoqData(null); setBoqMessage(""); }}
 boqData={boqData}
