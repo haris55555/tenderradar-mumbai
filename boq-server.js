@@ -1,8 +1,4 @@
 import http from 'http';
-import { createWriteStream, mkdirSync, rmSync, existsSync, readFileSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
-import { createGunzip } from 'zlib';
 
 const GEMINI_KEY = process.env.GEMINI_KEY || '';
 const ADOBE_CLIENT_ID = process.env.ADOBE_CLIENT_ID || '';
@@ -129,18 +125,16 @@ async function downloadPDF(url) {
 try {
 const response = await fetch(url, {
 headers: {
-'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
 'Accept': 'application/pdf,*/*',
-'Accept-Language': 'en-IN,en;q=0.9',
 'Referer': 'https://portal.mcgm.gov.in/irj/portal/anonymous/qletenders_new?guest_user=english',
-'Origin': 'https://portal.mcgm.gov.in',
 },
 signal: AbortSignal.timeout(25000)
 });
 console.log('PDF download status:', response.status);
 if (!response.ok) return null;
 const buffer = await response.arrayBuffer();
-console.log('PDF downloaded, size:', buffer.byteLength);
+console.log('PDF size:', buffer.byteLength);
 return Buffer.from(buffer);
 } catch (e) { console.log('PDF download error:', e.message); return null; }
 }
@@ -155,127 +149,113 @@ signal: AbortSignal.timeout(15000)
 });
 const uploadData = await uploadRes.json();
 if (!uploadData.uploadUri || !uploadData.assetID) return null;
-
-await fetch(uploadData.uploadUri, {
-method: 'PUT',
-headers: { 'Content-Type': 'application/pdf' },
-body: pdfBuffer,
-signal: AbortSignal.timeout(30000)
-});
-
+await fetch(uploadData.uploadUri, { method: 'PUT', headers: { 'Content-Type': 'application/pdf' }, body: pdfBuffer, signal: AbortSignal.timeout(30000) });
 const extractRes = await fetch('https://pdf-services.adobe.io/operation/extractpdf', {
 method: 'POST',
 headers: { 'Authorization': `Bearer ${token}`, 'X-API-Key': ADOBE_CLIENT_ID, 'Content-Type': 'application/json' },
 body: JSON.stringify({ assetID: uploadData.assetID, elementsToExtract: ['text', 'tables'] }),
 signal: AbortSignal.timeout(15000)
 });
-
 const jobLocation = extractRes.headers.get('location');
 if (!jobLocation) return null;
-
 for (let i = 0; i < 12; i++) {
 await new Promise(r => setTimeout(r, 5000));
-const pollRes = await fetch(jobLocation, {
-headers: { 'Authorization': `Bearer ${token}`, 'X-API-Key': ADOBE_CLIENT_ID },
-signal: AbortSignal.timeout(10000)
-});
+const pollRes = await fetch(jobLocation, { headers: { 'Authorization': `Bearer ${token}`, 'X-API-Key': ADOBE_CLIENT_ID }, signal: AbortSignal.timeout(10000) });
 const pollData = await pollRes.json();
-console.log('Poll status:', pollData.status);
+console.log('Poll:', pollData.status);
 if (pollData.status === 'done') {
 const downloadUri = pollData.resource?.downloadUri;
 if (!downloadUri) return null;
-// Download the ZIP file
 const zipRes = await fetch(downloadUri, { signal: AbortSignal.timeout(30000) });
 const zipBuffer = Buffer.from(await zipRes.arrayBuffer());
-console.log('ZIP downloaded, size:', zipBuffer.length);
+console.log('ZIP size:', zipBuffer.length);
 return zipBuffer;
 }
 if (pollData.status === 'failed') return null;
 }
 return null;
-} catch (e) { console.log('Adobe extraction error:', e.message); return null; }
+} catch (e) { console.log('Adobe error:', e.message); return null; }
 }
 
-async function extractTextFromZip(zipBuffer) {
-try {
-// Parse ZIP manually - find structuredData.json inside
-// ZIP local file header signature: PK\x03\x04
-const zip = zipBuffer;
-let allText = '';
+function extractFilesFromZip(zipBuffer) {
+const files = {};
 let pos = 0;
-
-while (pos < zip.length - 4) {
-// Look for local file header
-if (zip[pos] === 0x50 && zip[pos+1] === 0x4B && zip[pos+2] === 0x03 && zip[pos+3] === 0x04) {
-const compressionMethod = zip.readUInt16LE(pos + 8);
-const compressedSize = zip.readUInt32LE(pos + 18);
-const fileNameLength = zip.readUInt16LE(pos + 26);
-const extraLength = zip.readUInt16LE(pos + 28);
-const fileName = zip.slice(pos + 30, pos + 30 + fileNameLength).toString('utf8');
+while (pos < zipBuffer.length - 4) {
+if (zipBuffer[pos] === 0x50 && zipBuffer[pos+1] === 0x4B && zipBuffer[pos+2] === 0x03 && zipBuffer[pos+3] === 0x04) {
+const compressionMethod = zipBuffer.readUInt16LE(pos + 8);
+const compressedSize = zipBuffer.readUInt32LE(pos + 18);
+const fileNameLength = zipBuffer.readUInt16LE(pos + 26);
+const extraLength = zipBuffer.readUInt16LE(pos + 28);
+const fileName = zipBuffer.slice(pos + 30, pos + 30 + fileNameLength).toString('utf8');
 const dataStart = pos + 30 + fileNameLength + extraLength;
-
-console.log('ZIP entry:', fileName, 'compression:', compressionMethod, 'size:', compressedSize);
-
-if (fileName === 'structuredData.json' && compressionMethod === 0) {
-// Stored (not compressed)
-const jsonData = zip.slice(dataStart, dataStart + compressedSize).toString('utf8');
-console.log('Found structuredData.json, length:', jsonData.length);
-allText = jsonData;
-break;
-}
-
+const fileData = zipBuffer.slice(dataStart, dataStart + compressedSize);
+files[fileName] = { data: fileData, compression: compressionMethod };
 pos = dataStart + compressedSize;
 } else {
 pos++;
 }
 }
+return files;
+}
 
-return allText;
+async function extractXlsxText(xlsxBuffer) {
+// XLSX is also a ZIP - extract shared strings and sheet data
+try {
+const files = extractFilesFromZip(xlsxBuffer);
+let text = '';
+
+// Get shared strings
+const sharedStringsFile = files['xl/sharedStrings.xml'];
+if (sharedStringsFile && sharedStringsFile.compression === 0) {
+const xml = sharedStringsFile.data.toString('utf8');
+const matches = xml.match(/<t[^>]*>([^<]+)<\/t>/g) || [];
+const strings = matches.map(m => m.replace(/<[^>]+>/g, '').trim());
+text += strings.join(' | ') + '\n';
+}
+
+return text;
 } catch (e) {
-console.log('ZIP extraction error:', e.message);
 return '';
 }
 }
 
-async function parseBOQFromStructuredData(jsonText) {
+async function parseBOQFromZip(zipBuffer) {
 try {
-const data = JSON.parse(jsonText);
-console.log('Parsed structuredData, elements:', data.elements?.length);
+const files = extractFilesFromZip(zipBuffer);
+console.log('ZIP files found:', Object.keys(files).length);
 
-// Extract all text content
-let allText = '';
-if (data.elements) {
-for (const element of data.elements) {
-if (element.Text) allText += element.Text + '\n';
-if (element.kids) {
-for (const kid of element.kids) {
-if (kid.Text) allText += kid.Text + '\n';
-}
-}
-}
-}
+// Collect text from all xlsx files
+let allTableText = '';
+const xlsxFiles = Object.keys(files).filter(f => f.endsWith('.xlsx'));
+console.log('XLSX files:', xlsxFiles.length);
 
-console.log('Extracted text length:', allText.length);
-console.log('Text sample:', allText.substring(0, 300));
-
-// Find BOQ section
-let boqSection = allText;
-const boqKeywords = ['bill of quantity', 'schedule of quantity', 'bill of quantities', 'schedule of quantities', 'boq', 'item no', 'sr no', 'description of work', 'particulars of item'];
-for (const keyword of boqKeywords) {
-const idx = allText.toLowerCase().indexOf(keyword);
-if (idx !== -1) {
-boqSection = allText.substring(idx, idx + 6000);
-console.log('Found BOQ section at:', idx, 'keyword:', keyword);
-break;
+for (const xlsxFile of xlsxFiles.slice(0, 10)) { // Check first 10 tables
+const fileEntry = files[xlsxFile];
+if (fileEntry.compression === 8) {
+// Deflate compressed - need to decompress
+try {
+const { inflateRawSync } = await import('zlib');
+const decompressed = inflateRawSync(fileEntry.data);
+const text = await extractXlsxText(decompressed);
+if (text.length > 50) {
+allTableText += `\n--- Table from ${xlsxFile} ---\n${text}`;
+}
+} catch (e) {}
 }
 }
 
-// Send to Gemini
-const prompt = `Extract BOQ items from this tender document section.
-Find work items with quantities, units and rates.
+console.log('Table text length:', allTableText.length);
+console.log('Table text sample:', allTableText.substring(0, 500));
 
-Text:
-${boqSection.substring(0, 5000)}
+if (!allTableText || allTableText.length < 50) {
+console.log('No table text extracted');
+return { extractionSuccess: false, boqItems: [], tenderValue: 0 };
+}
+
+const prompt = `Extract BOQ items from this tender table data. Each table row may contain work description, unit, quantity, rate and amount.
+
+Table data:
+${allTableText.substring(0, 5000)}
 
 Return ONLY valid JSON no markdown:
 {"extractionSuccess":true,"boqItems":[{"item":"work description","unit":"Cum","quantity":100,"rate":7200,"amount":720000}],"tenderValue":0}
@@ -316,7 +296,7 @@ return parsed;
 }
 return { extractionSuccess: false, boqItems: [], tenderValue: 0 };
 } catch (e) {
-console.log('Structured data parse error:', e.message);
+console.log('ZIP parse error:', e.message);
 return { extractionSuccess: false, boqItems: [], tenderValue: 0 };
 }
 }
@@ -378,16 +358,13 @@ const pdfBuffer = await downloadPDF(pdfUrl);
 if (pdfBuffer && pdfBuffer.length > 1000) {
 const zipBuffer = await extractWithAdobe(pdfBuffer, token);
 if (zipBuffer) {
-const jsonText = await extractTextFromZip(zipBuffer);
-if (jsonText) {
-const parsed = await parseBOQFromStructuredData(jsonText);
+const parsed = await parseBOQFromZip(zipBuffer);
 if (parsed && parsed.extractionSuccess && parsed.boqItems?.length > 0) {
 boqItems = parsed.boqItems;
 dataSource = 'actual_pdf';
 pdfRead = true;
 if (parsed.tenderValue > 100000) deptEstimate = parsed.tenderValue;
 console.log('Adobe SUCCESS! Items:', boqItems.length);
-}
 }
 }
 }
