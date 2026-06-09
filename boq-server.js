@@ -103,6 +103,25 @@ return { item: item.item, unit: item.unit, quantity, rate: item.rate, amount };
 });
 }
 
+// Extract rupee amount from text like "₹ 30,96,02,212.00/-"
+function extractRupeeAmount(text) {
+const patterns = [
+/₹\s*([\d,]+(?:\.\d+)?)/,
+/Rs\.?\s*([\d,]+(?:\.\d+)?)/i,
+/INR\s*([\d,]+(?:\.\d+)?)/i,
+/([\d,]+(?:\.\d+)?)\s*(?:\/|-|lakh|crore|cr)/i,
+];
+for (const pattern of patterns) {
+const match = text.match(pattern);
+if (match) {
+const numStr = match[1].replace(/,/g, '');
+const num = parseFloat(numStr);
+if (num > 100000) return num;
+}
+}
+return 0;
+}
+
 async function getAdobeToken() {
 try {
 const params = new URLSearchParams();
@@ -186,38 +205,23 @@ if (zipBuffer[pos] === 0x50 && zipBuffer[pos+1] === 0x4B &&
 zipBuffer[pos+2] === 0x03 && zipBuffer[pos+3] === 0x04) {
 const compression = zipBuffer.readUInt16LE(pos + 8);
 const compressedSize = zipBuffer.readUInt32LE(pos + 18);
-const uncompressedSize = zipBuffer.readUInt32LE(pos + 22);
 const nameLen = zipBuffer.readUInt16LE(pos + 26);
 const extraLen = zipBuffer.readUInt16LE(pos + 28);
 const name = zipBuffer.slice(pos + 30, pos + 30 + nameLen).toString('utf8');
 const dataStart = pos + 30 + nameLen + extraLen;
-const compressedData = zipBuffer.slice(dataStart, dataStart + compressedSize);
-entries[name] = { compression, compressedData, uncompressedSize };
+entries[name] = { compression, data: zipBuffer.slice(dataStart, dataStart + compressedSize) };
 pos = dataStart + compressedSize;
-} else {
-pos++;
-}
+} else { pos++; }
 }
 return entries;
 }
 
 function decompressEntry(entry) {
-if (entry.compression === 0) return entry.compressedData;
+if (entry.compression === 0) return entry.data;
 if (entry.compression === 8) {
-try { return inflateRawSync(entry.compressedData); } catch (e) { return null; }
+try { return inflateRawSync(entry.data); } catch (e) { return null; }
 }
 return null;
-}
-
-function extractTextFromXml(xml) {
-// Extract text values from XML
-const texts = [];
-const matches = xml.match(/<(?:v|t)[^>]*>([^<]+)<\/(?:v|t)>/g) || [];
-for (const m of matches) {
-const val = m.replace(/<[^>]+>/g, '').trim();
-if (val && val.length > 0) texts.push(val);
-}
-return texts;
 }
 
 async function parseBOQFromZip(zipBuffer) {
@@ -226,14 +230,14 @@ const entries = parseZipEntries(zipBuffer);
 console.log('ZIP entries:', Object.keys(entries).join(', '));
 
 let allText = '';
+let tenderValue = 0;
 
-for (const [name, entry] of Object.entries(entries)) {
-if (!name.endsWith('.xlsx')) continue;
+const xlsxFiles = Object.keys(entries).filter(f => f.endsWith('.xlsx'));
 
-const xlsxBuffer = decompressEntry(entry);
-if (!xlsxBuffer) { console.log('Could not decompress:', name); continue; }
+for (const xlsxFile of xlsxFiles) {
+const xlsxBuffer = decompressEntry(entries[xlsxFile]);
+if (!xlsxBuffer) continue;
 
-// Parse the XLSX (which is itself a ZIP)
 const xlsxEntries = parseZipEntries(xlsxBuffer);
 
 // Get shared strings
@@ -244,8 +248,7 @@ const ssBuffer = decompressEntry(ssEntry);
 if (ssBuffer) {
 const ssXml = ssBuffer.toString('utf8');
 const matches = ssXml.match(/<t[^>]*>([^<]*)<\/t>/g) || [];
-sharedStrings = matches.map(m => m.replace(/<[^>]+>/g, '').trim());
-console.log(`${name} shared strings:`, sharedStrings.length, 'sample:', sharedStrings.slice(0, 5).join(', '));
+sharedStrings = matches.map(m => m.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim());
 }
 }
 
@@ -255,81 +258,46 @@ if (sheetEntry) {
 const sheetBuffer = decompressEntry(sheetEntry);
 if (sheetBuffer) {
 const sheetXml = sheetBuffer.toString('utf8');
-
-// Extract cell values
-const cellMatches = sheetXml.match(/<c[^>]*r="[^"]*"[^>]*>[\s\S]*?<\/c>/g) || [];
-const rowData = [];
+const cellMatches = sheetXml.match(/<c[^>]*>[\s\S]*?<\/c>/g) || [];
+const rowValues = [];
 
 for (const cell of cellMatches) {
 const typeMatch = cell.match(/t="([^"]*)"/);
 const valueMatch = cell.match(/<v>([^<]*)<\/v>/);
 if (!valueMatch) continue;
-
 let value = valueMatch[1];
 if (typeMatch && typeMatch[1] === 's') {
-// Shared string
-const idx = parseInt(value);
-value = sharedStrings[idx] || value;
+value = sharedStrings[parseInt(value)] || value;
 }
-if (value) rowData.push(value);
+if (value && value.trim()) rowValues.push(value.trim());
 }
 
-if (rowData.length > 0) {
-allText += rowData.join(' | ') + '\n';
-console.log(`${name} row data sample:`, rowData.slice(0, 8).join(' | '));
+const rowText = rowValues.join(' | ');
+allText += rowText + '\n';
+
+// Extract tender value from this sheet
+for (const val of rowValues) {
+const amount = extractRupeeAmount(val);
+if (amount > tenderValue) tenderValue = amount;
 }
 }
 }
 }
 
 console.log('Total text length:', allText.length);
-if (!allText || allText.length < 20) {
-return { extractionSuccess: false, boqItems: [], tenderValue: 0 };
+console.log('Extracted tender value:', tenderValue);
+
+// Return with real tender value even if no BOQ items
+if (tenderValue > 100000) {
+console.log('Real tender value extracted from PDF:', tenderValue);
+return {
+extractionSuccess: false,
+boqItems: [],
+tenderValue,
+realValueFound: true
+};
 }
 
-const prompt = `Extract BOQ items from this tender table data extracted from Excel sheets.
-Look for rows with work descriptions, quantities, units and rates.
-
-Data:
-${allText.substring(0, 6000)}
-
-Return ONLY valid JSON no markdown:
-{"extractionSuccess":true,"boqItems":[{"item":"work description","unit":"Cum","quantity":100,"rate":7200,"amount":720000}],"tenderValue":0}
-
-If no BOQ found: {"extractionSuccess":false,"boqItems":[],"tenderValue":0}`;
-
-const response = await fetch(
-`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
-{
-method: 'POST',
-headers: { 'Content-Type': 'application/json' },
-body: JSON.stringify({
-contents: [{ parts: [{ text: prompt }] }],
-generationConfig: { temperature: 0.1, maxOutputTokens: 3000 }
-}),
-signal: AbortSignal.timeout(20000)
-}
-);
-
-const geminiData = await response.json();
-const responseText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-console.log('Gemini response:', responseText.substring(0, 500));
-
-let parsed = null;
-try {
-const cleaned = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-parsed = JSON.parse(cleaned);
-} catch (e1) {
-try {
-const match = responseText.match(/\{[\s\S]*\}/);
-if (match) parsed = JSON.parse(match[0]);
-} catch (e2) { console.log('JSON parse failed'); }
-}
-
-if (parsed) {
-console.log('BOQ - success:', parsed.extractionSuccess, 'items:', parsed.boqItems?.length);
-return parsed;
-}
 return { extractionSuccess: false, boqItems: [], tenderValue: 0 };
 } catch (e) {
 console.log('ZIP parse error:', e.message);
@@ -381,11 +349,12 @@ else if (v.includes('L')) deptEstimate = parseFloat(v) * 100000;
 else { const n = parseFloat(v.replace(/[^0-9.]/g, '')); if (n > 100000) deptEstimate = n; }
 }
 if (!deptEstimate || deptEstimate < 100000) deptEstimate = estimateTenderValue(tenderTitle || '', organisation || '');
-console.log('Dept estimate:', deptEstimate);
+console.log('Initial dept estimate:', deptEstimate);
 
 let boqItems = [];
 let dataSource = 'pwd_estimation';
 let pdfRead = false;
+let realValueFromPDF = 0;
 
 if (pdfUrl && pdfUrl.startsWith('http') && ADOBE_CLIENT_ID && ADOBE_CLIENT_SECRET) {
 const token = await getAdobeToken();
@@ -395,21 +364,28 @@ if (pdfBuffer && pdfBuffer.length > 1000) {
 const zipBuffer = await extractWithAdobe(pdfBuffer, token);
 if (zipBuffer) {
 const parsed = await parseBOQFromZip(zipBuffer);
-if (parsed && parsed.extractionSuccess && parsed.boqItems?.length > 0) {
+if (parsed.tenderValue > 100000) {
+realValueFromPDF = parsed.tenderValue;
+deptEstimate = parsed.tenderValue;
+console.log('Using real PDF tender value:', deptEstimate);
+}
+if (parsed.extractionSuccess && parsed.boqItems?.length > 0) {
 boqItems = parsed.boqItems;
 dataSource = 'actual_pdf';
 pdfRead = true;
-if (parsed.tenderValue > 100000) deptEstimate = parsed.tenderValue;
-console.log('Adobe SUCCESS! Items:', boqItems.length);
+console.log('Adobe BOQ SUCCESS! Items:', boqItems.length);
 }
 }
 }
 }
 }
 
+// Always generate BOQ items if not extracted from PDF
 if (boqItems.length === 0) {
 boqItems = generateEstimatedBOQ(tenderType || '', deptEstimate);
-console.log('Using estimated BOQ, type:', tenderType);
+// If we got real value from PDF, mark as pdf_value_estimated_boq
+dataSource = realValueFromPDF > 0 ? 'pdf_value_estimated_boq' : 'pwd_estimation';
+console.log('Generated estimated BOQ with value:', deptEstimate);
 }
 
 const executionCost = boqItems.reduce((sum, item) => sum + (item.amount || item.quantity * item.rate || 0), 0);
@@ -419,7 +395,15 @@ const profitMargin = Math.round((expectedProfit / expectedWinningBid) * 100);
 const defaults = getDefaultsForType(tenderType || '');
 const bidReason = await getBidReason(tenderType || 'Civil', deptEstimate, profitMargin);
 
-console.log('Result - margin:', profitMargin, '% source:', dataSource);
+console.log('Result - estimate:', deptEstimate, 'margin:', profitMargin, '% source:', dataSource);
+
+// Message based on what we extracted
+let message = '📊 AI-estimated BOQ based on Maharashtra PWD rates 2024-25';
+if (pdfRead) {
+message = `✅ Real BOQ extracted from tender PDF — ${boqItems.length} items found`;
+} else if (realValueFromPDF > 0) {
+message = `📄 Real tender value ₹${(realValueFromPDF/10000000).toFixed(2)} Cr extracted from PDF — BOQ estimated using PWD rates`;
+}
 
 res.writeHead(200, { 'Content-Type': 'application/json' });
 res.end(JSON.stringify({
@@ -436,7 +420,7 @@ contingency: Math.round(executionCost * 0.05), keyMaterials: defaults.keyMateria
 majorEquipment: defaults.majorEquipment, executionDays: defaults.executionDays, riskFactors: defaults.riskFactors,
 },
 pdfRead,
-message: pdfRead ? `✅ Real BOQ extracted from tender PDF — ${boqItems.length} items found` : '📊 AI-estimated BOQ based on Maharashtra PWD rates 2024-25'
+message
 }));
 
 } catch (error) {
@@ -449,4 +433,3 @@ res.end(JSON.stringify({ error: 'BOQ analysis failed', details: String(error) })
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => console.log(`BOQ service running on port ${PORT}`));
-
