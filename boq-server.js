@@ -20,11 +20,42 @@ return PWD_RATES['default'];
 async function estimateWithGemini(title, type, org, value) {
 try {
 const t = Math.round(value * 0.85);
-const prompt = `Mumbai PWD quantity surveyor. Tender: ${title}, Type: ${type}, Org: ${org}, Value: ${value}. Return ONLY valid JSON no markdown: {"boqItems":[{"item":"specific item","quantity":500,"unit":"Cum","rate":280,"amount":140000},{"item":"item2","quantity":200,"unit":"Sqm","rate":650,"amount":130000}],"materialCost":${Math.round(t*0.45)},"labourCost":${Math.round(t*0.25)},"equipmentCost":${Math.round(t*0.15)},"overheadCost":${Math.round(t*0.10)},"contingency":${Math.round(t*0.05)},"keyMaterials":["Cement OPC 53","TMT Steel Fe500D","River Sand"],"majorEquipment":["JCB Excavator","Concrete Mixer"],"executionDays":120,"riskFactors":["Monsoon delays","Urban utilities","Traffic management"],"bidRecommendationReason":"specific reason for this tender"}`;
+
+const prompt = `You are an expert quantity surveyor for Mumbai government construction projects. Analyze this specific tender carefully.
+
+TENDER DETAILS:
+- Title: ${title}
+- Type: ${type}
+- Organisation: ${org}
+- Department Estimate: Rs ${value}
+
+Based on the EXACT tender title and type above, provide realistic BOQ items specific to THIS work only.
+Target execution cost should be Rs ${t} (85% of dept estimate).
+The profit margin should reflect realistic market conditions — typically between 8% to 18% depending on complexity.
+
+Return ONLY this JSON, no markdown, no explanation:
+{
+"boqItems": [
+{"item": "most relevant work item for this specific tender","quantity": 500,"unit": "Cum","rate": 1200,"amount": 600000},
+{"item": "second most relevant item specific to this work","quantity": 300,"unit": "Sqm","rate": 850,"amount": 255000},
+{"item": "third item specific to this tender type","quantity": 150,"unit": "Rm","rate": 2200,"amount": 330000},
+{"item": "fourth relevant item","quantity": 200,"unit": "Nos","rate": 4500,"amount": 900000}
+],
+"materialCost": ${Math.round(t * 0.45)},
+"labourCost": ${Math.round(t * 0.25)},
+"equipmentCost": ${Math.round(t * 0.15)},
+"overheadCost": ${Math.round(t * 0.10)},
+"contingency": ${Math.round(t * 0.05)},
+"keyMaterials": ["primary material specific to ${type} work in Mumbai 2026","secondary material with current rate","tertiary material"],
+"majorEquipment": ["primary equipment needed for ${type}","secondary equipment"],
+"executionDays": 120,
+"riskFactors": ["risk specific to ${type} work in Mumbai","monsoon season impact on timeline","urban site access constraints"],
+"bidRecommendationReason": "Specific financial reasoning for this Rs ${value} ${type} tender considering Mumbai 2026 market rates and competition"
+}`;
 
 const body = JSON.stringify({
 contents: [{ parts: [{ text: prompt }] }],
-generationConfig: { temperature: 0.3, maxOutputTokens: 1000 }
+generationConfig: { temperature: 0.7, maxOutputTokens: 1500 }
 });
 
 const response = await fetch(
