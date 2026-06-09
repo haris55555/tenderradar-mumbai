@@ -104,9 +104,34 @@ return { item: item.item, unit: item.unit, quantity, rate: item.rate, amount };
 });
 }
 
+async function downloadPDF(url) {
+try {
+console.log('Downloading PDF from:', url);
+// Try with different headers to bypass BMC blocking
+const response = await fetch(url, {
+headers: {
+'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+'Accept': 'application/pdf,*/*',
+'Accept-Language': 'en-IN,en;q=0.9',
+'Referer': 'https://portal.mcgm.gov.in/irj/portal/anonymous/qletenders_new?guest_user=english',
+'Origin': 'https://portal.mcgm.gov.in',
+'Connection': 'keep-alive',
+},
+signal: AbortSignal.timeout(25000)
+});
+console.log('PDF download status:', response.status);
+if (!response.ok) return null;
+const buffer = await response.arrayBuffer();
+console.log('PDF downloaded, size:', buffer.byteLength, 'bytes');
+return Buffer.from(buffer);
+} catch (e) {
+console.log('PDF download error:', e.message);
+return null;
+}
+}
+
 async function getAdobeToken() {
 try {
-console.log('Getting Adobe token...');
 const params = new URLSearchParams();
 params.append('client_id', ADOBE_CLIENT_ID);
 params.append('client_secret', ADOBE_CLIENT_SECRET);
@@ -121,13 +146,11 @@ signal: AbortSignal.timeout(15000)
 });
 
 const text = await response.text();
-console.log('Adobe token status:', response.status);
 const data = JSON.parse(text);
 if (data.access_token) {
-console.log('Adobe token obtained successfully');
+console.log('Adobe token obtained');
 return data.access_token;
 }
-console.log('No access token:', text.substring(0, 200));
 return null;
 } catch (e) {
 console.log('Adobe token error:', e.message);
@@ -135,33 +158,8 @@ return null;
 }
 }
 
-async function downloadPDF(url) {
-try {
-console.log('Downloading PDF from:', url);
-const response = await fetch(url, {
-headers: {
-'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-'Referer': 'https://portal.mcgm.gov.in/'
-},
-signal: AbortSignal.timeout(20000)
-});
-if (!response.ok) {
-console.log('PDF download failed:', response.status);
-return null;
-}
-const buffer = await response.arrayBuffer();
-console.log('PDF downloaded, size:', buffer.byteLength, 'bytes');
-return Buffer.from(buffer);
-} catch (e) {
-console.log('PDF download error:', e.message);
-return null;
-}
-}
-
 async function extractWithAdobe(pdfBuffer, token) {
 try {
-console.log('Starting Adobe extraction...');
-
 const uploadRes = await fetch('https://pdf-services.adobe.io/assets', {
 method: 'POST',
 headers: {
@@ -173,21 +171,15 @@ body: JSON.stringify({ mediaType: 'application/pdf' }),
 signal: AbortSignal.timeout(15000)
 });
 
-console.log('Upload URL status:', uploadRes.status);
 const uploadData = await uploadRes.json();
+if (!uploadData.uploadUri || !uploadData.assetID) return null;
 
-if (!uploadData.uploadUri || !uploadData.assetID) {
-console.log('No upload URI or assetID');
-return null;
-}
-
-const putRes = await fetch(uploadData.uploadUri, {
+await fetch(uploadData.uploadUri, {
 method: 'PUT',
 headers: { 'Content-Type': 'application/pdf' },
 body: pdfBuffer,
 signal: AbortSignal.timeout(30000)
 });
-console.log('PDF upload status:', putRes.status);
 
 const extractRes = await fetch('https://pdf-services.adobe.io/operation/extractpdf', {
 method: 'POST',
@@ -203,16 +195,11 @@ elementsToExtract: ['text', 'tables']
 signal: AbortSignal.timeout(15000)
 });
 
-console.log('Extract job status:', extractRes.status);
 const jobLocation = extractRes.headers.get('location');
-console.log('Job location:', jobLocation);
-
 if (!jobLocation) return null;
 
 for (let i = 0; i < 12; i++) {
 await new Promise(r => setTimeout(r, 5000));
-console.log(`Poll attempt ${i + 1}...`);
-
 const pollRes = await fetch(jobLocation, {
 headers: {
 'Authorization': `Bearer ${token}`,
@@ -232,14 +219,8 @@ const resultText = await resultRes.text();
 console.log('Extracted text length:', resultText.length);
 return resultText;
 }
-
-if (pollData.status === 'failed') {
-console.log('Extraction failed:', JSON.stringify(pollData));
-return null;
+if (pollData.status === 'failed') return null;
 }
-}
-
-console.log('Polling timed out');
 return null;
 } catch (e) {
 console.log('Adobe extraction error:', e.message);
@@ -249,8 +230,6 @@ return null;
 
 async function parseBOQFromExtractedText(text) {
 try {
-console.log('Parsing BOQ - text sample:', text.substring(0, 300));
-
 const prompt = `Extract BOQ items from this tender document text.
 Find any table with work items, quantities, units and rates.
 
@@ -278,10 +257,9 @@ signal: AbortSignal.timeout(20000)
 
 const data = await response.json();
 const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-console.log('Gemini raw response:', responseText.substring(0, 500));
+console.log('Gemini response sample:', responseText.substring(0, 300));
 
 let parsed = null;
-
 try {
 const cleaned = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
 parsed = JSON.parse(cleaned);
@@ -290,16 +268,15 @@ try {
 const match = responseText.match(/\{[\s\S]*\}/);
 if (match) parsed = JSON.parse(match[0]);
 } catch (e2) {
-console.log('JSON parse failed:', e2.message);
+console.log('JSON parse failed');
 }
 }
 
 if (parsed) {
-console.log('Parsed successfully - extractionSuccess:', parsed.extractionSuccess, 'items:', parsed.boqItems?.length);
+console.log('BOQ parsed - success:', parsed.extractionSuccess, 'items:', parsed.boqItems?.length);
 return parsed;
 }
 
-console.log('Could not parse JSON from Gemini response');
 return { extractionSuccess: false, boqItems: [], tenderValue: 0 };
 } catch (e) {
 console.log('BOQ parsing error:', e.message);
@@ -350,7 +327,7 @@ req.on('data', chunk => body += chunk);
 req.on('end', async () => {
 try {
 const { tenderTitle, tenderValue, tenderValueNum, tenderType, organisation, pdfUrl } = JSON.parse(body);
-console.log('BOQ request:', { tenderTitle: tenderTitle?.substring(0, 50), tenderType, pdfUrl: pdfUrl?.substring(0, 80) });
+console.log('BOQ request:', tenderTitle?.substring(0, 50), '| type:', tenderType);
 
 let deptEstimate = 0;
 if (tenderValueNum && tenderValueNum > 100000) deptEstimate = tenderValueNum;
@@ -366,46 +343,35 @@ if (n > 100000) deptEstimate = n;
 if (!deptEstimate || deptEstimate < 100000) {
 deptEstimate = estimateTenderValue(tenderTitle || '', organisation || '');
 }
-console.log('Department estimate:', deptEstimate);
+console.log('Dept estimate:', deptEstimate);
 
 let boqItems = [];
 let dataSource = 'pwd_estimation';
 let pdfRead = false;
 
 if (pdfUrl && pdfUrl.startsWith('http') && ADOBE_CLIENT_ID && ADOBE_CLIENT_SECRET) {
-console.log('Attempting Adobe PDF extraction...');
 const token = await getAdobeToken();
-
 if (token) {
 const pdfBuffer = await downloadPDF(pdfUrl);
-
 if (pdfBuffer && pdfBuffer.length > 1000) {
 const extractedText = await extractWithAdobe(pdfBuffer, token);
-
 if (extractedText) {
 const parsed = await parseBOQFromExtractedText(extractedText);
-
-if (parsed && parsed.extractionSuccess && parsed.boqItems && parsed.boqItems.length > 0) {
+if (parsed && parsed.extractionSuccess && parsed.boqItems?.length > 0) {
 boqItems = parsed.boqItems;
 dataSource = 'actual_pdf';
 pdfRead = true;
-if (parsed.tenderValue && parsed.tenderValue > 100000) {
-deptEstimate = parsed.tenderValue;
-}
-console.log('Adobe extraction SUCCESS! Items:', boqItems.length);
-} else {
-console.log('No BOQ items found in extracted text');
+if (parsed.tenderValue > 100000) deptEstimate = parsed.tenderValue;
+console.log('Adobe SUCCESS! Items:', boqItems.length);
 }
 }
 }
 }
-} else {
-console.log('Skipping Adobe - pdfUrl:', !!pdfUrl, 'credentials:', !!ADOBE_CLIENT_ID);
 }
 
 if (boqItems.length === 0) {
-console.log('Using estimated BOQ for type:', tenderType);
 boqItems = generateEstimatedBOQ(tenderType || '', deptEstimate);
+console.log('Using estimated BOQ, type:', tenderType, 'items:', boqItems.length);
 }
 
 const executionCost = boqItems.reduce((sum, item) => sum + (item.amount || item.quantity * item.rate || 0), 0);
@@ -415,9 +381,10 @@ const profitMargin = Math.round((expectedProfit / expectedWinningBid) * 100);
 const defaults = getDefaultsForType(tenderType || '');
 const bidReason = await getBidReason(tenderType || 'Civil', deptEstimate, profitMargin);
 
-console.log('Final - margin:', profitMargin, '% source:', dataSource, 'items:', boqItems.length);
+console.log('Result - margin:', profitMargin, '% source:', dataSource);
 
-const result = {
+res.writeHead(200, { 'Content-Type': 'application/json' });
+res.end(JSON.stringify({
 success: true,
 boq: {
 dataSource,
@@ -445,13 +412,10 @@ pdfRead,
 message: pdfRead
 ? `✅ Real BOQ extracted from tender PDF — ${boqItems.length} items found`
 : '📊 AI-estimated BOQ based on Maharashtra PWD rates 2024-25'
-};
-
-res.writeHead(200, { 'Content-Type': 'application/json' });
-res.end(JSON.stringify(result));
+}));
 
 } catch (error) {
-console.log('Handler error:', error.message);
+console.log('Error:', error.message);
 res.writeHead(500, { 'Content-Type': 'application/json' });
 res.end(JSON.stringify({ error: 'BOQ analysis failed', details: String(error) }));
 }
