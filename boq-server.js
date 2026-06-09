@@ -121,15 +121,13 @@ signal: AbortSignal.timeout(15000)
 });
 
 const text = await response.text();
-console.log('Adobe token response status:', response.status);
-console.log('Adobe token response:', text.substring(0, 200));
-
+console.log('Adobe token status:', response.status);
 const data = JSON.parse(text);
 if (data.access_token) {
 console.log('Adobe token obtained successfully');
 return data.access_token;
 }
-console.log('No access token in response');
+console.log('No access token:', text.substring(0, 200));
 return null;
 } catch (e) {
 console.log('Adobe token error:', e.message);
@@ -148,7 +146,7 @@ headers: {
 signal: AbortSignal.timeout(20000)
 });
 if (!response.ok) {
-console.log('PDF download failed with status:', response.status);
+console.log('PDF download failed:', response.status);
 return null;
 }
 const buffer = await response.arrayBuffer();
@@ -164,7 +162,6 @@ async function extractWithAdobe(pdfBuffer, token) {
 try {
 console.log('Starting Adobe extraction...');
 
-// Step 1: Get upload presigned URL
 const uploadRes = await fetch('https://pdf-services.adobe.io/assets', {
 method: 'POST',
 headers: {
@@ -176,17 +173,14 @@ body: JSON.stringify({ mediaType: 'application/pdf' }),
 signal: AbortSignal.timeout(15000)
 });
 
-console.log('Upload URL response status:', uploadRes.status);
+console.log('Upload URL status:', uploadRes.status);
 const uploadData = await uploadRes.json();
-console.log('Upload data:', JSON.stringify(uploadData).substring(0, 200));
 
 if (!uploadData.uploadUri || !uploadData.assetID) {
-console.log('No upload URI or assetID received');
+console.log('No upload URI or assetID');
 return null;
 }
 
-// Step 2: Upload PDF to presigned URL
-console.log('Uploading PDF to Adobe...');
 const putRes = await fetch(uploadData.uploadUri, {
 method: 'PUT',
 headers: { 'Content-Type': 'application/pdf' },
@@ -195,8 +189,6 @@ signal: AbortSignal.timeout(30000)
 });
 console.log('PDF upload status:', putRes.status);
 
-// Step 3: Start extraction job
-console.log('Starting extraction job...');
 const extractRes = await fetch('https://pdf-services.adobe.io/operation/extractpdf', {
 method: 'POST',
 headers: {
@@ -215,14 +207,8 @@ console.log('Extract job status:', extractRes.status);
 const jobLocation = extractRes.headers.get('location');
 console.log('Job location:', jobLocation);
 
-if (!jobLocation) {
-const extractData = await extractRes.json();
-console.log('Extract response:', JSON.stringify(extractData).substring(0, 200));
-return null;
-}
+if (!jobLocation) return null;
 
-// Step 4: Poll for result
-console.log('Polling for results...');
 for (let i = 0; i < 12; i++) {
 await new Promise(r => setTimeout(r, 5000));
 console.log(`Poll attempt ${i + 1}...`);
@@ -240,12 +226,10 @@ console.log('Poll status:', pollData.status);
 
 if (pollData.status === 'done') {
 const downloadUri = pollData.resource?.downloadUri;
-console.log('Extraction done! Download URI:', downloadUri ? 'found' : 'missing');
 if (!downloadUri) return null;
-
 const resultRes = await fetch(downloadUri, { signal: AbortSignal.timeout(15000) });
 const resultText = await resultRes.text();
-console.log('Result text length:', resultText.length);
+console.log('Extracted text length:', resultText.length);
 return resultText;
 }
 
@@ -265,18 +249,19 @@ return null;
 
 async function parseBOQFromExtractedText(text) {
 try {
-console.log('Parsing BOQ from extracted text...');
-const prompt = `You are an expert quantity surveyor. Below is text extracted from a Mumbai BMC government tender PDF.
+console.log('Parsing BOQ - text sample:', text.substring(0, 300));
 
-Find and extract ALL BOQ (Bill of Quantities) line items. Look for tables with item descriptions, quantities, units and rates.
+const prompt = `Extract BOQ items from this tender document text.
+Find any table with work items, quantities, units and rates.
 
 Text:
-${text.substring(0, 10000)}
+${text.substring(0, 8000)}
 
-Return ONLY this JSON, no markdown:
-{"extractionSuccess":true,"boqItems":[{"item":"description","unit":"Cum","quantity":100,"rate":7200,"amount":720000}],"tenderValue":0}
+Return ONLY valid JSON no markdown no explanation:
+{"extractionSuccess":true,"boqItems":[{"item":"work description","unit":"Cum","quantity":100,"rate":7200,"amount":720000}],"tenderValue":0}
 
-If no BOQ found: {"extractionSuccess":false,"boqItems":[],"tenderValue":0}`;
+If no BOQ table found return:
+{"extractionSuccess":false,"boqItems":[],"tenderValue":0}`;
 
 const response = await fetch(
 `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
@@ -285,7 +270,7 @@ method: 'POST',
 headers: { 'Content-Type': 'application/json' },
 body: JSON.stringify({
 contents: [{ parts: [{ text: prompt }] }],
-generationConfig: { temperature: 0.1, maxOutputTokens: 2000 }
+generationConfig: { temperature: 0.1, maxOutputTokens: 3000 }
 }),
 signal: AbortSignal.timeout(20000)
 }
@@ -293,10 +278,29 @@ signal: AbortSignal.timeout(20000)
 
 const data = await response.json();
 const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+console.log('Gemini raw response:', responseText.substring(0, 500));
+
+let parsed = null;
+
+try {
 const cleaned = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-const parsed = JSON.parse(cleaned.match(/\{[\s\S]*\}/)?.[0] || '{}');
-console.log('BOQ parsing result - success:', parsed.extractionSuccess, 'items:', parsed.boqItems?.length);
+parsed = JSON.parse(cleaned);
+} catch (e1) {
+try {
+const match = responseText.match(/\{[\s\S]*\}/);
+if (match) parsed = JSON.parse(match[0]);
+} catch (e2) {
+console.log('JSON parse failed:', e2.message);
+}
+}
+
+if (parsed) {
+console.log('Parsed successfully - extractionSuccess:', parsed.extractionSuccess, 'items:', parsed.boqItems?.length);
 return parsed;
+}
+
+console.log('Could not parse JSON from Gemini response');
+return { extractionSuccess: false, boqItems: [], tenderValue: 0 };
 } catch (e) {
 console.log('BOQ parsing error:', e.message);
 return { extractionSuccess: false, boqItems: [], tenderValue: 0 };
@@ -348,7 +352,6 @@ try {
 const { tenderTitle, tenderValue, tenderValueNum, tenderType, organisation, pdfUrl } = JSON.parse(body);
 console.log('BOQ request:', { tenderTitle: tenderTitle?.substring(0, 50), tenderType, pdfUrl: pdfUrl?.substring(0, 80) });
 
-// Get department estimate
 let deptEstimate = 0;
 if (tenderValueNum && tenderValueNum > 100000) deptEstimate = tenderValueNum;
 if (!deptEstimate) {
@@ -369,7 +372,6 @@ let boqItems = [];
 let dataSource = 'pwd_estimation';
 let pdfRead = false;
 
-// Try Adobe PDF extraction
 if (pdfUrl && pdfUrl.startsWith('http') && ADOBE_CLIENT_ID && ADOBE_CLIENT_SECRET) {
 console.log('Attempting Adobe PDF extraction...');
 const token = await getAdobeToken();
@@ -383,7 +385,7 @@ const extractedText = await extractWithAdobe(pdfBuffer, token);
 if (extractedText) {
 const parsed = await parseBOQFromExtractedText(extractedText);
 
-if (parsed.extractionSuccess && parsed.boqItems?.length > 0) {
+if (parsed && parsed.extractionSuccess && parsed.boqItems && parsed.boqItems.length > 0) {
 boqItems = parsed.boqItems;
 dataSource = 'actual_pdf';
 pdfRead = true;
@@ -391,19 +393,19 @@ if (parsed.tenderValue && parsed.tenderValue > 100000) {
 deptEstimate = parsed.tenderValue;
 }
 console.log('Adobe extraction SUCCESS! Items:', boqItems.length);
+} else {
+console.log('No BOQ items found in extracted text');
 }
 }
 }
 }
 } else {
-console.log('Skipping Adobe - missing pdfUrl or credentials');
+console.log('Skipping Adobe - pdfUrl:', !!pdfUrl, 'credentials:', !!ADOBE_CLIENT_ID);
 }
 
-// Fall back to estimated BOQ
 if (boqItems.length === 0) {
 console.log('Using estimated BOQ for type:', tenderType);
 boqItems = generateEstimatedBOQ(tenderType || '', deptEstimate);
-dataSource = 'pwd_estimation';
 }
 
 const executionCost = boqItems.reduce((sum, item) => sum + (item.amount || item.quantity * item.rate || 0), 0);
@@ -413,7 +415,7 @@ const profitMargin = Math.round((expectedProfit / expectedWinningBid) * 100);
 const defaults = getDefaultsForType(tenderType || '');
 const bidReason = await getBidReason(tenderType || 'Civil', deptEstimate, profitMargin);
 
-console.log('Final result - margin:', profitMargin, '% source:', dataSource);
+console.log('Final - margin:', profitMargin, '% source:', dataSource, 'items:', boqItems.length);
 
 const result = {
 success: true,
