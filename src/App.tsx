@@ -363,7 +363,7 @@ setAiLoading(false);
 const generateBOQ = async () => {
 setBoqLoading(true);
 try {
-const response = await fetch("/api/boq", {
+const response = await fetch("https://boq-server-pov7.onrender.com/api/boq", {
 method: "POST",
 headers: { "Content-Type": "application/json" },
 body: JSON.stringify({
