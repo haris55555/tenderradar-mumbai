@@ -1,4 +1,5 @@
 import http from 'http';
+import { inflateRawSync } from 'zlib';
 
 const GEMINI_KEY = process.env.GEMINI_KEY || '';
 const ADOBE_CLIENT_ID = process.env.ADOBE_CLIENT_ID || '';
@@ -131,12 +132,12 @@ headers: {
 },
 signal: AbortSignal.timeout(25000)
 });
-console.log('PDF download status:', response.status);
+console.log('PDF status:', response.status);
 if (!response.ok) return null;
 const buffer = await response.arrayBuffer();
 console.log('PDF size:', buffer.byteLength);
 return Buffer.from(buffer);
-} catch (e) { console.log('PDF download error:', e.message); return null; }
+} catch (e) { console.log('PDF error:', e.message); return null; }
 }
 
 async function extractWithAdobe(pdfBuffer, token) {
@@ -177,85 +178,120 @@ return null;
 } catch (e) { console.log('Adobe error:', e.message); return null; }
 }
 
-function extractFilesFromZip(zipBuffer) {
-const files = {};
+function parseZipEntries(zipBuffer) {
+const entries = {};
 let pos = 0;
 while (pos < zipBuffer.length - 4) {
-if (zipBuffer[pos] === 0x50 && zipBuffer[pos+1] === 0x4B && zipBuffer[pos+2] === 0x03 && zipBuffer[pos+3] === 0x04) {
-const compressionMethod = zipBuffer.readUInt16LE(pos + 8);
+if (zipBuffer[pos] === 0x50 && zipBuffer[pos+1] === 0x4B &&
+zipBuffer[pos+2] === 0x03 && zipBuffer[pos+3] === 0x04) {
+const compression = zipBuffer.readUInt16LE(pos + 8);
 const compressedSize = zipBuffer.readUInt32LE(pos + 18);
-const fileNameLength = zipBuffer.readUInt16LE(pos + 26);
-const extraLength = zipBuffer.readUInt16LE(pos + 28);
-const fileName = zipBuffer.slice(pos + 30, pos + 30 + fileNameLength).toString('utf8');
-const dataStart = pos + 30 + fileNameLength + extraLength;
-const fileData = zipBuffer.slice(dataStart, dataStart + compressedSize);
-files[fileName] = { data: fileData, compression: compressionMethod };
+const uncompressedSize = zipBuffer.readUInt32LE(pos + 22);
+const nameLen = zipBuffer.readUInt16LE(pos + 26);
+const extraLen = zipBuffer.readUInt16LE(pos + 28);
+const name = zipBuffer.slice(pos + 30, pos + 30 + nameLen).toString('utf8');
+const dataStart = pos + 30 + nameLen + extraLen;
+const compressedData = zipBuffer.slice(dataStart, dataStart + compressedSize);
+entries[name] = { compression, compressedData, uncompressedSize };
 pos = dataStart + compressedSize;
 } else {
 pos++;
 }
 }
-return files;
+return entries;
 }
 
-async function extractXlsxText(xlsxBuffer) {
-// XLSX is also a ZIP - extract shared strings and sheet data
-try {
-const files = extractFilesFromZip(xlsxBuffer);
-let text = '';
-
-// Get shared strings
-const sharedStringsFile = files['xl/sharedStrings.xml'];
-if (sharedStringsFile && sharedStringsFile.compression === 0) {
-const xml = sharedStringsFile.data.toString('utf8');
-const matches = xml.match(/<t[^>]*>([^<]+)<\/t>/g) || [];
-const strings = matches.map(m => m.replace(/<[^>]+>/g, '').trim());
-text += strings.join(' | ') + '\n';
+function decompressEntry(entry) {
+if (entry.compression === 0) return entry.compressedData;
+if (entry.compression === 8) {
+try { return inflateRawSync(entry.compressedData); } catch (e) { return null; }
+}
+return null;
 }
 
-return text;
-} catch (e) {
-return '';
+function extractTextFromXml(xml) {
+// Extract text values from XML
+const texts = [];
+const matches = xml.match(/<(?:v|t)[^>]*>([^<]+)<\/(?:v|t)>/g) || [];
+for (const m of matches) {
+const val = m.replace(/<[^>]+>/g, '').trim();
+if (val && val.length > 0) texts.push(val);
 }
+return texts;
 }
 
 async function parseBOQFromZip(zipBuffer) {
 try {
-const files = extractFilesFromZip(zipBuffer);
-console.log('ZIP files found:', Object.keys(files).length);
+const entries = parseZipEntries(zipBuffer);
+console.log('ZIP entries:', Object.keys(entries).join(', '));
 
-// Collect text from all xlsx files
-let allTableText = '';
-const xlsxFiles = Object.keys(files).filter(f => f.endsWith('.xlsx'));
-console.log('XLSX files:', xlsxFiles.length);
+let allText = '';
 
-for (const xlsxFile of xlsxFiles.slice(0, 10)) { // Check first 10 tables
-const fileEntry = files[xlsxFile];
-if (fileEntry.compression === 8) {
-// Deflate compressed - need to decompress
-try {
-const { inflateRawSync } = await import('zlib');
-const decompressed = inflateRawSync(fileEntry.data);
-const text = await extractXlsxText(decompressed);
-if (text.length > 50) {
-allTableText += `\n--- Table from ${xlsxFile} ---\n${text}`;
+for (const [name, entry] of Object.entries(entries)) {
+if (!name.endsWith('.xlsx')) continue;
+
+const xlsxBuffer = decompressEntry(entry);
+if (!xlsxBuffer) { console.log('Could not decompress:', name); continue; }
+
+// Parse the XLSX (which is itself a ZIP)
+const xlsxEntries = parseZipEntries(xlsxBuffer);
+
+// Get shared strings
+let sharedStrings = [];
+const ssEntry = xlsxEntries['xl/sharedStrings.xml'];
+if (ssEntry) {
+const ssBuffer = decompressEntry(ssEntry);
+if (ssBuffer) {
+const ssXml = ssBuffer.toString('utf8');
+const matches = ssXml.match(/<t[^>]*>([^<]*)<\/t>/g) || [];
+sharedStrings = matches.map(m => m.replace(/<[^>]+>/g, '').trim());
+console.log(`${name} shared strings:`, sharedStrings.length, 'sample:', sharedStrings.slice(0, 5).join(', '));
 }
-} catch (e) {}
+}
+
+// Get sheet data
+const sheetEntry = xlsxEntries['xl/worksheets/sheet1.xml'];
+if (sheetEntry) {
+const sheetBuffer = decompressEntry(sheetEntry);
+if (sheetBuffer) {
+const sheetXml = sheetBuffer.toString('utf8');
+
+// Extract cell values
+const cellMatches = sheetXml.match(/<c[^>]*r="[^"]*"[^>]*>[\s\S]*?<\/c>/g) || [];
+const rowData = [];
+
+for (const cell of cellMatches) {
+const typeMatch = cell.match(/t="([^"]*)"/);
+const valueMatch = cell.match(/<v>([^<]*)<\/v>/);
+if (!valueMatch) continue;
+
+let value = valueMatch[1];
+if (typeMatch && typeMatch[1] === 's') {
+// Shared string
+const idx = parseInt(value);
+value = sharedStrings[idx] || value;
+}
+if (value) rowData.push(value);
+}
+
+if (rowData.length > 0) {
+allText += rowData.join(' | ') + '\n';
+console.log(`${name} row data sample:`, rowData.slice(0, 8).join(' | '));
+}
+}
 }
 }
 
-console.log('Table text length:', allTableText.length);
-console.log('Table text sample:', allTableText.substring(0, 500));
-
-if (!allTableText || allTableText.length < 50) {
-console.log('No table text extracted');
+console.log('Total text length:', allText.length);
+if (!allText || allText.length < 20) {
 return { extractionSuccess: false, boqItems: [], tenderValue: 0 };
 }
 
-const prompt = `Extract BOQ items from this tender table data. Each table row may contain work description, unit, quantity, rate and amount.
+const prompt = `Extract BOQ items from this tender table data extracted from Excel sheets.
+Look for rows with work descriptions, quantities, units and rates.
 
-Table data:
-${allTableText.substring(0, 5000)}
+Data:
+${allText.substring(0, 6000)}
 
 Return ONLY valid JSON no markdown:
 {"extractionSuccess":true,"boqItems":[{"item":"work description","unit":"Cum","quantity":100,"rate":7200,"amount":720000}],"tenderValue":0}
@@ -291,7 +327,7 @@ if (match) parsed = JSON.parse(match[0]);
 }
 
 if (parsed) {
-console.log('BOQ parsed - success:', parsed.extractionSuccess, 'items:', parsed.boqItems?.length);
+console.log('BOQ - success:', parsed.extractionSuccess, 'items:', parsed.boqItems?.length);
 return parsed;
 }
 return { extractionSuccess: false, boqItems: [], tenderValue: 0 };
@@ -413,3 +449,4 @@ res.end(JSON.stringify({ error: 'BOQ analysis failed', details: String(error) })
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => console.log(`BOQ service running on port ${PORT}`));
+
