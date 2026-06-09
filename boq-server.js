@@ -1,8 +1,4 @@
 import http from 'http';
-import https from 'https';
-import { createWriteStream, readFileSync, unlinkSync, existsSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
 
 const GEMINI_KEY = process.env.GEMINI_KEY || '';
 const ADOBE_CLIENT_ID = process.env.ADOBE_CLIENT_ID || '';
@@ -110,46 +106,65 @@ return { item: item.item, unit: item.unit, quantity, rate: item.rate, amount };
 
 async function getAdobeToken() {
 try {
-const body = new URLSearchParams({
-client_id: ADOBE_CLIENT_ID,
-client_secret: ADOBE_CLIENT_SECRET,
-grant_type: 'client_credentials',
-scope: 'openid,AdobeID,DCAPI'
-}).toString();
+console.log('Getting Adobe token...');
+const params = new URLSearchParams();
+params.append('client_id', ADOBE_CLIENT_ID);
+params.append('client_secret', ADOBE_CLIENT_SECRET);
+params.append('grant_type', 'client_credentials');
+params.append('scope', 'openid,AdobeID,read_organizations,dc.annotate,dc.annotate.readonly,dc.archive,dc.print.high,additional_info.job_function,additional_info.projectedProductContext');
 
 const response = await fetch('https://ims-na1.adobelogin.com/ims/token/v3', {
 method: 'POST',
 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-body,
-signal: AbortSignal.timeout(10000)
+body: params.toString(),
+signal: AbortSignal.timeout(15000)
 });
-const data = await response.json();
-return data.access_token || null;
+
+const text = await response.text();
+console.log('Adobe token response status:', response.status);
+console.log('Adobe token response:', text.substring(0, 200));
+
+const data = JSON.parse(text);
+if (data.access_token) {
+console.log('Adobe token obtained successfully');
+return data.access_token;
+}
+console.log('No access token in response');
+return null;
 } catch (e) {
+console.log('Adobe token error:', e.message);
 return null;
 }
 }
 
-async function downloadPDFBuffer(url) {
+async function downloadPDF(url) {
 try {
+console.log('Downloading PDF from:', url);
 const response = await fetch(url, {
 headers: {
 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
 'Referer': 'https://portal.mcgm.gov.in/'
 },
-signal: AbortSignal.timeout(15000)
+signal: AbortSignal.timeout(20000)
 });
-if (!response.ok) return null;
+if (!response.ok) {
+console.log('PDF download failed with status:', response.status);
+return null;
+}
 const buffer = await response.arrayBuffer();
+console.log('PDF downloaded, size:', buffer.byteLength, 'bytes');
 return Buffer.from(buffer);
 } catch (e) {
+console.log('PDF download error:', e.message);
 return null;
 }
 }
 
-async function extractBOQWithAdobe(pdfBuffer, token) {
+async function extractWithAdobe(pdfBuffer, token) {
 try {
-// Step 1: Get upload URL
+console.log('Starting Adobe extraction...');
+
+// Step 1: Get upload presigned URL
 const uploadRes = await fetch('https://pdf-services.adobe.io/assets', {
 method: 'POST',
 headers: {
@@ -160,18 +175,28 @@ headers: {
 body: JSON.stringify({ mediaType: 'application/pdf' }),
 signal: AbortSignal.timeout(15000)
 });
-const uploadData = await uploadRes.json();
-const { uploadUri, assetID } = uploadData;
 
-// Step 2: Upload PDF
-await fetch(uploadUri, {
+console.log('Upload URL response status:', uploadRes.status);
+const uploadData = await uploadRes.json();
+console.log('Upload data:', JSON.stringify(uploadData).substring(0, 200));
+
+if (!uploadData.uploadUri || !uploadData.assetID) {
+console.log('No upload URI or assetID received');
+return null;
+}
+
+// Step 2: Upload PDF to presigned URL
+console.log('Uploading PDF to Adobe...');
+const putRes = await fetch(uploadData.uploadUri, {
 method: 'PUT',
 headers: { 'Content-Type': 'application/pdf' },
 body: pdfBuffer,
 signal: AbortSignal.timeout(30000)
 });
+console.log('PDF upload status:', putRes.status);
 
-// Step 3: Extract text
+// Step 3: Start extraction job
+console.log('Starting extraction job...');
 const extractRes = await fetch('https://pdf-services.adobe.io/operation/extractpdf', {
 method: 'POST',
 headers: {
@@ -180,66 +205,78 @@ headers: {
 'Content-Type': 'application/json'
 },
 body: JSON.stringify({
-assetID,
+assetID: uploadData.assetID,
 elementsToExtract: ['text', 'tables']
 }),
 signal: AbortSignal.timeout(15000)
 });
 
-const extractData = await extractRes.json();
-const jobUrl = extractRes.headers.get('location') || extractData.jobID;
+console.log('Extract job status:', extractRes.status);
+const jobLocation = extractRes.headers.get('location');
+console.log('Job location:', jobLocation);
 
-if (!jobUrl) return null;
+if (!jobLocation) {
+const extractData = await extractRes.json();
+console.log('Extract response:', JSON.stringify(extractData).substring(0, 200));
+return null;
+}
 
 // Step 4: Poll for result
-let resultUrl = null;
-for (let i = 0; i < 10; i++) {
-await new Promise(r => setTimeout(r, 3000));
-const pollRes = await fetch(jobUrl.startsWith('http') ? jobUrl : `https://pdf-services.adobe.io/operation/extractpdf/${jobUrl}`, {
+console.log('Polling for results...');
+for (let i = 0; i < 12; i++) {
+await new Promise(r => setTimeout(r, 5000));
+console.log(`Poll attempt ${i + 1}...`);
+
+const pollRes = await fetch(jobLocation, {
 headers: {
 'Authorization': `Bearer ${token}`,
 'X-API-Key': ADOBE_CLIENT_ID
-}
+},
+signal: AbortSignal.timeout(10000)
 });
+
 const pollData = await pollRes.json();
+console.log('Poll status:', pollData.status);
+
 if (pollData.status === 'done') {
-resultUrl = pollData.resource?.downloadUri || pollData.content?.downloadUri;
-break;
-}
-if (pollData.status === 'failed') break;
-}
+const downloadUri = pollData.resource?.downloadUri;
+console.log('Extraction done! Download URI:', downloadUri ? 'found' : 'missing');
+if (!downloadUri) return null;
 
-if (!resultUrl) return null;
-
-// Step 5: Download and parse result
-const resultRes = await fetch(resultUrl);
+const resultRes = await fetch(downloadUri, { signal: AbortSignal.timeout(15000) });
 const resultText = await resultRes.text();
+console.log('Result text length:', resultText.length);
 return resultText;
+}
 
-} catch (e) {
+if (pollData.status === 'failed') {
+console.log('Extraction failed:', JSON.stringify(pollData));
 return null;
 }
 }
 
-async function parseBOQFromText(extractedText, deptEstimate) {
-try {
-const prompt = `You are an expert quantity surveyor. Below is extracted text from a Mumbai BMC government tender PDF.
-
-Extract ALL BOQ (Bill of Quantities) line items from this text. Look for tables with item descriptions, quantities, units and rates.
-
-Extracted text:
-${extractedText.substring(0, 8000)}
-
-Return ONLY this JSON, no markdown:
-{
-"extractionSuccess": true,
-"boqItems": [
-{"item": "description of work item", "unit": "Cum", "quantity": 100, "rate": 7200, "amount": 720000}
-],
-"tenderValue": 0
+console.log('Polling timed out');
+return null;
+} catch (e) {
+console.log('Adobe extraction error:', e.message);
+return null;
+}
 }
 
-If no BOQ table found return: {"extractionSuccess": false, "boqItems": [], "tenderValue": 0}`;
+async function parseBOQFromExtractedText(text) {
+try {
+console.log('Parsing BOQ from extracted text...');
+const prompt = `You are an expert quantity surveyor. Below is text extracted from a Mumbai BMC government tender PDF.
+
+Find and extract ALL BOQ (Bill of Quantities) line items. Look for tables with item descriptions, quantities, units and rates.
+
+Text:
+${text.substring(0, 10000)}
+
+Return ONLY this JSON, no markdown:
+{"extractionSuccess":true,"boqItems":[{"item":"description","unit":"Cum","quantity":100,"rate":7200,"amount":720000}],"tenderValue":0}
+
+If no BOQ found: {"extractionSuccess":false,"boqItems":[],"tenderValue":0}`;
 
 const response = await fetch(
 `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
@@ -250,29 +287,31 @@ body: JSON.stringify({
 contents: [{ parts: [{ text: prompt }] }],
 generationConfig: { temperature: 0.1, maxOutputTokens: 2000 }
 }),
-signal: AbortSignal.timeout(15000)
+signal: AbortSignal.timeout(20000)
 }
 );
+
 const data = await response.json();
-const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-const cleaned = text.replace(/```json/g, '').replace(/```/g, '').trim();
+const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+const cleaned = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
 const parsed = JSON.parse(cleaned.match(/\{[\s\S]*\}/)?.[0] || '{}');
+console.log('BOQ parsing result - success:', parsed.extractionSuccess, 'items:', parsed.boqItems?.length);
 return parsed;
 } catch (e) {
+console.log('BOQ parsing error:', e.message);
 return { extractionSuccess: false, boqItems: [], tenderValue: 0 };
 }
 }
 
 async function getBidReason(type, deptEstimate, profitMargin) {
 try {
-const prompt = `One sentence bid recommendation for Mumbai ${type} tender worth Rs ${deptEstimate} with ${profitMargin}% profit margin. Be specific about Mumbai 2026 market.`;
 const response = await fetch(
 `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
 {
 method: 'POST',
 headers: { 'Content-Type': 'application/json' },
 body: JSON.stringify({
-contents: [{ parts: [{ text: prompt }] }],
+contents: [{ parts: [{ text: `One sentence bid recommendation for Mumbai ${type} tender worth Rs ${deptEstimate} with ${profitMargin}% profit margin. Be specific about Mumbai 2026 market conditions.` }] }],
 generationConfig: { temperature: 0.7, maxOutputTokens: 100 }
 }),
 signal: AbortSignal.timeout(8000)
@@ -307,8 +346,9 @@ req.on('data', chunk => body += chunk);
 req.on('end', async () => {
 try {
 const { tenderTitle, tenderValue, tenderValueNum, tenderType, organisation, pdfUrl } = JSON.parse(body);
+console.log('BOQ request:', { tenderTitle: tenderTitle?.substring(0, 50), tenderType, pdfUrl: pdfUrl?.substring(0, 80) });
 
-// Step 1: Get department estimate
+// Get department estimate
 let deptEstimate = 0;
 if (tenderValueNum && tenderValueNum > 100000) deptEstimate = tenderValueNum;
 if (!deptEstimate) {
@@ -323,49 +363,57 @@ if (n > 100000) deptEstimate = n;
 if (!deptEstimate || deptEstimate < 100000) {
 deptEstimate = estimateTenderValue(tenderTitle || '', organisation || '');
 }
+console.log('Department estimate:', deptEstimate);
 
 let boqItems = [];
 let dataSource = 'pwd_estimation';
 let pdfRead = false;
 
-// Step 2: Try Adobe PDF extraction
+// Try Adobe PDF extraction
 if (pdfUrl && pdfUrl.startsWith('http') && ADOBE_CLIENT_ID && ADOBE_CLIENT_SECRET) {
-try {
+console.log('Attempting Adobe PDF extraction...');
 const token = await getAdobeToken();
+
 if (token) {
-const pdfBuffer = await downloadPDFBuffer(pdfUrl);
+const pdfBuffer = await downloadPDF(pdfUrl);
+
 if (pdfBuffer && pdfBuffer.length > 1000) {
-const extractedText = await extractBOQWithAdobe(pdfBuffer, token);
+const extractedText = await extractWithAdobe(pdfBuffer, token);
+
 if (extractedText) {
-const parsed = await parseBOQFromText(extractedText, deptEstimate);
-if (parsed.extractionSuccess && parsed.boqItems && parsed.boqItems.length > 0) {
+const parsed = await parseBOQFromExtractedText(extractedText);
+
+if (parsed.extractionSuccess && parsed.boqItems?.length > 0) {
 boqItems = parsed.boqItems;
 dataSource = 'actual_pdf';
 pdfRead = true;
 if (parsed.tenderValue && parsed.tenderValue > 100000) {
 deptEstimate = parsed.tenderValue;
 }
+console.log('Adobe extraction SUCCESS! Items:', boqItems.length);
 }
 }
 }
 }
-} catch (e) {}
+} else {
+console.log('Skipping Adobe - missing pdfUrl or credentials');
 }
 
-// Step 3: Fall back to estimated BOQ if PDF extraction failed
+// Fall back to estimated BOQ
 if (boqItems.length === 0) {
+console.log('Using estimated BOQ for type:', tenderType);
 boqItems = generateEstimatedBOQ(tenderType || '', deptEstimate);
 dataSource = 'pwd_estimation';
 }
 
-// Step 4: Calculate financials
 const executionCost = boqItems.reduce((sum, item) => sum + (item.amount || item.quantity * item.rate || 0), 0);
 const expectedWinningBid = Math.round(deptEstimate * 0.92);
 const expectedProfit = expectedWinningBid - executionCost;
 const profitMargin = Math.round((expectedProfit / expectedWinningBid) * 100);
 const defaults = getDefaultsForType(tenderType || '');
-
 const bidReason = await getBidReason(tenderType || 'Civil', deptEstimate, profitMargin);
+
+console.log('Final result - margin:', profitMargin, '% source:', dataSource);
 
 const result = {
 success: true,
@@ -401,6 +449,7 @@ res.writeHead(200, { 'Content-Type': 'application/json' });
 res.end(JSON.stringify(result));
 
 } catch (error) {
+console.log('Handler error:', error.message);
 res.writeHead(500, { 'Content-Type': 'application/json' });
 res.end(JSON.stringify({ error: 'BOQ analysis failed', details: String(error) }));
 }
