@@ -1,4 +1,8 @@
 import http from 'http';
+import { createWriteStream, mkdirSync, rmSync, existsSync, readFileSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
+import { createGunzip } from 'zlib';
 
 const GEMINI_KEY = process.env.GEMINI_KEY || '';
 const ADOBE_CLIENT_ID = process.env.ADOBE_CLIENT_ID || '';
@@ -57,7 +61,6 @@ function generateEstimatedBOQ(type, deptEstimate) {
 const t = (type || '').toLowerCase();
 const targetCost = Math.round(deptEstimate * 0.82);
 let template = [];
-
 if (t.includes('road') || t.includes('infrastructure') || t.includes('footpath')) {
 template = [
 { item: 'Earthwork Excavation in all types of soil', unit: 'Cum', ratePct: 0.05, rate: 320 },
@@ -95,7 +98,6 @@ template = [
 { item: 'Plastering 12mm CM 1:4 both sides', unit: 'Sqm', ratePct: 0.17, rate: 320 },
 ];
 }
-
 return template.map(item => {
 const itemBudget = Math.round(targetCost * item.ratePct);
 const quantity = Math.max(1, Math.round(itemBudget / item.rate));
@@ -111,30 +113,20 @@ params.append('client_id', ADOBE_CLIENT_ID);
 params.append('client_secret', ADOBE_CLIENT_SECRET);
 params.append('grant_type', 'client_credentials');
 params.append('scope', 'openid,AdobeID,read_organizations,dc.annotate,dc.annotate.readonly,dc.archive,dc.print.high,additional_info.job_function,additional_info.projectedProductContext');
-
 const response = await fetch('https://ims-na1.adobelogin.com/ims/token/v3', {
 method: 'POST',
 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
 body: params.toString(),
 signal: AbortSignal.timeout(15000)
 });
-
-const text = await response.text();
-const data = JSON.parse(text);
-if (data.access_token) {
-console.log('Adobe token obtained');
-return data.access_token;
-}
+const data = JSON.parse(await response.text());
+if (data.access_token) { console.log('Adobe token obtained'); return data.access_token; }
 return null;
-} catch (e) {
-console.log('Adobe token error:', e.message);
-return null;
-}
+} catch (e) { console.log('Adobe token error:', e.message); return null; }
 }
 
 async function downloadPDF(url) {
 try {
-console.log('Downloading PDF from:', url);
 const response = await fetch(url, {
 headers: {
 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -142,34 +134,25 @@ headers: {
 'Accept-Language': 'en-IN,en;q=0.9',
 'Referer': 'https://portal.mcgm.gov.in/irj/portal/anonymous/qletenders_new?guest_user=english',
 'Origin': 'https://portal.mcgm.gov.in',
-'Connection': 'keep-alive',
 },
 signal: AbortSignal.timeout(25000)
 });
 console.log('PDF download status:', response.status);
 if (!response.ok) return null;
 const buffer = await response.arrayBuffer();
-console.log('PDF downloaded, size:', buffer.byteLength, 'bytes');
+console.log('PDF downloaded, size:', buffer.byteLength);
 return Buffer.from(buffer);
-} catch (e) {
-console.log('PDF download error:', e.message);
-return null;
-}
+} catch (e) { console.log('PDF download error:', e.message); return null; }
 }
 
 async function extractWithAdobe(pdfBuffer, token) {
 try {
 const uploadRes = await fetch('https://pdf-services.adobe.io/assets', {
 method: 'POST',
-headers: {
-'Authorization': `Bearer ${token}`,
-'X-API-Key': ADOBE_CLIENT_ID,
-'Content-Type': 'application/json'
-},
+headers: { 'Authorization': `Bearer ${token}`, 'X-API-Key': ADOBE_CLIENT_ID, 'Content-Type': 'application/json' },
 body: JSON.stringify({ mediaType: 'application/pdf' }),
 signal: AbortSignal.timeout(15000)
 });
-
 const uploadData = await uploadRes.json();
 if (!uploadData.uploadUri || !uploadData.assetID) return null;
 
@@ -182,15 +165,8 @@ signal: AbortSignal.timeout(30000)
 
 const extractRes = await fetch('https://pdf-services.adobe.io/operation/extractpdf', {
 method: 'POST',
-headers: {
-'Authorization': `Bearer ${token}`,
-'X-API-Key': ADOBE_CLIENT_ID,
-'Content-Type': 'application/json'
-},
-body: JSON.stringify({
-assetID: uploadData.assetID,
-elementsToExtract: ['text', 'tables']
-}),
+headers: { 'Authorization': `Bearer ${token}`, 'X-API-Key': ADOBE_CLIENT_ID, 'Content-Type': 'application/json' },
+body: JSON.stringify({ assetID: uploadData.assetID, elementsToExtract: ['text', 'tables'] }),
 signal: AbortSignal.timeout(15000)
 });
 
@@ -200,57 +176,108 @@ if (!jobLocation) return null;
 for (let i = 0; i < 12; i++) {
 await new Promise(r => setTimeout(r, 5000));
 const pollRes = await fetch(jobLocation, {
-headers: {
-'Authorization': `Bearer ${token}`,
-'X-API-Key': ADOBE_CLIENT_ID
-},
+headers: { 'Authorization': `Bearer ${token}`, 'X-API-Key': ADOBE_CLIENT_ID },
 signal: AbortSignal.timeout(10000)
 });
-
 const pollData = await pollRes.json();
 console.log('Poll status:', pollData.status);
-
 if (pollData.status === 'done') {
 const downloadUri = pollData.resource?.downloadUri;
 if (!downloadUri) return null;
-const resultRes = await fetch(downloadUri, { signal: AbortSignal.timeout(15000) });
-const resultText = await resultRes.text();
-console.log('Extracted text length:', resultText.length);
-return resultText;
+// Download the ZIP file
+const zipRes = await fetch(downloadUri, { signal: AbortSignal.timeout(30000) });
+const zipBuffer = Buffer.from(await zipRes.arrayBuffer());
+console.log('ZIP downloaded, size:', zipBuffer.length);
+return zipBuffer;
 }
 if (pollData.status === 'failed') return null;
 }
 return null;
-} catch (e) {
-console.log('Adobe extraction error:', e.message);
-return null;
-}
+} catch (e) { console.log('Adobe extraction error:', e.message); return null; }
 }
 
-async function parseBOQFromExtractedText(text) {
+async function extractTextFromZip(zipBuffer) {
 try {
-// Find BOQ section in extracted text
-let boqSection = text;
-const boqKeywords = ['bill of quantity', 'schedule of quantity', 'bill of quantities', 'schedule of quantities', 'boq', 'item no', 'sr no', 'description of work', 'particulars of item'];
+// Parse ZIP manually - find structuredData.json inside
+// ZIP local file header signature: PK\x03\x04
+const zip = zipBuffer;
+let allText = '';
+let pos = 0;
 
+while (pos < zip.length - 4) {
+// Look for local file header
+if (zip[pos] === 0x50 && zip[pos+1] === 0x4B && zip[pos+2] === 0x03 && zip[pos+3] === 0x04) {
+const compressionMethod = zip.readUInt16LE(pos + 8);
+const compressedSize = zip.readUInt32LE(pos + 18);
+const fileNameLength = zip.readUInt16LE(pos + 26);
+const extraLength = zip.readUInt16LE(pos + 28);
+const fileName = zip.slice(pos + 30, pos + 30 + fileNameLength).toString('utf8');
+const dataStart = pos + 30 + fileNameLength + extraLength;
+
+console.log('ZIP entry:', fileName, 'compression:', compressionMethod, 'size:', compressedSize);
+
+if (fileName === 'structuredData.json' && compressionMethod === 0) {
+// Stored (not compressed)
+const jsonData = zip.slice(dataStart, dataStart + compressedSize).toString('utf8');
+console.log('Found structuredData.json, length:', jsonData.length);
+allText = jsonData;
+break;
+}
+
+pos = dataStart + compressedSize;
+} else {
+pos++;
+}
+}
+
+return allText;
+} catch (e) {
+console.log('ZIP extraction error:', e.message);
+return '';
+}
+}
+
+async function parseBOQFromStructuredData(jsonText) {
+try {
+const data = JSON.parse(jsonText);
+console.log('Parsed structuredData, elements:', data.elements?.length);
+
+// Extract all text content
+let allText = '';
+if (data.elements) {
+for (const element of data.elements) {
+if (element.Text) allText += element.Text + '\n';
+if (element.kids) {
+for (const kid of element.kids) {
+if (kid.Text) allText += kid.Text + '\n';
+}
+}
+}
+}
+
+console.log('Extracted text length:', allText.length);
+console.log('Text sample:', allText.substring(0, 300));
+
+// Find BOQ section
+let boqSection = allText;
+const boqKeywords = ['bill of quantity', 'schedule of quantity', 'bill of quantities', 'schedule of quantities', 'boq', 'item no', 'sr no', 'description of work', 'particulars of item'];
 for (const keyword of boqKeywords) {
-const idx = text.toLowerCase().indexOf(keyword.toLowerCase());
+const idx = allText.toLowerCase().indexOf(keyword);
 if (idx !== -1) {
-boqSection = text.substring(idx, idx + 6000);
-console.log('Found BOQ section using keyword:', keyword, 'at index:', idx);
+boqSection = allText.substring(idx, idx + 6000);
+console.log('Found BOQ section at:', idx, 'keyword:', keyword);
 break;
 }
 }
 
-console.log('BOQ section sample:', boqSection.substring(0, 300));
-
+// Send to Gemini
 const prompt = `Extract BOQ items from this tender document section.
 Find work items with quantities, units and rates.
 
 Text:
 ${boqSection.substring(0, 5000)}
 
-Return ONLY valid JSON no markdown no extra text:
+Return ONLY valid JSON no markdown:
 {"extractionSuccess":true,"boqItems":[{"item":"work description","unit":"Cum","quantity":100,"rate":7200,"amount":720000}],"tenderValue":0}
 
 If no BOQ found: {"extractionSuccess":false,"boqItems":[],"tenderValue":0}`;
@@ -268,8 +295,8 @@ signal: AbortSignal.timeout(20000)
 }
 );
 
-const data = await response.json();
-const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+const geminiData = await response.json();
+const responseText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
 console.log('Gemini response:', responseText.substring(0, 500));
 
 let parsed = null;
@@ -280,19 +307,16 @@ parsed = JSON.parse(cleaned);
 try {
 const match = responseText.match(/\{[\s\S]*\}/);
 if (match) parsed = JSON.parse(match[0]);
-} catch (e2) {
-console.log('JSON parse failed');
-}
+} catch (e2) { console.log('JSON parse failed'); }
 }
 
 if (parsed) {
 console.log('BOQ parsed - success:', parsed.extractionSuccess, 'items:', parsed.boqItems?.length);
 return parsed;
 }
-
 return { extractionSuccess: false, boqItems: [], tenderValue: 0 };
 } catch (e) {
-console.log('BOQ parsing error:', e.message);
+console.log('Structured data parse error:', e.message);
 return { extractionSuccess: false, boqItems: [], tenderValue: 0 };
 }
 }
@@ -313,26 +337,16 @@ signal: AbortSignal.timeout(8000)
 );
 const data = await response.json();
 return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
-} catch (e) {
-return '';
-}
+} catch (e) { return ''; }
 }
 
 const server = http.createServer(async (req, res) => {
 res.setHeader('Access-Control-Allow-Origin', '*');
 res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
 res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-if (req.method === 'OPTIONS') {
-res.writeHead(200);
-res.end();
-return;
-}
-
+if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
 if (req.method !== 'POST' || req.url !== '/api/boq') {
-res.writeHead(404);
-res.end(JSON.stringify({ error: 'Not found' }));
-return;
+res.writeHead(404); res.end(JSON.stringify({ error: 'Not found' })); return;
 }
 
 let body = '';
@@ -348,14 +362,9 @@ if (!deptEstimate) {
 const v = (tenderValue || '').replace(/,/g, '');
 if (v.includes('Cr')) deptEstimate = parseFloat(v) * 10000000;
 else if (v.includes('L')) deptEstimate = parseFloat(v) * 100000;
-else {
-const n = parseFloat(v.replace(/[^0-9.]/g, ''));
-if (n > 100000) deptEstimate = n;
+else { const n = parseFloat(v.replace(/[^0-9.]/g, '')); if (n > 100000) deptEstimate = n; }
 }
-}
-if (!deptEstimate || deptEstimate < 100000) {
-deptEstimate = estimateTenderValue(tenderTitle || '', organisation || '');
-}
+if (!deptEstimate || deptEstimate < 100000) deptEstimate = estimateTenderValue(tenderTitle || '', organisation || '');
 console.log('Dept estimate:', deptEstimate);
 
 let boqItems = [];
@@ -367,9 +376,11 @@ const token = await getAdobeToken();
 if (token) {
 const pdfBuffer = await downloadPDF(pdfUrl);
 if (pdfBuffer && pdfBuffer.length > 1000) {
-const extractedText = await extractWithAdobe(pdfBuffer, token);
-if (extractedText) {
-const parsed = await parseBOQFromExtractedText(extractedText);
+const zipBuffer = await extractWithAdobe(pdfBuffer, token);
+if (zipBuffer) {
+const jsonText = await extractTextFromZip(zipBuffer);
+if (jsonText) {
+const parsed = await parseBOQFromStructuredData(jsonText);
 if (parsed && parsed.extractionSuccess && parsed.boqItems?.length > 0) {
 boqItems = parsed.boqItems;
 dataSource = 'actual_pdf';
@@ -381,10 +392,11 @@ console.log('Adobe SUCCESS! Items:', boqItems.length);
 }
 }
 }
+}
 
 if (boqItems.length === 0) {
 boqItems = generateEstimatedBOQ(tenderType || '', deptEstimate);
-console.log('Using estimated BOQ, type:', tenderType, 'items:', boqItems.length);
+console.log('Using estimated BOQ, type:', tenderType);
 }
 
 const executionCost = boqItems.reduce((sum, item) => sum + (item.amount || item.quantity * item.rate || 0), 0);
@@ -400,31 +412,18 @@ res.writeHead(200, { 'Content-Type': 'application/json' });
 res.end(JSON.stringify({
 success: true,
 boq: {
-dataSource,
-departmentEstimate: deptEstimate,
-expectedWinningBid,
-executionCost,
-expectedProfit,
-profitMargin,
-workingCapitalNeeded: Math.round(executionCost * 0.3),
+dataSource, departmentEstimate: deptEstimate, expectedWinningBid, executionCost,
+expectedProfit, profitMargin, workingCapitalNeeded: Math.round(executionCost * 0.3),
 raCycleDays: 60,
 bidRecommendation: profitMargin >= 10 ? 'YES' : profitMargin >= 7 ? 'REVIEW' : 'NO',
 bidRecommendationReason: bidReason || `${profitMargin}% margin on ${tenderType} tender in Mumbai`,
-boqItems,
-materialCost: Math.round(executionCost * 0.45),
-labourCost: Math.round(executionCost * 0.25),
-equipmentCost: Math.round(executionCost * 0.15),
-overheadCost: Math.round(executionCost * 0.10),
-contingency: Math.round(executionCost * 0.05),
-keyMaterials: defaults.keyMaterials,
-majorEquipment: defaults.majorEquipment,
-executionDays: defaults.executionDays,
-riskFactors: defaults.riskFactors,
+boqItems, materialCost: Math.round(executionCost * 0.45), labourCost: Math.round(executionCost * 0.25),
+equipmentCost: Math.round(executionCost * 0.15), overheadCost: Math.round(executionCost * 0.10),
+contingency: Math.round(executionCost * 0.05), keyMaterials: defaults.keyMaterials,
+majorEquipment: defaults.majorEquipment, executionDays: defaults.executionDays, riskFactors: defaults.riskFactors,
 },
 pdfRead,
-message: pdfRead
-? `✅ Real BOQ extracted from tender PDF — ${boqItems.length} items found`
-: '📊 AI-estimated BOQ based on Maharashtra PWD rates 2024-25'
+message: pdfRead ? `✅ Real BOQ extracted from tender PDF — ${boqItems.length} items found` : '📊 AI-estimated BOQ based on Maharashtra PWD rates 2024-25'
 }));
 
 } catch (error) {
@@ -436,6 +435,4 @@ res.end(JSON.stringify({ error: 'BOQ analysis failed', details: String(error) })
 });
 
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
-console.log(`BOQ service running on port ${PORT}`);
-});
+server.listen(PORT, () => console.log(`BOQ service running on port ${PORT}`));
