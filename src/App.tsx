@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 const PORTALS = ["BMC", "GeM", "CPPP", "PWD Maharashtra", "MMRDA", "MSRDC"];
 const WORK_TYPES = ["All", "Civil", "Roads & Infrastructure", "Sanitary", "Sewerage", "Electrical & Mechanical"];
@@ -99,6 +99,51 @@ function Badge({ children, color, bg, border }: { children: React.ReactNode; col
 return <span style={{ background: bg, color, border: `1px solid ${border || bg}`, borderRadius: "5px", padding: "2px 9px", fontSize: "11px", fontWeight: "700" }}>{children}</span>;
 }
 
+function BOQLoadingCard({ step }: { step: number }) {
+const steps = [
+{ icon: "🔍", text: "Downloading tender document from BMC portal..." },
+{ icon: "📄", text: "Reading PDF with Adobe AI..." },
+{ icon: "💰", text: "Extracting real tender value..." },
+{ icon: "📊", text: "Calculating profit margin & working capital..." },
+{ icon: "✅", text: "Preparing your bid analysis..." },
+];
+return (
+<div style={{ background: "#f0f9ff", border: "1.5px solid #bae6fd", borderRadius: "14px", padding: "24px", marginBottom: "16px" }}>
+<div style={{ color: "#0369a1", fontSize: "13px", fontWeight: "800", marginBottom: "20px", letterSpacing: "0.5px" }}>
+📊 ANALYSING TENDER — Please wait 30-60 seconds
+</div>
+{steps.map((s, i) => (
+<div key={i} style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px", opacity: i <= step ? 1 : 0.3 }}>
+<div style={{
+width: "28px", height: "28px", borderRadius: "50%",
+background: i < step ? "#dcfce7" : i === step ? "#0369a1" : "#f1f5f9",
+border: i === step ? "2px solid #0369a1" : "2px solid transparent",
+display: "flex", alignItems: "center", justifyContent: "center",
+fontSize: "13px", flexShrink: 0,
+animation: i === step ? "pulse 1s infinite" : "none"
+}}>
+{i < step ? "✓" : s.icon}
+</div>
+<span style={{
+fontSize: "13px",
+color: i < step ? "#166534" : i === step ? "#0369a1" : "#94a3b8",
+fontWeight: i === step ? "700" : "500"
+}}>{s.text}</span>
+</div>
+))}
+<div style={{ marginTop: "16px", background: "#e0f2fe", borderRadius: "8px", height: "6px", overflow: "hidden" }}>
+<div style={{
+height: "100%",
+width: `${Math.min(((step + 1) / steps.length) * 100, 95)}%`,
+background: "linear-gradient(90deg, #0369a1, #0ea5e9)",
+borderRadius: "8px",
+transition: "width 1s ease"
+}} />
+</div>
+</div>
+);
+}
+
 function DecisionCard({ boq }: { boq: BOQData }) {
 const recColor = boq.bidRecommendation === 'YES' ? '#166534' : boq.bidRecommendation === 'REVIEW' ? '#92400e' : '#991b1b';
 const recBg = boq.bidRecommendation === 'YES' ? '#dcfce7' : boq.bidRecommendation === 'REVIEW' ? '#fef3c7' : '#fee2e2';
@@ -157,12 +202,13 @@ return (
 
 function BOQPanel({ boq, message }: { boq: BOQData; message: string }) {
 const isReal = boq.dataSource === 'actual_pdf';
+const isPdfValue = boq.dataSource === 'pdf_value_estimated_boq';
 return (
 <div>
 <DecisionCard boq={boq} />
 <WorkingCapitalCard boq={boq} />
-<div style={{ background: isReal ? "#f0fdf4" : "#f8fafc", border: `1.5px solid ${isReal ? "#bbf7d0" : "#e2e8f0"}`, borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
-<div style={{ color: isReal ? "#166534" : "#64748b", fontSize: "11px", fontWeight: "800", marginBottom: "12px" }}>{message}</div>
+<div style={{ background: isReal ? "#f0fdf4" : isPdfValue ? "#f0f9ff" : "#f8fafc", border: `1.5px solid ${isReal ? "#bbf7d0" : isPdfValue ? "#bae6fd" : "#e2e8f0"}`, borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
+<div style={{ color: isReal ? "#166534" : isPdfValue ? "#0369a1" : "#64748b", fontSize: "11px", fontWeight: "800", marginBottom: "12px" }}>{message}</div>
 <div style={{ marginBottom: "12px" }}>
 <div style={{ color: "#64748b", fontSize: "11px", fontWeight: "700", letterSpacing: "1px", marginBottom: "8px" }}>COST BIFURCATION</div>
 {[
@@ -216,7 +262,7 @@ return (
 {(boq.riskFactors || []).map((r, i) => <div key={i} style={{ color: "#92400e", fontSize: "11px", marginBottom: "2px" }}>• {r}</div>)}
 </div>
 <div style={{ color: "#94a3b8", fontSize: "10px", marginTop: "8px" }}>
-{isReal ? "✅ Extracted from actual tender PDF" : "📊 Estimated using Maharashtra PWD Schedule of Rates 2024-25. Accuracy ±15%."}
+{isReal ? "✅ Extracted from actual tender PDF" : isPdfValue ? "📄 Tender value from PDF — BOQ estimated using PWD 2024-25 rates" : "📊 Estimated using Maharashtra PWD Schedule of Rates 2024-25. Accuracy ±15%."}
 </div>
 </div>
 <div style={{ marginBottom: "16px" }}>
@@ -251,7 +297,7 @@ return (
 <p style={{ color: "#94a3b8", fontSize: "11px", marginTop: "6px" }}>⚠ After TDS 2%, Labour Cess 1%, Retention 5%</p>
 </div>
 <div>
-<div style={{ color: "#64748b", fontSize: "11px", fontWeight: "700", letterSpacing: "1px", marginBottom: "8px" }}>MUMBAI MATERIAL RATES (TODAY)</div>
+<div style={{ color: "#64748b", fontSize: "11px", fontWeight: "700", letterSpacing: "1px", marginBottom: "8px" }}>MUMBAI MATERIAL RATES (JUNE 2026)</div>
 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
 {[
 { label: "Ultratech Cement OPC 53", value: "₹420/bag" },
@@ -285,9 +331,11 @@ const [aiSummary, setAiSummary] = useState("");
 const [aiLoading, setAiLoading] = useState(false);
 const [aiGenerated, setAiGenerated] = useState(false);
 const [boqLoading, setBoqLoading] = useState(false);
+const [boqStep, setBoqStep] = useState(0);
 const [uploadLoading, setUploadLoading] = useState(false);
 const [enrichData, setEnrichData] = useState<EnrichData | null>(null);
 const [enrichLoading, setEnrichLoading] = useState(false);
+const stepIntervalRef = useRef<any>(null);
 const risk = riskConfig[tender.risk];
 const deadline = cleanDeadline(tender.deadline);
 
@@ -296,6 +344,7 @@ setActiveTab("overview");
 setAiSummary("");
 setAiGenerated(false);
 setEnrichData(null);
+setBoqStep(0);
 if (tender.portal === 'BMC' && tender.value === 'See Portal') {
 enrichTender();
 }
@@ -315,9 +364,7 @@ title: tender.title
 })
 });
 const data = await response.json();
-if (data.tenderValue && data.tenderValue > 0) {
-setEnrichData(data);
-}
+if (data.tenderValue && data.tenderValue > 0) setEnrichData(data);
 } catch {}
 setEnrichLoading(false);
 };
@@ -363,6 +410,17 @@ setAiLoading(false);
 
 const generateBOQ = async () => {
 setBoqLoading(true);
+setBoqStep(0);
+setActiveTab("financial");
+
+// Animate steps
+stepIntervalRef.current = setInterval(() => {
+setBoqStep(prev => {
+if (prev < 4) return prev + 1;
+return prev;
+});
+}, 10000);
+
 try {
 const response = await fetch("https://boq-service-pov7.onrender.com/api/boq", {
 method: "POST",
@@ -379,11 +437,13 @@ pdfUrl: tender.pdfUrl || ''
 });
 const data = await response.json();
 if (data.success && data.boq) {
+clearInterval(stepIntervalRef.current);
+setBoqStep(5);
 setBoqData(data.boq);
 setBoqMessage(data.message);
-setActiveTab("financial");
 }
 } catch {
+clearInterval(stepIntervalRef.current);
 alert("BOQ analysis failed. Please try again.");
 }
 setBoqLoading(false);
@@ -391,6 +451,7 @@ setBoqLoading(false);
 
 const uploadBOQPDF = async (file: File) => {
 setUploadLoading(true);
+setActiveTab("financial");
 try {
 const formData = new FormData();
 formData.append('pdf', file);
@@ -404,7 +465,6 @@ const data = await response.json();
 if (data.success && data.boq) {
 setBoqData(data.boq);
 setBoqMessage(data.message);
-setActiveTab("financial");
 } else {
 alert("PDF analysis failed. Please try a different file.");
 }
@@ -424,50 +484,29 @@ return (
 
 {enrichLoading && (
 <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: "8px", padding: "10px 14px", marginBottom: "12px", fontSize: "12px", color: "#0369a1" }}>
-🔍 Fetching real tender value from BMC portal...
+🔍 Fetching tender value...
 </div>
 )}
 {enrichData && enrichData.dataSource !== 'estimated' && (
 <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "10px 14px", marginBottom: "12px", fontSize: "12px", color: "#166534", fontWeight: "600" }}>
-✅ Real tender value fetched from BMC portal ({enrichData.confidence} confidence)
+✅ Real tender value fetched ({enrichData.confidence} confidence)
 </div>
 )}
 
-<button onClick={generateBOQ} disabled={boqLoading || uploadLoading || enrichLoading} style={{ width: "100%", background: boqLoading ? "#f1f5f9" : boqData ? "#166534" : "linear-gradient(135deg, #166534, #16a34a)", border: "none", color: boqLoading ? "#94a3b8" : "#fff", borderRadius: "10px", padding: "14px", fontSize: "14px", fontWeight: "700", cursor: boqLoading ? "not-allowed" : "pointer", marginBottom: "10px" }}>
-{boqLoading ? "📊 Calculating BOQ & Bid..." : boqData ? "✅ BOQ Complete — View Financial Tab" : enrichLoading ? "⏳ Loading tender value first..." : "📊 Get BOQ Analysis & Bid Decision"}
+<button onClick={generateBOQ} disabled={boqLoading || uploadLoading} style={{ width: "100%", background: boqLoading ? "#f1f5f9" : boqData ? "#166534" : "linear-gradient(135deg, #166534, #16a34a)", border: "none", color: boqLoading ? "#94a3b8" : "#fff", borderRadius: "10px", padding: "14px", fontSize: "14px", fontWeight: "700", cursor: boqLoading ? "not-allowed" : "pointer", marginBottom: "10px" }}>
+{boqLoading ? "⏳ Analysing..." : boqData ? "✅ BOQ Complete — View Financial Tab" : "📊 Get BOQ Analysis & Bid Decision"}
 </button>
 
-{/* PDF Upload Section */}
 <div style={{ marginBottom: "14px" }}>
-<input
-type="file"
-accept=".pdf"
-id={`boq-upload-${tender.id}`}
-style={{ display: 'none' }}
-onChange={(e) => {
-const file = e.target.files?.[0];
-if (file) uploadBOQPDF(file);
-e.target.value = '';
-}}
-/>
-<label
-htmlFor={`boq-upload-${tender.id}`}
-style={{
-display: 'block',
-width: '100%',
-background: uploadLoading ? '#f1f5f9' : 'transparent',
-border: '1.5px dashed #cbd5e1',
-color: uploadLoading ? '#94a3b8' : '#64748b',
-borderRadius: '10px',
-padding: '12px',
-fontSize: '12px',
-fontWeight: '600',
-cursor: uploadLoading ? 'not-allowed' : 'pointer',
-textAlign: 'center',
-boxSizing: 'border-box',
-}}
->
-{uploadLoading ? '⏳ Reading BOQ PDF with Adobe AI...' : '📎 Upload BOQ PDF from MahaTenders → Get Real Calculations'}
+<input type="file" accept=".pdf" id={`boq-upload-${tender.id}`} style={{ display: 'none' }}
+onChange={(e) => { const file = e.target.files?.[0]; if (file) uploadBOQPDF(file); e.target.value = ''; }} />
+<label htmlFor={`boq-upload-${tender.id}`} style={{
+display: 'block', width: '100%', background: 'transparent',
+border: '1.5px dashed #cbd5e1', color: uploadLoading ? '#94a3b8' : '#64748b',
+borderRadius: '10px', padding: '12px', fontSize: '12px', fontWeight: '600',
+cursor: uploadLoading ? 'not-allowed' : 'pointer', textAlign: 'center', boxSizing: 'border-box',
+}}>
+{uploadLoading ? '⏳ Reading BOQ PDF...' : '📎 Upload BOQ PDF from MahaTenders → Get Real Calculations'}
 </label>
 </div>
 
@@ -531,7 +570,9 @@ boxSizing: 'border-box',
 </div>
 ) : (
 <div>
-{boqData ? (
+{boqLoading ? (
+<BOQLoadingCard step={boqStep} />
+) : boqData ? (
 <BOQPanel boq={boqData} message={boqMessage} />
 ) : (
 <div style={{ textAlign: "center", padding: "40px 20px" }}>
@@ -708,6 +749,7 @@ setBoqMessage={setBoqMessage}
 <style>{`
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap');
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 * { box-sizing: border-box; }
 `}</style>
 </div>
