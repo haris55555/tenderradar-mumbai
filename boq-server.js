@@ -258,7 +258,14 @@ const ssBuffer = decompressEntry(ssEntry);
 if (ssBuffer) {
 const ssXml = ssBuffer.toString('utf8');
 const matches = ssXml.match(/<t[^>]*>([^<]*)<\/t>/g) || [];
-sharedStrings = matches.map(m => m.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim());
+sharedStrings = matches.map(m =>
+m.replace(/<[^>]+>/g, '')
+.replace(/&amp;/g, '&')
+.replace(/&lt;/g, '<')
+.replace(/&gt;/g, '>')
+.replace(/_x000D_/g, '')
+.trim()
+);
 }
 }
 
@@ -275,9 +282,15 @@ const valueMatch = cell.match(/<v>([^<]*)<\/v>/);
 if (!valueMatch) continue;
 let value = valueMatch[1];
 if (typeMatch && typeMatch[1] === 's') value = sharedStrings[parseInt(value)] || value;
-if (value && value.trim()) rowValues.push(value.trim());
+// Clean the value
+value = value.replace(/_x000D_/g, '').replace(/\s+/g, ' ').trim();
+if (value && value.length > 0) rowValues.push(value);
 }
-allText += rowValues.join(' | ') + '\n';
+
+// Clean row before adding
+const cleanedRow = rowValues.join(' | ').replace(/_x000D_/g, '').replace(/\s+/g, ' ').trim();
+if (cleanedRow.length > 5) allText += cleanedRow + '\n';
+
 for (const val of rowValues) {
 const amount = extractRupeeAmount(val);
 if (amount > tenderValue) tenderValue = amount;
@@ -287,21 +300,35 @@ if (amount > tenderValue) tenderValue = amount;
 }
 
 console.log('Total text length:', allText.length);
-console.log('Text sample:', allText.substring(0, 300));
+console.log('Text sample:', allText.substring(0, 500));
 console.log('Tender value found:', tenderValue);
 
-// Try Gemini to extract BOQ items
+// Send to Gemini for BOQ extraction
 if (allText.length > 100) {
 try {
-const prompt = `Extract BOQ line items from this tender document data. Look for rows with SR NO, item descriptions, units, quantities and rates/amounts.
+const prompt = `Extract BOQ (Bill of Quantities) line items from this Mumbai government tender document data.
+
+The data has columns like: Sr. No. | Item No. | Description | Quantity | Rate | Amount
+OR: SR NO | ITEM CODE | ITEM DESCRIPTION | UNIT | QTY | RATE | AMOUNT
+
+Look for rows that have:
+- A description of work (excavation, pipes, concrete, etc.)
+- A unit (Cum, Sqm, Rm, Nos, MT, LS etc.)
+- A quantity (number)
+- A rate (price per unit in rupees)
+- An amount (quantity × rate)
 
 Data:
-${allText.substring(0, 6000)}
+${allText.substring(0, 7000)}
 
 Return ONLY valid JSON no markdown:
-{"extractionSuccess":true,"boqItems":[{"item":"description","unit":"Cum","quantity":100,"rate":7200,"amount":720000}],"tenderValue":0}
+{"extractionSuccess":true,"boqItems":[{"item":"full description of work item","unit":"Cum","quantity":100,"rate":380,"amount":38000}],"tenderValue":0}
 
-If no BOQ items found: {"extractionSuccess":false,"boqItems":[],"tenderValue":0}`;
+Important:
+- Extract ALL work items you find
+- item should be the full description
+- quantity, rate, amount must be numbers not strings
+- If no clear BOQ items found return: {"extractionSuccess":false,"boqItems":[],"tenderValue":0}`;
 
 const response = await fetch(
 `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
@@ -310,14 +337,14 @@ method: 'POST',
 headers: { 'Content-Type': 'application/json' },
 body: JSON.stringify({
 contents: [{ parts: [{ text: prompt }] }],
-generationConfig: { temperature: 0.1, maxOutputTokens: 3000 }
+generationConfig: { temperature: 0.1, maxOutputTokens: 4000 }
 }),
-signal: AbortSignal.timeout(20000)
+signal: AbortSignal.timeout(25000)
 }
 );
 const geminiData = await response.json();
 const responseText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-console.log('Gemini BOQ response:', responseText.substring(0, 500));
+console.log('Gemini BOQ response:', responseText.substring(0, 800));
 
 let parsed = null;
 try {
@@ -326,9 +353,16 @@ parsed = JSON.parse(responseText.replace(/```json/g, '').replace(/```/g, '').tri
 const match = responseText.match(/\{[\s\S]*\}/);
 if (match) try { parsed = JSON.parse(match[0]); } catch {}
 }
+
 if (parsed?.extractionSuccess && parsed?.boqItems?.length > 0) {
 console.log('BOQ extraction SUCCESS! Items:', parsed.boqItems.length);
-return { extractionSuccess: true, boqItems: parsed.boqItems, tenderValue: tenderValue || parsed.tenderValue };
+return {
+extractionSuccess: true,
+boqItems: parsed.boqItems,
+tenderValue: tenderValue || parsed.tenderValue
+};
+} else {
+console.log('Gemini could not extract BOQ items');
 }
 } catch (e) { console.log('Gemini error:', e.message); }
 }
@@ -367,7 +401,6 @@ try {
 console.log('Parsing multipart, boundary:', boundary);
 console.log('Body size:', body.length);
 
-// Try both with and without quotes in boundary
 const cleanBoundary = boundary.replace(/"/g, '');
 const parts = body.toString('binary').split('--' + cleanBoundary);
 console.log('Parts found:', parts.length);
@@ -383,16 +416,9 @@ if (fileData.length > 100) return fileData;
 }
 }
 
-// Try alternative: look for PDF header directly
 const pdfStart = body.indexOf(Buffer.from('%PDF'));
 if (pdfStart !== -1) {
 console.log('Found PDF header at position:', pdfStart);
-const pdfEnd = body.lastIndexOf(Buffer.from('%%EOF'));
-if (pdfEnd !== -1) {
-const pdfData = body.slice(pdfStart, pdfEnd + 5);
-console.log('PDF data size:', pdfData.length);
-return pdfData;
-}
 return body.slice(pdfStart);
 }
 
@@ -432,11 +458,9 @@ if (!pdfBuffer || pdfBuffer.length < 1000) {
 res.writeHead(400); res.end(JSON.stringify({ error: 'No valid PDF found in upload' })); return;
 }
 
-// Check it's actually a PDF
 const header = pdfBuffer.slice(0, 4).toString();
 console.log('PDF header check:', header);
 if (!header.startsWith('%PDF')) {
-console.log('Not a valid PDF');
 res.writeHead(400); res.end(JSON.stringify({ error: 'File does not appear to be a valid PDF' })); return;
 }
 
@@ -452,10 +476,9 @@ console.log('Tender type:', tenderType, '| Title:', tenderTitle.substring(0, 50)
 const token = await getAdobeToken();
 if (!token) { res.writeHead(500); res.end(JSON.stringify({ error: 'Adobe auth failed' })); return; }
 
-console.log('Starting Adobe extraction for uploaded PDF, size:', pdfBuffer.length);
+console.log('Starting Adobe extraction, PDF size:', pdfBuffer.length);
 const zipBuffer = await extractWithAdobe(pdfBuffer, token);
 if (!zipBuffer) {
-console.log('Adobe extraction returned null');
 res.writeHead(500); res.end(JSON.stringify({ error: 'PDF extraction failed' })); return;
 }
 
@@ -471,11 +494,11 @@ if (parsed.extractionSuccess && parsed.boqItems?.length > 0) {
 boqItems = parsed.boqItems;
 pdfRead = true;
 dataSource = 'actual_pdf';
-console.log('Using REAL BOQ items from PDF:', boqItems.length, 'items');
+console.log('Using REAL BOQ items:', boqItems.length);
 } else {
 boqItems = generateEstimatedBOQ(tenderType, deptEstimate);
 dataSource = parsed.tenderValue > 100000 ? 'pdf_value_estimated_boq' : 'pwd_estimation';
-console.log('Using estimated BOQ, items:', boqItems.length);
+console.log('Using estimated BOQ:', boqItems.length);
 }
 
 const executionCost = boqItems.reduce((sum, item) => sum + (item.amount || 0), 0);
@@ -488,7 +511,7 @@ const bidReason = await getBidReason(tenderType, deptEstimate, profitMargin);
 let message = pdfRead
 ? `✅ Real BOQ extracted from uploaded PDF — ${boqItems.length} items found`
 : parsed.tenderValue > 100000
-? `📄 Real tender value ₹${(parsed.tenderValue/10000000).toFixed(2)} Cr extracted — BOQ estimated using 2026 Mumbai rates`
+? `📄 Real tender value ₹${(parsed.tenderValue / 10000000).toFixed(2)} Cr extracted — BOQ estimated using 2026 Mumbai rates`
 : '📊 BOQ estimated using 2026 Mumbai market rates';
 
 console.log('Upload result - margin:', profitMargin, '% source:', dataSource, 'pdfRead:', pdfRead);
@@ -576,7 +599,7 @@ const bidReason = await getBidReason(tenderType || 'Civil', deptEstimate, profit
 
 let message = '📊 BOQ estimated using 2026 Mumbai market rates';
 if (pdfRead) message = `✅ Real BOQ extracted from tender PDF — ${boqItems.length} items found`;
-else if (realValueFromPDF > 0) message = `📄 Real tender value ₹${(realValueFromPDF/10000000).toFixed(2)} Cr extracted from PDF — BOQ estimated using 2026 Mumbai rates`;
+else if (realValueFromPDF > 0) message = `📄 Real tender value ₹${(realValueFromPDF / 10000000).toFixed(2)} Cr extracted from PDF — BOQ estimated using 2026 Mumbai rates`;
 
 console.log('Result - margin:', profitMargin, '% source:', dataSource);
 
