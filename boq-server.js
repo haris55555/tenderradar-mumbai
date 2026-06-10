@@ -24,40 +24,40 @@ function getDefaultsForType(type) {
 const t = (type || '').toLowerCase();
 if (t.includes('road') || t.includes('infrastructure')) {
 return {
-keyMaterials: ['Bituminous Macadam', 'WBM Aggregate', 'Cement Concrete M30', 'TMT Steel Fe500D'],
-majorEquipment: ['Road Roller 10T', 'Paver Machine', 'JCB Excavator', 'Tipper Trucks'],
-riskFactors: ['Heavy monsoon damage to road surface', 'Underground utility conflicts', 'Traffic diversion in busy Mumbai roads'],
+keyMaterials: ['Bituminous Macadam DBM Grade II', 'WBM Aggregate 40mm', 'Cement Concrete M30', 'TMT Steel Fe500D'],
+majorEquipment: ['Road Roller 10T Vibratory', 'Sensor Paver Machine', 'JCB Excavator 3CX', 'Tipper Trucks 10MT'],
+riskFactors: ['Heavy monsoon damage to fresh bituminous surface', 'Underground utility conflicts in urban roads', 'Traffic diversion management in busy Mumbai roads'],
 executionDays: 120
 };
 }
 if (t.includes('sewer') || t.includes('sewerage') || t.includes('drain')) {
 return {
-keyMaterials: ['NP3 RCC Pipes', 'Cement OPC 53', 'River Sand Zone II', 'Brick Masonry'],
-majorEquipment: ['JCB Excavator', 'Dewatering Pump', 'Concrete Mixer', 'Crane'],
-riskFactors: ['High water table in Mumbai', 'Existing utility crossing', 'Monsoon flooding risk'],
+keyMaterials: ['NP3 RCC Hume Pipes', 'Cement OPC 53 Grade', 'River Sand Zone II', 'Brick Masonry Class A'],
+majorEquipment: ['JCB 3CX Excavator', 'Dewatering Pump 10HP', 'Concrete Mixer 500L', 'Hydraulic Crane 10T'],
+riskFactors: ['High water table in coastal Mumbai areas', 'Existing utility crossing at depth', 'Monsoon flooding risk for open trenches'],
 executionDays: 150
 };
 }
 if (t.includes('sanitary') || t.includes('water') || t.includes('pipeline') || t.includes('pump')) {
 return {
-keyMaterials: ['DI Pipes K9 Class', 'Sluice Valves', 'Cement OPC 53', 'Sand Bedding Material'],
-majorEquipment: ['Pipe Laying Machine', 'JCB Excavator', 'Welding Machine', 'Pressure Testing Equipment'],
-riskFactors: ['Water supply disruption during work', 'Pressure testing failures', 'Soil condition variations in Mumbai'],
+keyMaterials: ['DI Pipes K9 Class IS 8329', 'Sluice Valves IS 14846', 'Cement OPC 53 Grade', 'Coarse Sand Bedding'],
+majorEquipment: ['Pipe Laying Excavator', 'JCB 3CX Excavator', 'Hydraulic Pipe Bending Machine', 'Pressure Testing Equipment'],
+riskFactors: ['Water supply disruption to residents during work', 'Pressure testing failures at joints', 'Soil condition variations across Mumbai zones'],
 executionDays: 90
 };
 }
 if (t.includes('electrical') || t.includes('mechanical')) {
 return {
-keyMaterials: ['Electrical Cables', 'Switch Gear', 'Control Panels', 'Conduit Pipes'],
-majorEquipment: ['Cable Laying Machine', 'Hydraulic Crane', 'Welding Machine', 'Testing Equipment'],
-riskFactors: ['Live electrical hazards', 'Shutdown coordination required', 'Specialized manpower needed'],
+keyMaterials: ['Aluminium/Copper Cables IS 694', 'MS Conduit Pipes', 'Distribution Panels', 'Earthing Materials'],
+majorEquipment: ['Cable Laying Machine', 'Hydraulic Crane 5T', 'Cable Drum Trailer', 'Megger Testing Equipment'],
+riskFactors: ['Live electrical hazards during installation', 'Shutdown coordination with BMC Electrical dept', 'Specialized licensed electricians required'],
 executionDays: 60
 };
 }
 return {
-keyMaterials: ['Cement OPC 53', 'TMT Steel Fe500D', 'River Sand Zone II', '20mm Aggregate'],
-majorEquipment: ['JCB Excavator', 'Concrete Mixer', 'Compactor', 'Tipper Truck'],
-riskFactors: ['Urban area work constraints', 'Monsoon season delays', 'Utility shifting required'],
+keyMaterials: ['Cement OPC 53 Grade Ultratech', 'TMT Steel Fe500D TATA/JSW', 'River Sand Zone II', '20mm Graded Aggregate'],
+majorEquipment: ['JCB 3CX Excavator', 'Concrete Transit Mixer', 'Plate Compactor', 'Tipper Truck 10MT'],
+riskFactors: ['Urban area work with restricted access', 'Monsoon season work stoppage Jun-Sep', 'Utility shifting coordination required'],
 executionDays: 120
 };
 }
@@ -68,47 +68,47 @@ const targetCost = Math.round(deptEstimate * 0.82);
 let template = [];
 if (t.includes('road') || t.includes('infrastructure') || t.includes('footpath')) {
 template = [
-{ item: 'Earthwork Excavation in all types of soil', unit: 'Cum', ratePct: 0.05, rate: 320 },
-{ item: 'Granular Sub Base (GSB) 200mm thick', unit: 'Sqm', ratePct: 0.15, rate: 380 },
-{ item: 'Wet Mix Macadam (WMM) 150mm thick', unit: 'Sqm', ratePct: 0.20, rate: 520 },
-{ item: 'Dense Bituminous Macadam (DBM) 50mm', unit: 'Sqm', ratePct: 0.30, rate: 680 },
-{ item: 'Bituminous Concrete (BC) 25mm wearing coat', unit: 'Sqm', ratePct: 0.20, rate: 420 },
-{ item: 'Precast RCC Kerb Stone 230x300mm', unit: 'Rm', ratePct: 0.10, rate: 850 },
+{ item: 'Earthwork Excavation in all types of soil including disposal', unit: 'Cum', ratePct: 0.05, rate: 380 },
+{ item: 'Granular Sub Base (GSB) 200mm compacted thickness', unit: 'Sqm', ratePct: 0.14, rate: 450 },
+{ item: 'Wet Mix Macadam (WMM) 150mm compacted thickness', unit: 'Sqm', ratePct: 0.19, rate: 620 },
+{ item: 'Dense Bituminous Macadam (DBM) 50mm thick', unit: 'Sqm', ratePct: 0.30, rate: 780 },
+{ item: 'Bituminous Concrete (BC) 25mm wearing course', unit: 'Sqm', ratePct: 0.22, rate: 520 },
+{ item: 'Precast RCC Kerb Stone 230x300mm with foundation', unit: 'Rm', ratePct: 0.10, rate: 950 },
 ];
 } else if (t.includes('sewer') || t.includes('sewerage') || t.includes('drain')) {
 template = [
-{ item: 'Earthwork Excavation for sewer trench', unit: 'Cum', ratePct: 0.08, rate: 380 },
-{ item: 'NP3 RCC Sewer Pipe 300mm dia including jointing', unit: 'Rm', ratePct: 0.35, rate: 2200 },
-{ item: 'Brick Masonry Manhole Chamber 1.2m dia', unit: 'Nos', ratePct: 0.25, rate: 45000 },
-{ item: 'RCC M20 Bed Concrete 150mm thick', unit: 'Cum', ratePct: 0.15, rate: 6800 },
-{ item: 'Sand Filling and Compaction in trench', unit: 'Cum', ratePct: 0.07, rate: 220 },
-{ item: 'CI Surface Box and Frame for manholes', unit: 'Nos', ratePct: 0.10, rate: 8500 },
+{ item: 'Earthwork Excavation for sewer trench including shoring', unit: 'Cum', ratePct: 0.08, rate: 420 },
+{ item: 'NP3 RCC Sewer Pipe 300mm dia including rubber ring jointing', unit: 'Rm', ratePct: 0.34, rate: 2800 },
+{ item: 'Brick Masonry Manhole Chamber 1.2m dia with CI cover', unit: 'Nos', ratePct: 0.25, rate: 52000 },
+{ item: 'RCC M20 Bed Concrete 150mm thick for pipe bedding', unit: 'Cum', ratePct: 0.14, rate: 7800 },
+{ item: 'Sand Filling and Compaction in layers in trench', unit: 'Cum', ratePct: 0.07, rate: 280 },
+{ item: 'CI Surface Box and Frame for manhole access', unit: 'Nos', ratePct: 0.12, rate: 9500 },
 ];
 } else if (t.includes('sanitary') || t.includes('water') || t.includes('pipeline') || t.includes('pump')) {
 template = [
-{ item: 'Earthwork Excavation for pipe trench', unit: 'Cum', ratePct: 0.08, rate: 350 },
-{ item: 'DI Pipe K9 200mm dia including jointing material', unit: 'Rm', ratePct: 0.38, rate: 3800 },
-{ item: 'Sluice Valve 200mm with valve chamber', unit: 'Nos', ratePct: 0.20, rate: 85000 },
-{ item: 'Sand Bedding 150mm thick for pipe', unit: 'Cum', ratePct: 0.06, rate: 1800 },
-{ item: 'Backfilling with excavated material and compaction', unit: 'Cum', ratePct: 0.08, rate: 250 },
-{ item: 'Hydro Testing of Pipeline', unit: 'Rm', ratePct: 0.20, rate: 180 },
+{ item: 'Earthwork Excavation for pipe trench including disposal', unit: 'Cum', ratePct: 0.08, rate: 420 },
+{ item: 'DI Pipe K9 Class 200mm dia including jointing material', unit: 'Rm', ratePct: 0.37, rate: 4500 },
+{ item: 'Sluice Valve 200mm with CI valve chamber', unit: 'Nos', ratePct: 0.20, rate: 95000 },
+{ item: 'Coarse Sand Bedding 150mm thick for pipe', unit: 'Cum', ratePct: 0.06, rate: 2200 },
+{ item: 'Backfilling with excavated material and compaction in layers', unit: 'Cum', ratePct: 0.08, rate: 300 },
+{ item: 'Hydro Testing of Pipeline at 1.5x working pressure', unit: 'Rm', ratePct: 0.21, rate: 220 },
 ];
 } else if (t.includes('electrical') || t.includes('mechanical')) {
 template = [
-{ item: 'Supply and laying of HT cable 11KV', unit: 'Rm', ratePct: 0.30, rate: 1850 },
-{ item: 'Supply and installation of LT panel', unit: 'Nos', ratePct: 0.25, rate: 285000 },
-{ item: 'Earthing and bonding work', unit: 'Ls', ratePct: 0.15, rate: targetCost * 0.15 },
-{ item: 'Supply and installation of conduit wiring', unit: 'Rm', ratePct: 0.20, rate: 420 },
-{ item: 'Testing and commissioning', unit: 'Ls', ratePct: 0.10, rate: targetCost * 0.10 },
+{ item: 'Supply and laying of HT XLPE Cable 11KV 3CX 95sqmm', unit: 'Rm', ratePct: 0.30, rate: 2200 },
+{ item: 'Supply and installation of LT Distribution Panel with MCBs', unit: 'Nos', ratePct: 0.25, rate: 320000 },
+{ item: 'Earthing with GI electrode and strips as per IE rules', unit: 'Set', ratePct: 0.15, rate: Math.round(targetCost * 0.15) },
+{ item: 'MS Conduit wiring with copper cables in buildings', unit: 'Rm', ratePct: 0.20, rate: 480 },
+{ item: 'Testing commissioning and load trial of installations', unit: 'Ls', ratePct: 0.10, rate: Math.round(targetCost * 0.10) },
 ];
 } else {
 template = [
-{ item: 'Earthwork Excavation in foundation', unit: 'Cum', ratePct: 0.08, rate: 350 },
-{ item: 'PCC M10 in foundation 150mm thick', unit: 'Cum', ratePct: 0.10, rate: 5200 },
-{ item: 'RCC M25 in columns beams and slabs', unit: 'Cum', ratePct: 0.25, rate: 7800 },
-{ item: 'TMT Steel Fe500D reinforcement bars', unit: 'MT', ratePct: 0.20, rate: 63500 },
-{ item: 'Brick Masonry in CM 1:6', unit: 'Cum', ratePct: 0.20, rate: 4800 },
-{ item: 'Plastering 12mm CM 1:4 both sides', unit: 'Sqm', ratePct: 0.17, rate: 320 },
+{ item: 'Earthwork Excavation in hard soil for foundation', unit: 'Cum', ratePct: 0.08, rate: 420 },
+{ item: 'PCC M10 in foundation and plinth 150mm thick', unit: 'Cum', ratePct: 0.10, rate: 6200 },
+{ item: 'RCC M25 in columns beams slabs and foundations', unit: 'Cum', ratePct: 0.24, rate: 9200 },
+{ item: 'TMT Steel Fe500D reinforcement bars including binding', unit: 'MT', ratePct: 0.20, rate: 63500 },
+{ item: 'Brick Masonry in CM 1:6 for walls', unit: 'Cum', ratePct: 0.21, rate: 5800 },
+{ item: 'Cement Plastering 12mm CM 1:4 both sides of walls', unit: 'Sqm', ratePct: 0.17, rate: 380 },
 ];
 }
 return template.map(item => {
@@ -164,10 +164,12 @@ headers: {
 },
 signal: AbortSignal.timeout(25000)
 });
+console.log('PDF status:', response.status);
 if (!response.ok) return null;
 const buffer = await response.arrayBuffer();
+console.log('PDF size:', buffer.byteLength);
 return Buffer.from(buffer);
-} catch (e) { return null; }
+} catch (e) { console.log('PDF error:', e.message); return null; }
 }
 
 async function extractWithAdobe(pdfBuffer, token) {
@@ -179,8 +181,8 @@ body: JSON.stringify({ mediaType: 'application/pdf' }),
 signal: AbortSignal.timeout(15000)
 });
 const uploadData = await uploadRes.json();
-if (!uploadData.uploadUri || !uploadData.assetID) return null;
-await fetch(uploadData.uploadUri, { method: 'PUT', headers: { 'Content-Type': 'application/pdf' }, body: pdfBuffer, signal: AbortSignal.timeout(30000) });
+if (!uploadData.uploadUri || !uploadData.assetID) { console.log('Upload asset failed:', JSON.stringify(uploadData)); return null; }
+await fetch(uploadData.uploadUri, { method: 'PUT', headers: { 'Content-Type': 'application/pdf' }, body: pdfBuffer, signal: AbortSignal.timeout(60000) });
 const extractRes = await fetch('https://pdf-services.adobe.io/operation/extractpdf', {
 method: 'POST',
 headers: { 'Authorization': `Bearer ${token}`, 'X-API-Key': ADOBE_CLIENT_ID, 'Content-Type': 'application/json' },
@@ -188,7 +190,7 @@ body: JSON.stringify({ assetID: uploadData.assetID, elementsToExtract: ['text', 
 signal: AbortSignal.timeout(15000)
 });
 const jobLocation = extractRes.headers.get('location');
-if (!jobLocation) return null;
+if (!jobLocation) { console.log('No job location'); return null; }
 for (let i = 0; i < 12; i++) {
 await new Promise(r => setTimeout(r, 5000));
 const pollRes = await fetch(jobLocation, { headers: { 'Authorization': `Bearer ${token}`, 'X-API-Key': ADOBE_CLIENT_ID }, signal: AbortSignal.timeout(10000) });
@@ -196,11 +198,13 @@ const pollData = await pollRes.json();
 console.log('Poll:', pollData.status);
 if (pollData.status === 'done') {
 const downloadUri = pollData.resource?.downloadUri;
-if (!downloadUri) return null;
+if (!downloadUri) { console.log('No download URI'); return null; }
 const zipRes = await fetch(downloadUri, { signal: AbortSignal.timeout(30000) });
-return Buffer.from(await zipRes.arrayBuffer());
+const zipBuffer = Buffer.from(await zipRes.arrayBuffer());
+console.log('ZIP size:', zipBuffer.length);
+return zipBuffer;
 }
-if (pollData.status === 'failed') return null;
+if (pollData.status === 'failed') { console.log('Adobe extraction failed'); return null; }
 }
 return null;
 } catch (e) { console.log('Adobe error:', e.message); return null; }
@@ -236,9 +240,11 @@ return null;
 async function parseBOQFromZip(zipBuffer) {
 try {
 const entries = parseZipEntries(zipBuffer);
+console.log('ZIP entries:', Object.keys(entries).join(', '));
 let allText = '';
 let tenderValue = 0;
 const xlsxFiles = Object.keys(entries).filter(f => f.endsWith('.xlsx'));
+console.log('XLSX files count:', xlsxFiles.length);
 
 for (const xlsxFile of xlsxFiles) {
 const xlsxBuffer = decompressEntry(entries[xlsxFile]);
@@ -280,15 +286,19 @@ if (amount > tenderValue) tenderValue = amount;
 }
 }
 
+console.log('Total text length:', allText.length);
+console.log('Text sample:', allText.substring(0, 300));
+console.log('Tender value found:', tenderValue);
+
 // Try Gemini to extract BOQ items
-if (allText.length > 50) {
+if (allText.length > 100) {
 try {
-const prompt = `Extract BOQ line items from this tender Excel data. Look for rows with item descriptions, quantities, units and rates/amounts.
+const prompt = `Extract BOQ line items from this tender document data. Look for rows with SR NO, item descriptions, units, quantities and rates/amounts.
 
 Data:
 ${allText.substring(0, 6000)}
 
-Return ONLY valid JSON:
+Return ONLY valid JSON no markdown:
 {"extractionSuccess":true,"boqItems":[{"item":"description","unit":"Cum","quantity":100,"rate":7200,"amount":720000}],"tenderValue":0}
 
 If no BOQ items found: {"extractionSuccess":false,"boqItems":[],"tenderValue":0}`;
@@ -307,6 +317,8 @@ signal: AbortSignal.timeout(20000)
 );
 const geminiData = await response.json();
 const responseText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+console.log('Gemini BOQ response:', responseText.substring(0, 500));
+
 let parsed = null;
 try {
 parsed = JSON.parse(responseText.replace(/```json/g, '').replace(/```/g, '').trim());
@@ -315,12 +327,16 @@ const match = responseText.match(/\{[\s\S]*\}/);
 if (match) try { parsed = JSON.parse(match[0]); } catch {}
 }
 if (parsed?.extractionSuccess && parsed?.boqItems?.length > 0) {
+console.log('BOQ extraction SUCCESS! Items:', parsed.boqItems.length);
 return { extractionSuccess: true, boqItems: parsed.boqItems, tenderValue: tenderValue || parsed.tenderValue };
 }
-} catch (e) {}
+} catch (e) { console.log('Gemini error:', e.message); }
 }
 
-return { extractionSuccess: false, boqItems: [], tenderValue };
+if (tenderValue > 100000) {
+return { extractionSuccess: false, boqItems: [], tenderValue, realValueFound: true };
+}
+return { extractionSuccess: false, boqItems: [], tenderValue: 0 };
 } catch (e) {
 console.log('ZIP parse error:', e.message);
 return { extractionSuccess: false, boqItems: [], tenderValue: 0 };
@@ -335,7 +351,7 @@ const response = await fetch(
 method: 'POST',
 headers: { 'Content-Type': 'application/json' },
 body: JSON.stringify({
-contents: [{ parts: [{ text: `One sentence bid recommendation for Mumbai ${type} tender worth Rs ${deptEstimate} with ${profitMargin}% profit margin. Be specific about Mumbai 2026 market.` }] }],
+contents: [{ parts: [{ text: `One sentence bid recommendation for Mumbai ${type} tender worth Rs ${deptEstimate} with ${profitMargin}% profit margin. Be specific about Mumbai June 2026 market conditions and competition level.` }] }],
 generationConfig: { temperature: 0.7, maxOutputTokens: 100 }
 }),
 signal: AbortSignal.timeout(8000)
@@ -346,30 +362,42 @@ return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
 } catch (e) { return ''; }
 }
 
-function buildBOQResponse(boqItems, deptEstimate, tenderType, pdfRead, realValueFromPDF, message) {
-const executionCost = boqItems.reduce((sum, item) => sum + (item.amount || item.quantity * item.rate || 0), 0);
-const expectedWinningBid = Math.round(deptEstimate * 0.92);
-const expectedProfit = expectedWinningBid - executionCost;
-const profitMargin = Math.round((expectedProfit / expectedWinningBid) * 100);
-const defaults = getDefaultsForType(tenderType || '');
-return { executionCost, expectedWinningBid, expectedProfit, profitMargin, defaults };
-}
-
-// Parse multipart form data to extract file buffer
 function parseMultipart(body, boundary) {
 try {
-const parts = body.split(Buffer.from('--' + boundary));
+console.log('Parsing multipart, boundary:', boundary);
+console.log('Body size:', body.length);
+
+// Try both with and without quotes in boundary
+const cleanBoundary = boundary.replace(/"/g, '');
+const parts = body.toString('binary').split('--' + cleanBoundary);
+console.log('Parts found:', parts.length);
+
 for (const part of parts) {
-if (part.includes('filename=') && part.includes('application/pdf') || part.includes('filename=')) {
+if (part.includes('filename=') || part.includes('application/pdf') || part.includes('Content-Type: application')) {
 const headerEnd = part.indexOf('\r\n\r\n');
 if (headerEnd !== -1) {
-const fileData = part.slice(headerEnd + 4, part.length - 2);
+const fileData = Buffer.from(part.slice(headerEnd + 4, part.length - 2), 'binary');
+console.log('File data size:', fileData.length);
 if (fileData.length > 100) return fileData;
 }
 }
 }
+
+// Try alternative: look for PDF header directly
+const pdfStart = body.indexOf(Buffer.from('%PDF'));
+if (pdfStart !== -1) {
+console.log('Found PDF header at position:', pdfStart);
+const pdfEnd = body.lastIndexOf(Buffer.from('%%EOF'));
+if (pdfEnd !== -1) {
+const pdfData = body.slice(pdfStart, pdfEnd + 5);
+console.log('PDF data size:', pdfData.length);
+return pdfData;
+}
+return body.slice(pdfStart);
+}
+
 return null;
-} catch (e) { return null; }
+} catch (e) { console.log('Multipart parse error:', e.message); return null; }
 }
 
 const server = http.createServer(async (req, res) => {
@@ -378,7 +406,6 @@ res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
 res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
 
-// Collect body
 const chunks = [];
 req.on('data', chunk => chunks.push(chunk));
 
@@ -389,51 +416,69 @@ const body = Buffer.concat(chunks);
 if (req.method === 'POST' && req.url === '/api/boq-upload') {
 try {
 const contentType = req.headers['content-type'] || '';
+console.log('Upload received, content-type:', contentType.substring(0, 150));
+console.log('Body size:', body.length);
+
 const boundaryMatch = contentType.match(/boundary=([^\s;]+)/);
 if (!boundaryMatch) {
-res.writeHead(400, { 'Content-Type': 'application/json' });
-res.end(JSON.stringify({ error: 'No boundary found' }));
-return;
+console.log('No boundary found');
+res.writeHead(400); res.end(JSON.stringify({ error: 'No boundary' })); return;
 }
 
 const pdfBuffer = parseMultipart(body, boundaryMatch[1]);
+console.log('PDF buffer:', pdfBuffer ? pdfBuffer.length + ' bytes' : 'null');
+
 if (!pdfBuffer || pdfBuffer.length < 1000) {
-res.writeHead(400, { 'Content-Type': 'application/json' });
-res.end(JSON.stringify({ error: 'No valid PDF found in upload' }));
-return;
+res.writeHead(400); res.end(JSON.stringify({ error: 'No valid PDF found in upload' })); return;
 }
 
-console.log('PDF upload received, size:', pdfBuffer.length);
+// Check it's actually a PDF
+const header = pdfBuffer.slice(0, 4).toString();
+console.log('PDF header check:', header);
+if (!header.startsWith('%PDF')) {
+console.log('Not a valid PDF');
+res.writeHead(400); res.end(JSON.stringify({ error: 'File does not appear to be a valid PDF' })); return;
+}
 
-// Extract tenderType and tenderTitle from form fields
+const bodyStr = body.toString('binary');
 let tenderType = 'Civil';
 let tenderTitle = '';
-const bodyStr = body.toString('binary');
 const typeMatch = bodyStr.match(/name="tenderType"\r\n\r\n([^\r\n]+)/);
 const titleMatch = bodyStr.match(/name="tenderTitle"\r\n\r\n([^\r\n]+)/);
 if (typeMatch) tenderType = typeMatch[1];
 if (titleMatch) tenderTitle = titleMatch[1];
+console.log('Tender type:', tenderType, '| Title:', tenderTitle.substring(0, 50));
 
 const token = await getAdobeToken();
-if (!token) {
-res.writeHead(500, { 'Content-Type': 'application/json' });
-res.end(JSON.stringify({ error: 'Adobe authentication failed' }));
-return;
-}
+if (!token) { res.writeHead(500); res.end(JSON.stringify({ error: 'Adobe auth failed' })); return; }
 
+console.log('Starting Adobe extraction for uploaded PDF, size:', pdfBuffer.length);
 const zipBuffer = await extractWithAdobe(pdfBuffer, token);
 if (!zipBuffer) {
-res.writeHead(500, { 'Content-Type': 'application/json' });
-res.end(JSON.stringify({ error: 'PDF extraction failed' }));
-return;
+console.log('Adobe extraction returned null');
+res.writeHead(500); res.end(JSON.stringify({ error: 'PDF extraction failed' })); return;
 }
 
 const parsed = await parseBOQFromZip(zipBuffer);
-let deptEstimate = parsed.tenderValue > 100000 ? parsed.tenderValue : estimateTenderValue(tenderTitle, '');
-let boqItems = parsed.boqItems?.length > 0 ? parsed.boqItems : generateEstimatedBOQ(tenderType, deptEstimate);
-let pdfRead = parsed.extractionSuccess && parsed.boqItems?.length > 0;
+console.log('BOQ parsed - success:', parsed.extractionSuccess, 'items:', parsed.boqItems?.length, 'value:', parsed.tenderValue);
 
-const executionCost = boqItems.reduce((sum, item) => sum + (item.amount || item.quantity * item.rate || 0), 0);
+let deptEstimate = parsed.tenderValue > 100000 ? parsed.tenderValue : estimateTenderValue(tenderTitle, '');
+let boqItems = [];
+let pdfRead = false;
+let dataSource = 'pwd_estimation';
+
+if (parsed.extractionSuccess && parsed.boqItems?.length > 0) {
+boqItems = parsed.boqItems;
+pdfRead = true;
+dataSource = 'actual_pdf';
+console.log('Using REAL BOQ items from PDF:', boqItems.length, 'items');
+} else {
+boqItems = generateEstimatedBOQ(tenderType, deptEstimate);
+dataSource = parsed.tenderValue > 100000 ? 'pdf_value_estimated_boq' : 'pwd_estimation';
+console.log('Using estimated BOQ, items:', boqItems.length);
+}
+
+const executionCost = boqItems.reduce((sum, item) => sum + (item.amount || 0), 0);
 const expectedWinningBid = Math.round(deptEstimate * 0.92);
 const expectedProfit = expectedWinningBid - executionCost;
 const profitMargin = Math.round((expectedProfit / expectedWinningBid) * 100);
@@ -443,42 +488,32 @@ const bidReason = await getBidReason(tenderType, deptEstimate, profitMargin);
 let message = pdfRead
 ? `✅ Real BOQ extracted from uploaded PDF — ${boqItems.length} items found`
 : parsed.tenderValue > 100000
-? `📄 Real tender value ₹${(parsed.tenderValue/10000000).toFixed(2)} Cr extracted — BOQ estimated using PWD rates`
-: '📊 AI-estimated BOQ based on Maharashtra PWD rates 2024-25';
+? `📄 Real tender value ₹${(parsed.tenderValue/10000000).toFixed(2)} Cr extracted — BOQ estimated using 2026 Mumbai rates`
+: '📊 BOQ estimated using 2026 Mumbai market rates';
+
+console.log('Upload result - margin:', profitMargin, '% source:', dataSource, 'pdfRead:', pdfRead);
 
 res.writeHead(200, { 'Content-Type': 'application/json' });
 res.end(JSON.stringify({
 success: true,
 boq: {
-dataSource: pdfRead ? 'actual_pdf' : 'pwd_estimation',
-departmentEstimate: deptEstimate,
-expectedWinningBid,
-executionCost,
-expectedProfit,
-profitMargin,
-workingCapitalNeeded: Math.round(executionCost * 0.3),
+dataSource, departmentEstimate: deptEstimate, expectedWinningBid, executionCost,
+expectedProfit, profitMargin, workingCapitalNeeded: Math.round(executionCost * 0.3),
 raCycleDays: 60,
 bidRecommendation: profitMargin >= 10 ? 'YES' : profitMargin >= 7 ? 'REVIEW' : 'NO',
 bidRecommendationReason: bidReason || `${profitMargin}% margin on ${tenderType} tender`,
-boqItems,
-materialCost: Math.round(executionCost * 0.45),
-labourCost: Math.round(executionCost * 0.25),
-equipmentCost: Math.round(executionCost * 0.15),
-overheadCost: Math.round(executionCost * 0.10),
-contingency: Math.round(executionCost * 0.05),
-keyMaterials: defaults.keyMaterials,
-majorEquipment: defaults.majorEquipment,
-executionDays: defaults.executionDays,
-riskFactors: defaults.riskFactors,
+boqItems, materialCost: Math.round(executionCost * 0.45), labourCost: Math.round(executionCost * 0.25),
+equipmentCost: Math.round(executionCost * 0.15), overheadCost: Math.round(executionCost * 0.10),
+contingency: Math.round(executionCost * 0.05), keyMaterials: defaults.keyMaterials,
+majorEquipment: defaults.majorEquipment, executionDays: defaults.executionDays, riskFactors: defaults.riskFactors,
 },
 pdfRead,
 message
 }));
 
 } catch (error) {
-console.log('Upload error:', error.message);
-res.writeHead(500, { 'Content-Type': 'application/json' });
-res.end(JSON.stringify({ error: 'Upload processing failed', details: String(error) }));
+console.log('Upload error:', error.message, error.stack);
+res.writeHead(500); res.end(JSON.stringify({ error: 'Upload failed', details: String(error) }));
 }
 return;
 }
@@ -498,6 +533,7 @@ else if (v.includes('L')) deptEstimate = parseFloat(v) * 100000;
 else { const n = parseFloat(v.replace(/[^0-9.]/g, '')); if (n > 100000) deptEstimate = n; }
 }
 if (!deptEstimate || deptEstimate < 100000) deptEstimate = estimateTenderValue(tenderTitle || '', organisation || '');
+console.log('Dept estimate:', deptEstimate);
 
 let boqItems = [];
 let dataSource = 'pwd_estimation';
@@ -531,16 +567,18 @@ boqItems = generateEstimatedBOQ(tenderType || '', deptEstimate);
 dataSource = realValueFromPDF > 0 ? 'pdf_value_estimated_boq' : 'pwd_estimation';
 }
 
-const executionCost = boqItems.reduce((sum, item) => sum + (item.amount || item.quantity * item.rate || 0), 0);
+const executionCost = boqItems.reduce((sum, item) => sum + (item.amount || 0), 0);
 const expectedWinningBid = Math.round(deptEstimate * 0.92);
 const expectedProfit = expectedWinningBid - executionCost;
 const profitMargin = Math.round((expectedProfit / expectedWinningBid) * 100);
 const defaults = getDefaultsForType(tenderType || '');
 const bidReason = await getBidReason(tenderType || 'Civil', deptEstimate, profitMargin);
 
-let message = '📊 AI-estimated BOQ based on Maharashtra PWD rates 2024-25';
+let message = '📊 BOQ estimated using 2026 Mumbai market rates';
 if (pdfRead) message = `✅ Real BOQ extracted from tender PDF — ${boqItems.length} items found`;
-else if (realValueFromPDF > 0) message = `📄 Real tender value ₹${(realValueFromPDF/10000000).toFixed(2)} Cr extracted from PDF — BOQ estimated using PWD rates`;
+else if (realValueFromPDF > 0) message = `📄 Real tender value ₹${(realValueFromPDF/10000000).toFixed(2)} Cr extracted from PDF — BOQ estimated using 2026 Mumbai rates`;
+
+console.log('Result - margin:', profitMargin, '% source:', dataSource);
 
 res.writeHead(200, { 'Content-Type': 'application/json' });
 res.end(JSON.stringify({
@@ -550,7 +588,7 @@ dataSource, departmentEstimate: deptEstimate, expectedWinningBid, executionCost,
 expectedProfit, profitMargin, workingCapitalNeeded: Math.round(executionCost * 0.3),
 raCycleDays: 60,
 bidRecommendation: profitMargin >= 10 ? 'YES' : profitMargin >= 7 ? 'REVIEW' : 'NO',
-bidRecommendationReason: bidReason || `${profitMargin}% margin on ${tenderType} tender`,
+bidRecommendationReason: bidReason || `${profitMargin}% margin on ${tenderType} tender in Mumbai`,
 boqItems, materialCost: Math.round(executionCost * 0.45), labourCost: Math.round(executionCost * 0.25),
 equipmentCost: Math.round(executionCost * 0.15), overheadCost: Math.round(executionCost * 0.10),
 contingency: Math.round(executionCost * 0.05), keyMaterials: defaults.keyMaterials,
@@ -562,17 +600,14 @@ message
 
 } catch (error) {
 console.log('Error:', error.message);
-res.writeHead(500, { 'Content-Type': 'application/json' });
-res.end(JSON.stringify({ error: 'BOQ analysis failed', details: String(error) }));
+res.writeHead(500); res.end(JSON.stringify({ error: 'BOQ analysis failed', details: String(error) }));
 }
 return;
 }
 
-res.writeHead(404);
-res.end(JSON.stringify({ error: 'Not found' }));
+res.writeHead(404); res.end(JSON.stringify({ error: 'Not found' }));
 });
 });
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => console.log(`BOQ service running on port ${PORT}`));
-
