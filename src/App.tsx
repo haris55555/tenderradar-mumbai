@@ -48,7 +48,7 @@ function fmtNum(n: number): string {
 return n.toLocaleString('en-IN');
 }
 
-function UploadZone({ onUpload, loading }: { onUpload: (file: File) => void; loading: boolean }) {
+function UploadZone({ onUpload }: { onUpload: (file: File) => void }) {
 const [dragging, setDragging] = useState(false);
 const inputRef = useRef<HTMLInputElement>(null);
 
@@ -64,11 +64,11 @@ return (
 onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
 onDragLeave={() => setDragging(false)}
 onDrop={handleDrop}
-onClick={() => !loading && inputRef.current?.click()}
+onClick={() => inputRef.current?.click()}
 style={{
 border: `2px dashed ${dragging ? '#F5A623' : '#2A3F54'}`,
 borderRadius: '16px', padding: '60px 40px', textAlign: 'center',
-cursor: loading ? 'not-allowed' : 'pointer',
+cursor: 'pointer',
 background: dragging ? 'rgba(245,166,35,0.05)' : 'rgba(26,42,58,0.5)',
 transition: 'all 0.2s',
 }}
@@ -80,7 +80,7 @@ onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f); e.target.v
 Upload your BOQ PDF
 </div>
 <div style={{ color: '#6B7F8E', fontSize: '15px', marginBottom: '24px', lineHeight: '1.6' }}>
-Download the tender document from mahatenders.gov.in<br />
+Download the tender document from any government portal<br />
 and upload it here to get your exact profit calculation
 </div>
 <div style={{
@@ -239,20 +239,13 @@ borderRadius: '4px', transition: 'width 0.5s ease',
 );
 }
 
-// Reusable percentage input
-function PctInput({
-label, sublabel, value, onChange, basis, color
-}: {
+function PctInput({ label, sublabel, value, onChange, basis, color }: {
 label: string; sublabel: string; value: number;
 onChange: (v: number) => void; basis: string; color: string;
 }) {
 const [raw, setRaw] = useState(String(value));
-
 return (
-<div style={{
-background: '#0F1923', borderRadius: '10px', padding: '16px',
-border: '1px solid #2A3F54',
-}}>
+<div style={{ background: '#0F1923', borderRadius: '10px', padding: '16px', border: '1px solid #2A3F54' }}>
 <div style={{ color: '#E8EDF2', fontSize: '13px', fontWeight: '700', marginBottom: '2px' }}>{label}</div>
 <div style={{ color: '#3A5068', fontSize: '11px', marginBottom: '12px', lineHeight: '1.4' }}>{sublabel}</div>
 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -286,6 +279,44 @@ fontSize: '16px', fontWeight: '800', outline: 'none',
 );
 }
 
+function NumInput({ label, sublabel, value, onChange, suffix, color, min, max }: {
+label: string; sublabel: string; value: number;
+onChange: (v: number) => void; suffix: string; color: string;
+min?: number; max?: number;
+}) {
+const [raw, setRaw] = useState(String(value));
+return (
+<div style={{ background: '#0F1923', borderRadius: '10px', padding: '16px', border: '1px solid #2A3F54' }}>
+<div style={{ color: '#E8EDF2', fontSize: '13px', fontWeight: '700', marginBottom: '2px' }}>{label}</div>
+<div style={{ color: '#3A5068', fontSize: '11px', marginBottom: '12px', lineHeight: '1.4' }}>{sublabel}</div>
+<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+<input
+type="number" min={min ?? 1} max={max ?? 999} step="1"
+value={raw}
+onFocus={(e) => e.target.select()}
+onChange={(e) => {
+setRaw(e.target.value);
+const n = parseFloat(e.target.value);
+if (!isNaN(n) && n > 0) onChange(n);
+}}
+onBlur={(e) => {
+const n = parseFloat(e.target.value);
+if (isNaN(n) || n <= 0) { setRaw('1'); onChange(1); }
+else setRaw(String(n));
+}}
+style={{
+width: '80px', padding: '8px 10px',
+background: '#1A2A3A', border: `1px solid ${color}40`,
+borderRadius: '6px', color,
+fontSize: '16px', fontWeight: '800', outline: 'none',
+}}
+/>
+<div style={{ color, fontSize: '14px', fontWeight: '700' }}>{suffix}</div>
+</div>
+</div>
+);
+}
+
 export default function App() {
 const [uploadState, setUploadState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
 const [loadingStep, setLoadingStep] = useState(0);
@@ -294,12 +325,17 @@ const [items, setItems] = useState<BOQItem[]>([]);
 const [errorMsg, setErrorMsg] = useState('');
 const stepTimer = useRef<any>(null);
 
+// Cost inputs
 const [facilitation, setFacilitation] = useState(3);
 const [overhead, setOverhead] = useState(8);
 const [wastage, setWastage] = useState(5);
 const [labourEscalation, setLabourEscalation] = useState(2);
 const [bidPercent, setBidPercent] = useState(92);
 const [bidPercentRaw, setBidPercentRaw] = useState('92');
+
+// Working capital inputs
+const [projectMonths, setProjectMonths] = useState(6);
+const [raCycleDays, setRaCycleDays] = useState(60);
 
 const handleUpload = async (file: File) => {
 setUploadState('loading');
@@ -334,6 +370,10 @@ const data: UploadResult = await response.json();
 if (data.success && data.boq) {
 setResult(data);
 setItems(data.boq.boqItems.map(item => ({ ...item, editedRate: item.rate })));
+// Set project months from execution days
+if (data.boq.executionDays) {
+setProjectMonths(Math.ceil(data.boq.executionDays / 30));
+}
 setUploadState('done');
 } else {
 throw new Error('Analysis failed');
@@ -357,6 +397,7 @@ setErrorMsg('');
 setLoadingStep(0);
 };
 
+// Live calculations
 const deptEstimate = result?.boq.departmentEstimate || 0;
 const expectedWinningBid = Math.round(deptEstimate * (bidPercent / 100));
 const executionCost = items.reduce((sum, item) => sum + (item.quantity * (item.editedRate ?? item.rate)), 0);
@@ -367,7 +408,12 @@ const labourEscCost = Math.round(executionCost * (labourEscalation / 100));
 const totalRealCost = executionCost + facilitationCost + overheadCost + wastageCost + labourEscCost;
 const realProfit = expectedWinningBid - totalRealCost;
 const profitMargin = expectedWinningBid > 0 ? Math.round((realProfit / expectedWinningBid) * 100) : 0;
-const workingCapital = Math.round(totalRealCost * 0.3);
+
+// Working capital calculations
+const monthlySpend = projectMonths > 0 ? Math.round(totalRealCost / projectMonths) : 0;
+const raCycleMonths = raCycleDays / 30;
+const minWorkingCapital = Math.round(monthlySpend * (raCycleMonths + 1));
+const recommendedWorkingCapital = Math.round(monthlySpend * (raCycleMonths + 2));
 
 const bidDecision = profitMargin >= 10 ? 'BID' : profitMargin >= 6 ? 'REVIEW' : 'AVOID';
 const bidColor = profitMargin >= 10 ? '#00C896' : profitMargin >= 6 ? '#F5A623' : '#FF4D4D';
@@ -436,12 +482,12 @@ Upload the BOQ PDF from any government tender portal.<br />
 Enter your actual rates. Get your real profit — including officer facilitation costs.
 </p>
 </div>
-<UploadZone onUpload={handleUpload} loading={false} />
+<UploadZone onUpload={handleUpload} />
 <div style={{ marginTop: '40px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
 {[
-{ icon: '📋', title: 'Upload BOQ', desc: 'Any government tender PDF' },
-{ icon: '✏️', title: 'Enter Your Rates', desc: 'Your actual material & labour cost' },
-{ icon: '💰', title: 'See Real Profit', desc: 'Including all hidden costs' },
+{ icon: '📋', title: 'Upload BOQ', desc: 'Any government tender PDF — BMC, PWD, MMRDA, CPWD' },
+{ icon: '✏️', title: 'Enter Your Rates', desc: 'Your actual material & labour cost per item' },
+{ icon: '💰', title: 'See Real Profit', desc: 'Including facilitation, overhead & working capital' },
 ].map((step, i) => (
 <div key={i} style={{
 background: '#1A2A3A', borderRadius: '12px', padding: '20px',
@@ -497,8 +543,9 @@ fontWeight: '700', cursor: 'pointer',
 {uploadState === 'done' && result && (
 <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '24px', alignItems: 'start' }}>
 
-{/* Left */}
+{/* Left Column */}
 <div>
+{/* BOQ Table Header */}
 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
 <div>
 <h2 style={{ fontSize: '18px', fontWeight: '800', margin: '0 0 6px 0' }}>Bill of Quantities</h2>
@@ -518,6 +565,7 @@ Edit <span style={{ color: '#F5A623', fontWeight: '700' }}>Your Rate</span> colu
 </div>
 </div>
 
+{/* BOQ Table */}
 <div style={{ background: '#1A2A3A', borderRadius: '12px', border: '1px solid #2A3F54', overflow: 'hidden', marginBottom: '12px' }}>
 <BOQTable items={items} onRateChange={handleRateChange} />
 </div>
@@ -570,7 +618,7 @@ basis="% of execution cost" color="#F5A623"
 <div>
 <div style={{ color: '#E8EDF2', fontSize: '13px', fontWeight: '700' }}>Your Bid Percentage</div>
 <div style={{ color: '#3A5068', fontSize: '11px', marginTop: '2px' }}>
-% of dept estimate you plan to quote — e.g. 92 means you bid ₹92L on a ₹1Cr tender (8% below)
+% of dept estimate you plan to quote — e.g. 92 means you bid ₹92L on a ₹1Cr tender (8% below estimate)
 </div>
 </div>
 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -601,9 +649,88 @@ fontSize: '16px', fontWeight: '800', outline: 'none',
 </div>
 </div>
 </div>
+
+{/* Working Capital Calculator */}
+<div style={{ background: '#1A2A3A', borderRadius: '12px', border: '1px solid #2A3F54', padding: '24px', marginBottom: '24px' }}>
+<h3 style={{ fontSize: '15px', fontWeight: '800', marginBottom: '4px' }}>💰 Working Capital Calculator</h3>
+<p style={{ color: '#6B7F8E', fontSize: '13px', marginBottom: '24px' }}>
+How much cash you need in your bank before starting this tender
+</p>
+
+<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+<NumInput
+label="Project Duration"
+sublabel="Total months to complete the work (excluding monsoon if applicable)"
+value={projectMonths} onChange={setProjectMonths}
+suffix="months" color="#00C896" min={1} max={60}
+/>
+<NumInput
+label="RA Bill Payment Cycle"
+sublabel="How many days after submitting RA bill does govt typically pay?"
+value={raCycleDays} onChange={setRaCycleDays}
+suffix="days" color="#F5A623" min={15} max={180}
+/>
 </div>
 
-{/* Right — Dashboard */}
+{/* Working Capital Results */}
+<div style={{ background: '#0F1923', borderRadius: '10px', padding: '20px', border: '1px solid #2A3F54' }}>
+<div style={{ color: '#6B7F8E', fontSize: '11px', fontWeight: '700', letterSpacing: '1px', marginBottom: '16px' }}>
+WORKING CAPITAL ANALYSIS
+</div>
+
+{/* Monthly spend */}
+<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #1A2A3A' }}>
+<div>
+<div style={{ color: '#E8EDF2', fontSize: '13px', fontWeight: '600' }}>Monthly Spend</div>
+<div style={{ color: '#3A5068', fontSize: '11px' }}>Total cost ÷ {projectMonths} months</div>
+</div>
+<div style={{ color: '#E8EDF2', fontSize: '16px', fontWeight: '800', fontFamily: 'monospace' }}>
+{fmt(monthlySpend)}<span style={{ color: '#3A5068', fontSize: '11px' }}>/mo</span>
+</div>
+</div>
+
+{/* Minimum working capital */}
+<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #1A2A3A' }}>
+<div>
+<div style={{ color: '#FF4D4D', fontSize: '13px', fontWeight: '600' }}>Minimum Capital Needed</div>
+<div style={{ color: '#3A5068', fontSize: '11px' }}>
+{fmt(monthlySpend)} × {(raCycleDays / 30 + 1).toFixed(1)} months (1 RA cycle + 1 buffer)
+</div>
+</div>
+<div style={{ color: '#FF4D4D', fontSize: '18px', fontWeight: '800', fontFamily: 'monospace' }}>
+{fmt(minWorkingCapital)}
+</div>
+</div>
+
+{/* Recommended working capital */}
+<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #1A2A3A' }}>
+<div>
+<div style={{ color: '#F5A623', fontSize: '13px', fontWeight: '600' }}>Recommended Capital</div>
+<div style={{ color: '#3A5068', fontSize: '11px' }}>
+{fmt(monthlySpend)} × {(raCycleDays / 30 + 2).toFixed(1)} months (safer — covers payment delays)
+</div>
+</div>
+<div style={{ color: '#F5A623', fontSize: '18px', fontWeight: '800', fontFamily: 'monospace' }}>
+{fmt(recommendedWorkingCapital)}
+</div>
+</div>
+
+{/* Bank loan note */}
+<div style={{ marginTop: '14px', background: 'rgba(0,200,150,0.05)', borderRadius: '8px', padding: '12px', border: '1px solid rgba(0,200,150,0.1)' }}>
+<div style={{ color: '#00C896', fontSize: '12px', fontWeight: '700', marginBottom: '4px' }}>
+🏦 For Bank Loan Application
+</div>
+<div style={{ color: '#6B7F8E', fontSize: '12px', lineHeight: '1.6' }}>
+Request <strong style={{ color: '#E8EDF2' }}>{fmt(recommendedWorkingCapital)}</strong> as working capital loan.
+Repayable from RA bills received every {raCycleDays} days.
+Total project value: <strong style={{ color: '#E8EDF2' }}>{fmt(expectedWinningBid)}</strong>.
+</div>
+</div>
+</div>
+</div>
+</div>
+
+{/* Right Column — Dashboard */}
 <div style={{ position: 'sticky', top: '24px' }}>
 
 {/* Bid Decision */}
@@ -628,9 +755,9 @@ FINANCIAL SUMMARY
 {[
 { label: 'Dept Estimate', value: fmt(deptEstimate), color: '#E8EDF2', sub: "Government's budget" },
 { label: 'Your Winning Bid', value: fmt(expectedWinningBid), color: '#00C896', sub: `${bidPercent}% of estimate` },
-{ label: 'Execution Cost', value: fmt(executionCost), color: '#E8EDF2', sub: 'Sum of BOQ items at your rates' },
+{ label: 'Execution Cost', value: fmt(executionCost), color: '#E8EDF2', sub: 'Sum of BOQ at your rates' },
 { label: 'Facilitation Cost', value: fmt(facilitationCost), color: '#FF4D4D', sub: `${facilitation}% of bid` },
-{ label: 'Overhead + Wastage', value: fmt(overheadCost + wastageCost + labourEscCost), color: '#F5A623', sub: 'All additional costs' },
+{ label: 'Overhead + Wastage + Escalation', value: fmt(overheadCost + wastageCost + labourEscCost), color: '#F5A623', sub: 'All additional costs' },
 { label: 'Total Real Cost', value: fmt(totalRealCost), color: '#E8EDF2', sub: 'Everything you spend', bold: true },
 { label: realProfit >= 0 ? 'Net Profit' : 'Net Loss', value: fmt(Math.abs(realProfit)), color: realProfit >= 0 ? '#00C896' : '#FF4D4D', sub: realProfit >= 0 ? 'You keep this' : 'You lose this', bold: true },
 ].map((row) => (
@@ -639,29 +766,60 @@ FINANCIAL SUMMARY
 <div style={{ color: '#6B7F8E', fontSize: '12px' }}>{row.label}</div>
 <div style={{ color: '#3A5068', fontSize: '10px' }}>{row.sub}</div>
 </div>
-<div style={{ color: row.color, fontSize: row.bold ? '15px' : '14px', fontWeight: row.bold ? '800' : '600', fontFamily: 'monospace' }}>
-{realProfit < 0 && row.label === 'Net Loss' ? '-' : ''}{row.value}
+<div style={{ color: row.color, fontSize: (row as any).bold ? '15px' : '14px', fontWeight: (row as any).bold ? '800' : '600', fontFamily: 'monospace' }}>
+{row.value}
 </div>
 </div>
 ))}
 </div>
 
-{/* Cash Flow */}
+{/* Working Capital Summary */}
 <div style={{ background: '#1A2A3A', borderRadius: '12px', border: '1px solid #2A3F54', padding: '20px', marginBottom: '16px' }}>
-<div style={{ color: '#6B7F8E', fontSize: '11px', fontWeight: '700', letterSpacing: '1px', marginBottom: '12px' }}>CASH FLOW</div>
-<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-{[
-{ label: 'Working Capital', value: fmt(workingCapital), color: '#FF4D4D', sub: 'Need upfront' },
-{ label: 'RA Cycle', value: '60 days', color: '#6B7F8E', sub: 'Govt pays every' },
-{ label: 'Timeline', value: `${result.boq.executionDays} days`, color: '#6B7F8E', sub: 'To complete' },
-{ label: 'ROI', value: totalRealCost > 0 ? `${Math.round((realProfit / totalRealCost) * 100)}%` : '—', color: realProfit > 0 ? '#00C896' : '#FF4D4D', sub: 'Return on investment' },
-].map((item) => (
-<div key={item.label} style={{ background: '#0F1923', borderRadius: '8px', padding: '12px', border: '1px solid #2A3F54' }}>
-<div style={{ color: '#6B7F8E', fontSize: '10px', fontWeight: '700', marginBottom: '4px' }}>{item.label}</div>
-<div style={{ color: item.color, fontSize: '16px', fontWeight: '800' }}>{item.value}</div>
-<div style={{ color: '#3A5068', fontSize: '10px', marginTop: '2px' }}>{item.sub}</div>
+<div style={{ color: '#6B7F8E', fontSize: '11px', fontWeight: '700', letterSpacing: '1px', marginBottom: '12px' }}>
+💰 WORKING CAPITAL
 </div>
-))}
+<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+<div style={{ background: '#0F1923', borderRadius: '8px', padding: '12px', border: '1px solid rgba(255,77,77,0.2)' }}>
+<div style={{ color: '#6B7F8E', fontSize: '10px', fontWeight: '700', marginBottom: '4px' }}>MINIMUM</div>
+<div style={{ color: '#FF4D4D', fontSize: '16px', fontWeight: '800' }}>{fmt(minWorkingCapital)}</div>
+<div style={{ color: '#3A5068', fontSize: '10px', marginTop: '2px' }}>Must have upfront</div>
+</div>
+<div style={{ background: '#0F1923', borderRadius: '8px', padding: '12px', border: '1px solid rgba(245,166,35,0.2)' }}>
+<div style={{ color: '#6B7F8E', fontSize: '10px', fontWeight: '700', marginBottom: '4px' }}>RECOMMENDED</div>
+<div style={{ color: '#F5A623', fontSize: '16px', fontWeight: '800' }}>{fmt(recommendedWorkingCapital)}</div>
+<div style={{ color: '#3A5068', fontSize: '10px', marginTop: '2px' }}>Safe with delays</div>
+</div>
+<div style={{ background: '#0F1923', borderRadius: '8px', padding: '12px', border: '1px solid #2A3F54' }}>
+<div style={{ color: '#6B7F8E', fontSize: '10px', fontWeight: '700', marginBottom: '4px' }}>MONTHLY SPEND</div>
+<div style={{ color: '#E8EDF2', fontSize: '16px', fontWeight: '800' }}>{fmt(monthlySpend)}</div>
+<div style={{ color: '#3A5068', fontSize: '10px', marginTop: '2px' }}>Per month</div>
+</div>
+<div style={{ background: '#0F1923', borderRadius: '8px', padding: '12px', border: '1px solid #2A3F54' }}>
+<div style={{ color: '#6B7F8E', fontSize: '10px', fontWeight: '700', marginBottom: '4px' }}>RA CYCLE</div>
+<div style={{ color: '#6B7F8E', fontSize: '16px', fontWeight: '800' }}>{raCycleDays} days</div>
+<div style={{ color: '#3A5068', fontSize: '10px', marginTop: '2px' }}>Govt pays every</div>
+</div>
+</div>
+</div>
+
+{/* ROI */}
+<div style={{ background: '#1A2A3A', borderRadius: '12px', border: '1px solid #2A3F54', padding: '20px', marginBottom: '16px' }}>
+<div style={{ color: '#6B7F8E', fontSize: '11px', fontWeight: '700', letterSpacing: '1px', marginBottom: '12px' }}>
+RETURNS
+</div>
+<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+<div style={{ background: '#0F1923', borderRadius: '8px', padding: '12px', border: '1px solid #2A3F54' }}>
+<div style={{ color: '#6B7F8E', fontSize: '10px', fontWeight: '700', marginBottom: '4px' }}>ROI</div>
+<div style={{ color: realProfit > 0 ? '#00C896' : '#FF4D4D', fontSize: '16px', fontWeight: '800' }}>
+{totalRealCost > 0 ? `${Math.round((realProfit / totalRealCost) * 100)}%` : '—'}
+</div>
+<div style={{ color: '#3A5068', fontSize: '10px', marginTop: '2px' }}>Return on investment</div>
+</div>
+<div style={{ background: '#0F1923', borderRadius: '8px', padding: '12px', border: '1px solid #2A3F54' }}>
+<div style={{ color: '#6B7F8E', fontSize: '10px', fontWeight: '700', marginBottom: '4px' }}>DURATION</div>
+<div style={{ color: '#6B7F8E', fontSize: '16px', fontWeight: '800' }}>{projectMonths} months</div>
+<div style={{ color: '#3A5068', fontSize: '10px', marginTop: '2px' }}>Project timeline</div>
+</div>
 </div>
 </div>
 
