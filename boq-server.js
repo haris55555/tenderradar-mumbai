@@ -183,7 +183,6 @@ const boqItems = [];
 let descCol = -1, unitCol = -1, qtyCol = -1, rateCol = -1, amountCol = -1;
 let headerRowIdx = -1;
 
-// Step 1: Find header row
 for (let i = 0; i < Math.min(rows.length, 30); i++) {
 const row = rows[i];
 const rowLower = row.map(v => (v || '').toLowerCase().trim());
@@ -191,6 +190,112 @@ const hasDesc = rowLower.some(v => v.includes('description') || v.includes('part
 const hasQty = rowLower.some(v => v === 'quantity' || v === 'qty' || v === 'qnty');
 const hasRate = rowLower.some(v => v === 'rate' || v.startsWith('rate'));
 const hasAmount = rowLower.some(v => v === 'amount' || v === 'amt');
+
+if (hasDesc && (hasQty || hasRate || hasAmount)) {
+headerRowIdx = i;
+rowLower.forEach((v, idx) => {
+if ((v.includes('description') || v.includes('particulars')) && descCol === -1) descCol = idx;
+if ((isUnit(v) || v === 'unit' || v === 'per') && unitCol === -1) unitCol = idx;
+if ((v === 'quantity' || v === 'qty' || v === 'qnty') && qtyCol === -1) qtyCol = idx;
+if ((v === 'rate' || v === 'rate (rs)' || v.startsWith('rate')) && rateCol === -1) rateCol = idx;
+if ((v === 'amount' || v === 'amt') && amountCol === -1) amountCol = idx;
+});
+console.log(`Header at row ${i}: desc=${descCol} unit=${unitCol} qty=${qtyCol} rate=${rateCol} amount=${amountCol}`);
+break;
+}
+}
+
+if (headerRowIdx === -1) { console.log('No header found'); return []; }
+
+let pendingDescription = '';
+
+for (let i = headerRowIdx + 1; i < rows.length; i++) {
+const row = rows[i];
+if (!row || row.length === 0) continue;
+
+// ALWAYS check summary FIRST — before anything else
+if (isSummaryRow(row)) {
+console.log(`Summary section at row ${i}: ${row.join(' | ').substring(0, 80)}, stopping`);
+break;
+}
+
+// Skip note rows
+if (isNoteRow(row)) {
+console.log(`Note row skipped at ${i}`);
+continue;
+}
+
+const rowStr = row.join(' ').trim();
+if (rowStr.length < 2) continue;
+
+const desc = descCol >= 0 && descCol < row.length ? (row[descCol] || '').trim() : '';
+const unit = unitCol >= 0 && unitCol < row.length ? (row[unitCol] || '').trim() : '';
+const qtyRaw = qtyCol >= 0 && qtyCol < row.length ? (row[qtyCol] || '').trim() : '';
+const rateRaw = rateCol >= 0 && rateCol < row.length ? (row[rateCol] || '').trim() : '';
+const amountRaw = amountCol >= 0 && amountCol < row.length ? (row[amountCol] || '').trim() : '';
+
+const qty = parseNumber(qtyRaw);
+const rate = parseNumber(rateRaw);
+const amount = parseNumber(amountRaw);
+const hasNumbers = (qty > 0 || rate > 0 || amount > 0);
+
+const firstCell = (row[0] || '').trim();
+const isSubItem = /^[A-Za-z]$/.test(firstCell);
+
+if (hasNumbers && amount > 0) {
+let finalDesc = '';
+if (isSubItem && pendingDescription) {
+finalDesc = `${pendingDescription} — ${desc || firstCell}`;
+} else {
+finalDesc = pendingDescription || desc;
+}
+if (!finalDesc || finalDesc.length < 3) {
+finalDesc = row.find(v => isDescriptionText(v || '') && (v || '').length > 5) || '';
+}
+
+if (finalDesc && finalDesc.length > 3) {
+let finalQty = qty;
+let finalRate = rate;
+let finalAmount = amount;
+let finalUnit = unit || 'Nos';
+
+if (finalAmount === 0 && finalQty > 0 && finalRate > 0) finalAmount = finalQty * finalRate;
+if (finalQty === 0 && finalRate > 0 && finalAmount > 0) finalQty = Math.round(finalAmount / finalRate);
+if (finalRate === 0 && finalQty > 0 && finalAmount > 0) finalRate = Math.round(finalAmount / finalQty);
+
+if (finalAmount > 0) {
+boqItems.push({
+item: finalDesc.substring(0, 300),
+unit: finalUnit.toUpperCase(),
+quantity: Math.round(finalQty * 100) / 100,
+rate: Math.round(finalRate * 100) / 100,
+amount: Math.round(finalAmount)
+});
+console.log(`BOQ item ${boqItems.length}: ${finalDesc.substring(0, 60)} | ${finalUnit} | ${finalQty} | ${finalRate} | ${finalAmount}`);
+}
+}
+if (!isSubItem) pendingDescription = '';
+
+} else if (desc && isDescriptionText(desc)) {
+if (pendingDescription && !isSubItem) {
+pendingDescription += ' ' + desc;
+} else if (!isSubItem) {
+pendingDescription = desc;
+}
+} else if (!desc && !hasNumbers) {
+const anyDesc = row.find((v, idx) => idx !== 0 && isDescriptionText(v || '') && (v || '').length > 10);
+if (anyDesc) {
+if (pendingDescription) pendingDescription += ' ' + anyDesc;
+else pendingDescription = anyDesc;
+}
+}
+}
+
+console.log(`Direct parser found ${boqItems.length} BOQ items`);
+return boqItems;
+}
+
+
 
 if (hasDesc && (hasQty || hasRate || hasAmount)) {
 headerRowIdx = i;
