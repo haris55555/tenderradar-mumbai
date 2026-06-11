@@ -108,7 +108,6 @@ function extractRupeeAmount(text) {
 const patterns = [
 /₹\s*([\d,]+(?:\.\d+)?)/,
 /Rs\.?\s*([\d,]+(?:\.\d+)?)/i,
-/INR\s*([\d,]+(?:\.\d+)?)/i,
 ];
 for (const pattern of patterns) {
 const match = text.match(pattern);
@@ -124,16 +123,36 @@ const KNOWN_UNITS = [
 'cum', 'sqm', 'rm', 'nos', 'mt', 'kg', 'ltr', 'ls', 'set',
 'rmt', 'sqft', 'cft', 'mtr', 'unit', 'job', 'lot',
 'month', 'day', 'hr', 'ton', 'quintal', 'bag', 'pair',
-'cbo', 'each', 'no', 'num', 'running', 'sq', 'cu',
-'per', 'point', 'trip', 'visit', 'lump'
+'cbo', 'each', 'no', 'num', 'sq.m.', 'sq.ft.', 'rmt',
+'per', 'point', 'trip', 'visit', 'lump', 'seat'
 ];
+
+// Summary/financial keywords that mark end of BOQ items
+const SUMMARY_KEYWORDS = [
+'estimated cost', 'contractors rebate', 'contractor\'s rebate',
+'gst', 'contract sum', 'contingency', 'contract cost',
+'water charges', 'sewerage charges', 'supervision charges',
+'total project cost', 'project cost', 'cost after rebate',
+'physical contingency', 'cost contingency', 'grand total',
+'sub total', 'total amount', 'net amount', 'taxable amount'
+];
+
+function isSummaryRow(row) {
+const rowStr = row.join(' ').toLowerCase().trim();
+return SUMMARY_KEYWORDS.some(keyword => rowStr.includes(keyword));
+}
+
+function isNoteRow(row) {
+const firstCell = (row[0] || '').toLowerCase().trim();
+const rowStr = row.join(' ').toLowerCase().trim();
+return firstCell.startsWith('note') || rowStr.startsWith('note:') ||
+rowStr.startsWith('note ') || firstCell === 'note';
+}
 
 function isUnit(val) {
 if (!val) return false;
-const v = val.toLowerCase().trim();
-if (KNOWN_UNITS.includes(v)) return true;
-if (v.match(/^(cum|sqm|rm|rmt|nos|mt|kg|ls|set|ltr|mtr)$/i)) return true;
-return false;
+const v = val.toLowerCase().trim().replace(/\./g, '');
+return KNOWN_UNITS.includes(v) || KNOWN_UNITS.includes(val.toLowerCase().trim());
 }
 
 function isNumber(val) {
@@ -154,11 +173,11 @@ const v = val.trim();
 if (v.length < 3) return false;
 if (isNumber(v)) return false;
 if (isUnit(v)) return false;
-if (/^\d+$/.test(v)) return false;
+if (/^\d+(\.\d+)?$/.test(v)) return false;
+if (/^[A-Z]$/.test(v)) return false; // Single letter like A, B
 return /[a-zA-Z]/.test(v) && v.length > 3;
 }
 
-// Fixed BOQ parser — handles long descriptions that wrap across rows
 function parseBOQDirectly(rows) {
 const boqItems = [];
 let descCol = -1, unitCol = -1, qtyCol = -1, rateCol = -1, amountCol = -1;
@@ -168,19 +187,23 @@ let headerRowIdx = -1;
 for (let i = 0; i < Math.min(rows.length, 30); i++) {
 const row = rows[i];
 const rowLower = row.map(v => (v || '').toLowerCase().trim());
-const hasDesc = rowLower.some(v => v.includes('description') || v.includes('particulars') || v.includes('item desc'));
+const hasDesc = rowLower.some(v => v.includes('description') || v.includes('particulars'));
 const hasQty = rowLower.some(v => v === 'quantity' || v === 'qty' || v === 'qnty');
-const hasRate = rowLower.some(v => v === 'rate' || v === 'rate (rs)' || v === 'rate(rs)');
-const hasAmount = rowLower.some(v => v === 'amount' || v === 'amt' || v.includes('amount'));
+const hasRate = rowLower.some(v => v === 'rate' || v.startsWith('rate'));
+const hasAmount = rowLower.some(v => v === 'amount' || v === 'amt');
 
 if (hasDesc && (hasQty || hasRate || hasAmount)) {
 headerRowIdx = i;
 rowLower.forEach((v, idx) => {
-if ((v.includes('description') || v.includes('particulars')) && descCol === -1) descCol = idx;
-if (isUnit(v) || v === 'unit' || v === 'per') unitCol = idx;
+if (v.includes('description') || v.includes('particulars')) {
+if (descCol === -1) descCol = idx;
+}
+if (isUnit(v) || v === 'unit' || v === 'per') {
+if (unitCol === -1) unitCol = idx;
+}
 if ((v === 'quantity' || v === 'qty' || v === 'qnty') && qtyCol === -1) qtyCol = idx;
 if ((v === 'rate' || v === 'rate (rs)' || v.startsWith('rate')) && rateCol === -1) rateCol = idx;
-if ((v === 'amount' || v === 'amt' || v.includes('amount')) && amountCol === -1) amountCol = idx;
+if ((v === 'amount' || v === 'amt') && amountCol === -1) amountCol = idx;
 });
 console.log(`Header at row ${i}: desc=${descCol} unit=${unitCol} qty=${qtyCol} rate=${rateCol} amount=${amountCol}`);
 break;
@@ -192,24 +215,31 @@ console.log('No header found');
 return [];
 }
 
-// Step 2: Parse data rows with description merging
+// Step 2: Parse data rows
 let pendingDescription = '';
-let pendingItemNo = '';
+let summaryStarted = false;
 
 for (let i = headerRowIdx + 1; i < rows.length; i++) {
 const row = rows[i];
 if (!row || row.length === 0) continue;
 
-const rowStr = row.join(' ').toLowerCase().trim();
+// Stop at summary section
+if (isSummaryRow(row)) {
+console.log(`Summary section started at row ${i}, stopping BOQ parse`);
+summaryStarted = true;
+break;
+}
 
-// Skip total/subtotal rows
-if (rowStr.includes('grand total') || rowStr.includes('sub total') ||
-rowStr === 'total' || rowStr.includes('total amount')) continue;
+// Skip note rows
+if (isNoteRow(row)) {
+console.log(`Skipping note row ${i}`);
+continue;
+}
 
-// Skip empty rows
-if (rowStr.trim().length < 2) continue;
+const rowStr = row.join(' ').trim();
+if (rowStr.length < 2) continue;
 
-// Get values at known column positions
+// Get values at known positions
 const desc = descCol >= 0 && descCol < row.length ? (row[descCol] || '').trim() : '';
 const unit = unitCol >= 0 && unitCol < row.length ? (row[unitCol] || '').trim() : '';
 const qtyRaw = qtyCol >= 0 && qtyCol < row.length ? (row[qtyCol] || '').trim() : '';
@@ -219,19 +249,33 @@ const amountRaw = amountCol >= 0 && amountCol < row.length ? (row[amountCol] || 
 const qty = parseNumber(qtyRaw);
 const rate = parseNumber(rateRaw);
 const amount = parseNumber(amountRaw);
-
-// Check if this row has numeric data
 const hasNumbers = (qty > 0 || rate > 0 || amount > 0);
 
-if (hasNumbers) {
-// This row has the numbers — use pending description if available
-const finalDesc = pendingDescription || desc;
-const finalUnit = unit || 'Nos';
+// Check first column for sr no
+const firstCell = (row[0] || '').trim();
+const isSubItem = /^[A-Za-z]$/.test(firstCell); // A, B, C sub items
+
+if (hasNumbers && amount > 0) {
+// This row has valid financial data
+let finalDesc = '';
+
+if (isSubItem && pendingDescription) {
+// Sub-item — prepend parent description
+finalDesc = `${pendingDescription} — ${desc || firstCell}`;
+} else {
+finalDesc = pendingDescription || desc;
+}
+
+if (!finalDesc || finalDesc.length < 3) {
+// Try to find description in any cell
+finalDesc = row.find(v => isDescriptionText(v || '') && (v || '').length > 5) || '';
+}
 
 if (finalDesc && finalDesc.length > 3) {
 let finalQty = qty;
 let finalRate = rate;
 let finalAmount = amount;
+let finalUnit = unit || 'Nos';
 
 // Calculate missing values
 if (finalAmount === 0 && finalQty > 0 && finalRate > 0) finalAmount = finalQty * finalRate;
@@ -246,29 +290,27 @@ quantity: Math.round(finalQty * 100) / 100,
 rate: Math.round(finalRate * 100) / 100,
 amount: Math.round(finalAmount)
 });
-console.log(`BOQ item ${boqItems.length}: ${finalDesc.substring(0, 50)} | ${finalUnit} | ${finalQty} | ${finalRate} | ${finalAmount}`);
+console.log(`BOQ item ${boqItems.length}: ${finalDesc.substring(0, 60)} | ${finalUnit} | ${finalQty} | ${finalRate} | ${finalAmount}`);
 }
 }
-// Reset pending
-pendingDescription = '';
-pendingItemNo = '';
 
-} else if (desc && isDescriptionText(desc) && !hasNumbers) {
-// This row has description but no numbers — accumulate description
-if (pendingDescription) {
+// Reset pending only if not a sub-item with more sub-items coming
+if (!isSubItem) {
+pendingDescription = '';
+}
+
+} else if (desc && isDescriptionText(desc)) {
+// Description row without numbers — accumulate
+if (pendingDescription && !isSubItem) {
 pendingDescription += ' ' + desc;
-} else {
+} else if (!isSubItem) {
 pendingDescription = desc;
 }
-
-// Also check if item no is in first column
-const firstCol = (row[0] || '').trim();
-if (firstCol && !isNaN(parseInt(firstCol))) {
-pendingItemNo = firstCol;
-}
 } else if (!desc && !hasNumbers) {
-// Row with only description in other columns — try to find it
-const anyDesc = row.find(v => isDescriptionText(v || '') && (v || '').length > 10);
+// Try other cells for description
+const anyDesc = row.find((v, idx) =>
+idx !== 0 && isDescriptionText(v || '') && (v || '').length > 10
+);
 if (anyDesc) {
 if (pendingDescription) {
 pendingDescription += ' ' + anyDesc;
@@ -308,16 +350,14 @@ const response = await fetch(url, {
 headers: {
 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
 'Accept': 'application/pdf,*/*',
-'Referer': 'https://portal.mcgm.gov.in/irj/portal/anonymous/qletenders_new?guest_user=english',
+'Referer': 'https://portal.mcgm.gov.in/',
 },
 signal: AbortSignal.timeout(25000)
 });
-console.log('PDF status:', response.status);
 if (!response.ok) return null;
 const buffer = await response.arrayBuffer();
-console.log('PDF size:', buffer.byteLength);
 return Buffer.from(buffer);
-} catch (e) { console.log('PDF error:', e.message); return null; }
+} catch (e) { return null; }
 }
 
 async function extractWithAdobe(pdfBuffer, token) {
@@ -400,13 +440,8 @@ sharedStrings = siMatches.map(si => {
 const texts = si.match(/<t[^>]*>([^<]*)<\/t>/g) || [];
 return texts.map(t => t.replace(/<[^>]+>/g, ''))
 .join('')
-.replace(/&amp;/g, '&')
-.replace(/&lt;/g, '<')
-.replace(/&gt;/g, '>')
-.replace(/&apos;/g, "'")
-.replace(/&quot;/g, '"')
-.replace(/_x000D_/g, '')
-.trim();
+.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+.replace(/_x000D_/g, '').trim();
 });
 }
 }
@@ -421,15 +456,9 @@ const rowMatches = sheetXml.match(/<row[^>]*>[\s\S]*?<\/row>/g) || [];
 const allRows = [];
 
 for (const rowXml of rowMatches) {
-// Get row number and column references for proper positioning
-const rowNumMatch = rowXml.match(/r="(\d+)"/);
-const rowNum = rowNumMatch ? parseInt(rowNumMatch[1]) : 0;
-
 const cellMatches = rowXml.match(/<c[^>]*r="([^"]*)"[^>]*>[\s\S]*?<\/c>/g) || [];
-
 if (cellMatches.length === 0) continue;
 
-// Find max column to size the array
 let maxCol = 0;
 const cellData = [];
 
@@ -437,40 +466,28 @@ for (const cell of cellMatches) {
 const refMatch = cell.match(/r="([A-Z]+)(\d+)"/);
 if (!refMatch) continue;
 const colLetters = refMatch[1];
-// Convert column letters to index (A=0, B=1, Z=25, AA=26 etc)
 let colIdx = 0;
 for (let ci = 0; ci < colLetters.length; ci++) {
 colIdx = colIdx * 26 + (colLetters.charCodeAt(ci) - 64);
 }
-colIdx -= 1; // 0-based
-
+colIdx -= 1;
 if (colIdx > maxCol) maxCol = colIdx;
 
 const typeMatch = cell.match(/t="([^"]*)"/);
 const valueMatch = cell.match(/<v>([^<]*)<\/v>/);
 
-if (!valueMatch) {
-cellData.push({ col: colIdx, value: '' });
-continue;
-}
+if (!valueMatch) { cellData.push({ col: colIdx, value: '' }); continue; }
 
 let value = valueMatch[1];
-if (typeMatch && typeMatch[1] === 's') {
-value = sharedStrings[parseInt(value)] || '';
-}
+if (typeMatch && typeMatch[1] === 's') value = sharedStrings[parseInt(value)] || '';
 value = value.replace(/_x000D_/g, '').replace(/\s+/g, ' ').trim();
 cellData.push({ col: colIdx, value });
 }
 
-// Build row array with proper column positions
 if (cellData.length > 0) {
 const rowArray = new Array(maxCol + 1).fill('');
-for (const { col, value } of cellData) {
-rowArray[col] = value;
-}
-if (rowArray.some(v => v.length > 0)) {
-allRows.push(rowArray);
-}
+for (const { col, value } of cellData) rowArray[col] = value;
+if (rowArray.some(v => v.length > 0)) allRows.push(rowArray);
 }
 }
 
@@ -484,41 +501,30 @@ return [];
 async function parseBOQFromZip(zipBuffer) {
 try {
 const entries = parseZipEntries(zipBuffer);
-console.log('ZIP entries:', Object.keys(entries).join(', '));
-
 const xlsxFiles = Object.keys(entries).filter(f => f.endsWith('.xlsx'));
 console.log('XLSX files:', xlsxFiles.length);
 
 let allRows = [];
 let tenderValue = 0;
-let boqXlsxFound = false;
 
 for (const xlsxFile of xlsxFiles) {
 const xlsxBuffer = decompressEntry(entries[xlsxFile]);
 if (!xlsxBuffer) continue;
-
 const rows = extractRowsFromXlsx(xlsxBuffer);
 console.log(`${xlsxFile}: ${rows.length} rows`);
+rows.forEach((row, i) => console.log(`Row ${i}:`, row.join(' | ')));
 
-// Log ALL rows for debugging
-rows.forEach((row, i) => {
-console.log(`Row ${i}:`, row.join(' | '));
-});
-
-// Check if this xlsx has BOQ data
 const hasBoqHeader = rows.some(row => {
-const rowLower = row.map(v => (v || '').toLowerCase());
-return rowLower.some(v => v.includes('description') || v.includes('particulars')) &&
-rowLower.some(v => v === 'quantity' || v === 'qty' || v === 'rate' || v === 'amount');
+const rl = row.map(v => (v || '').toLowerCase());
+return rl.some(v => v.includes('description') || v.includes('particulars')) &&
+rl.some(v => v === 'quantity' || v === 'qty' || v === 'rate' || v === 'amount');
 });
 
 if (hasBoqHeader) {
-console.log(`BOQ data found in ${xlsxFile}`);
+console.log(`BOQ data in ${xlsxFile}`);
 allRows = allRows.concat(rows);
-boqXlsxFound = true;
 }
 
-// Extract tender value from all files
 for (const row of rows) {
 for (const val of row) {
 const amount = extractRupeeAmount(val || '');
@@ -527,27 +533,20 @@ if (amount > tenderValue) tenderValue = amount;
 }
 }
 
-// If no BOQ xlsx found, use all rows
-if (!boqXlsxFound) {
+if (allRows.length === 0) {
 for (const xlsxFile of xlsxFiles) {
 const xlsxBuffer = decompressEntry(entries[xlsxFile]);
 if (!xlsxBuffer) continue;
-const rows = extractRowsFromXlsx(xlsxBuffer);
-allRows = allRows.concat(rows);
+allRows = allRows.concat(extractRowsFromXlsx(xlsxBuffer));
 }
 }
 
-console.log('Total rows to parse:', allRows.length);
-console.log('Tender value:', tenderValue);
-
+console.log('Total rows:', allRows.length, '| Tender value:', tenderValue);
 const boqItems = parseBOQDirectly(allRows);
 
 if (boqItems.length > 0) {
-console.log('BOQ extraction SUCCESS:', boqItems.length, 'items');
 return { extractionSuccess: true, boqItems, tenderValue };
 }
-
-console.log('No BOQ items found');
 return { extractionSuccess: false, boqItems: [], tenderValue };
 
 } catch (e) {
@@ -564,7 +563,7 @@ const response = await fetch(
 method: 'POST',
 headers: { 'Content-Type': 'application/json' },
 body: JSON.stringify({
-contents: [{ parts: [{ text: `One sentence bid recommendation for Mumbai ${type} tender worth Rs ${deptEstimate} with ${profitMargin}% profit margin. Be specific about Mumbai June 2026 market.` }] }],
+contents: [{ parts: [{ text: `One sentence bid recommendation for Mumbai ${type} tender worth Rs ${deptEstimate} with ${profitMargin}% profit margin. Mumbai June 2026 market.` }] }],
 generationConfig: { temperature: 0.7, maxOutputTokens: 100 }
 }),
 signal: AbortSignal.timeout(8000)
@@ -591,7 +590,7 @@ if (fileData.length > 100) return fileData;
 const pdfStart = body.indexOf(Buffer.from('%PDF'));
 if (pdfStart !== -1) return body.slice(pdfStart);
 return null;
-} catch (e) { console.log('Multipart error:', e.message); return null; }
+} catch (e) { return null; }
 }
 
 const server = http.createServer(async (req, res) => {
@@ -625,7 +624,6 @@ const typeMatch = bodyStr.match(/name="tenderType"\r\n\r\n([^\r\n]+)/);
 const titleMatch = bodyStr.match(/name="tenderTitle"\r\n\r\n([^\r\n]+)/);
 if (typeMatch) tenderType = typeMatch[1];
 if (titleMatch) tenderTitle = titleMatch[1];
-console.log('Type:', tenderType, '| Title:', tenderTitle.substring(0, 50));
 
 const token = await getAdobeToken();
 if (!token) { res.writeHead(500); res.end(JSON.stringify({ error: 'Adobe auth failed' })); return; }
@@ -716,14 +714,9 @@ if (pdfBuffer && pdfBuffer.length > 1000) {
 const zipBuffer = await extractWithAdobe(pdfBuffer, token);
 if (zipBuffer) {
 const parsed = await parseBOQFromZip(zipBuffer);
-if (parsed.tenderValue > 100000) {
-realValueFromPDF = parsed.tenderValue;
-deptEstimate = parsed.tenderValue;
-}
+if (parsed.tenderValue > 100000) { realValueFromPDF = parsed.tenderValue; deptEstimate = parsed.tenderValue; }
 if (parsed.extractionSuccess && parsed.boqItems?.length > 0) {
-boqItems = parsed.boqItems;
-dataSource = 'actual_pdf';
-pdfRead = true;
+boqItems = parsed.boqItems; dataSource = 'actual_pdf'; pdfRead = true;
 }
 }
 }
@@ -744,7 +737,7 @@ const bidReason = await getBidReason(tenderType || 'Civil', deptEstimate, profit
 
 let message = '📊 BOQ estimated using 2026 Mumbai market rates';
 if (pdfRead) message = `✅ Real BOQ extracted from tender PDF — ${boqItems.length} items found`;
-else if (realValueFromPDF > 0) message = `📄 Real tender value ₹${(realValueFromPDF / 10000000).toFixed(2)} Cr extracted from PDF — BOQ estimated using 2026 Mumbai rates`;
+else if (realValueFromPDF > 0) message = `📄 Real tender value ₹${(realValueFromPDF / 10000000).toFixed(2)} Cr extracted — BOQ estimated using 2026 Mumbai rates`;
 
 res.writeHead(200, { 'Content-Type': 'application/json' });
 res.end(JSON.stringify({
@@ -760,8 +753,7 @@ equipmentCost: Math.round(executionCost * 0.15), overheadCost: Math.round(execut
 contingency: Math.round(executionCost * 0.05), keyMaterials: defaults.keyMaterials,
 majorEquipment: defaults.majorEquipment, executionDays: defaults.executionDays, riskFactors: defaults.riskFactors,
 },
-pdfRead,
-message
+pdfRead, message
 }));
 
 } catch (error) {
