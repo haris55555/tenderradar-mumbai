@@ -123,18 +123,17 @@ const KNOWN_UNITS = [
 'cum', 'sqm', 'rm', 'nos', 'mt', 'kg', 'ltr', 'ls', 'set',
 'rmt', 'sqft', 'cft', 'mtr', 'unit', 'job', 'lot',
 'month', 'day', 'hr', 'ton', 'quintal', 'bag', 'pair',
-'cbo', 'each', 'no', 'num', 'sq.m.', 'sq.ft.', 'rmt',
-'per', 'point', 'trip', 'visit', 'lump', 'seat'
+'cbo', 'each', 'no', 'num', 'per', 'point', 'trip', 'visit',
+'lump', 'seat', 'sq.m.', 'sq.ft.'
 ];
 
-// Summary/financial keywords that mark end of BOQ items
 const SUMMARY_KEYWORDS = [
-'estimated cost', 'contractors rebate', 'contractor\'s rebate',
-'gst', 'contract sum', 'contingency', 'contract cost',
+'estimated cost', 'contractors rebate', "contractor's rebate",
+'gst 18', 'contract sum', 'contingency', 'contract cost',
 'water charges', 'sewerage charges', 'supervision charges',
 'total project cost', 'project cost', 'cost after rebate',
 'physical contingency', 'cost contingency', 'grand total',
-'sub total', 'total amount', 'net amount', 'taxable amount'
+'net amount', 'taxable amount'
 ];
 
 function isSummaryRow(row) {
@@ -145,8 +144,7 @@ return SUMMARY_KEYWORDS.some(keyword => rowStr.includes(keyword));
 function isNoteRow(row) {
 const firstCell = (row[0] || '').toLowerCase().trim();
 const rowStr = row.join(' ').toLowerCase().trim();
-return firstCell.startsWith('note') || rowStr.startsWith('note:') ||
-rowStr.startsWith('note ') || firstCell === 'note';
+return firstCell.startsWith('note') || rowStr.startsWith('note:') || rowStr.startsWith('note ');
 }
 
 function isUnit(val) {
@@ -174,7 +172,7 @@ if (v.length < 3) return false;
 if (isNumber(v)) return false;
 if (isUnit(v)) return false;
 if (/^\d+(\.\d+)?$/.test(v)) return false;
-if (/^[A-Z]$/.test(v)) return false; // Single letter like A, B
+if (/^[A-Z]$/.test(v)) return false;
 return /[a-zA-Z]/.test(v) && v.length > 3;
 }
 
@@ -183,6 +181,7 @@ const boqItems = [];
 let descCol = -1, unitCol = -1, qtyCol = -1, rateCol = -1, amountCol = -1;
 let headerRowIdx = -1;
 
+// Find header row using for loop (not forEach — forEach doesn't support break)
 for (let i = 0; i < Math.min(rows.length, 30); i++) {
 const row = rows[i];
 const rowLower = row.map(v => (v || '').toLowerCase().trim());
@@ -193,13 +192,15 @@ const hasAmount = rowLower.some(v => v === 'amount' || v === 'amt');
 
 if (hasDesc && (hasQty || hasRate || hasAmount)) {
 headerRowIdx = i;
-rowLower.forEach((v, idx) => {
-if ((v.includes('description') || v.includes('particulars')) && descCol === -1) descCol = idx;
-if ((isUnit(v) || v === 'unit' || v === 'per') && unitCol === -1) unitCol = idx;
-if ((v === 'quantity' || v === 'qty' || v === 'qnty') && qtyCol === -1) qtyCol = idx;
-if ((v === 'rate' || v === 'rate (rs)' || v.startsWith('rate')) && rateCol === -1) rateCol = idx;
-if ((v === 'amount' || v === 'amt') && amountCol === -1) amountCol = idx;
-});
+// Use for loop not forEach to avoid illegal break
+for (let ci = 0; ci < rowLower.length; ci++) {
+const v = rowLower[ci];
+if ((v.includes('description') || v.includes('particulars')) && descCol === -1) descCol = ci;
+if ((isUnit(v) || v === 'unit' || v === 'per') && unitCol === -1) unitCol = ci;
+if ((v === 'quantity' || v === 'qty' || v === 'qnty') && qtyCol === -1) qtyCol = ci;
+if ((v === 'rate' || v === 'rate (rs)' || v.startsWith('rate')) && rateCol === -1) rateCol = ci;
+if ((v === 'amount' || v === 'amt') && amountCol === -1) amountCol = ci;
+}
 console.log(`Header at row ${i}: desc=${descCol} unit=${unitCol} qty=${qtyCol} rate=${rateCol} amount=${amountCol}`);
 break;
 }
@@ -213,7 +214,7 @@ for (let i = headerRowIdx + 1; i < rows.length; i++) {
 const row = rows[i];
 if (!row || row.length === 0) continue;
 
-// ALWAYS check summary FIRST — before anything else
+// ALWAYS check summary FIRST before anything else
 if (isSummaryRow(row)) {
 console.log(`Summary section at row ${i}: ${row.join(' | ').substring(0, 80)}, stopping`);
 break;
@@ -287,141 +288,6 @@ const anyDesc = row.find((v, idx) => idx !== 0 && isDescriptionText(v || '') && 
 if (anyDesc) {
 if (pendingDescription) pendingDescription += ' ' + anyDesc;
 else pendingDescription = anyDesc;
-}
-}
-}
-
-console.log(`Direct parser found ${boqItems.length} BOQ items`);
-return boqItems;
-}
-
-
-
-if (hasDesc && (hasQty || hasRate || hasAmount)) {
-headerRowIdx = i;
-rowLower.forEach((v, idx) => {
-if (v.includes('description') || v.includes('particulars')) {
-if (descCol === -1) descCol = idx;
-}
-if (isUnit(v) || v === 'unit' || v === 'per') {
-if (unitCol === -1) unitCol = idx;
-}
-if ((v === 'quantity' || v === 'qty' || v === 'qnty') && qtyCol === -1) qtyCol = idx;
-if ((v === 'rate' || v === 'rate (rs)' || v.startsWith('rate')) && rateCol === -1) rateCol = idx;
-if ((v === 'amount' || v === 'amt') && amountCol === -1) amountCol = idx;
-});
-console.log(`Header at row ${i}: desc=${descCol} unit=${unitCol} qty=${qtyCol} rate=${rateCol} amount=${amountCol}`);
-break;
-}
-}
-
-if (headerRowIdx === -1) {
-console.log('No header found');
-return [];
-}
-
-// Step 2: Parse data rows
-let pendingDescription = '';
-let summaryStarted = false;
-
-for (let i = headerRowIdx + 1; i < rows.length; i++) {
-const row = rows[i];
-if (!row || row.length === 0) continue;
-
-// Stop at summary section
-if (isSummaryRow(row)) {
-console.log(`Summary section started at row ${i}, stopping BOQ parse`);
-summaryStarted = true;
-break;
-}
-
-// Skip note rows
-if (isNoteRow(row)) {
-console.log(`Skipping note row ${i}`);
-continue;
-}
-
-const rowStr = row.join(' ').trim();
-if (rowStr.length < 2) continue;
-
-// Get values at known positions
-const desc = descCol >= 0 && descCol < row.length ? (row[descCol] || '').trim() : '';
-const unit = unitCol >= 0 && unitCol < row.length ? (row[unitCol] || '').trim() : '';
-const qtyRaw = qtyCol >= 0 && qtyCol < row.length ? (row[qtyCol] || '').trim() : '';
-const rateRaw = rateCol >= 0 && rateCol < row.length ? (row[rateCol] || '').trim() : '';
-const amountRaw = amountCol >= 0 && amountCol < row.length ? (row[amountCol] || '').trim() : '';
-
-const qty = parseNumber(qtyRaw);
-const rate = parseNumber(rateRaw);
-const amount = parseNumber(amountRaw);
-const hasNumbers = (qty > 0 || rate > 0 || amount > 0);
-
-// Check first column for sr no
-const firstCell = (row[0] || '').trim();
-const isSubItem = /^[A-Za-z]$/.test(firstCell); // A, B, C sub items
-
-if (hasNumbers && amount > 0) {
-// This row has valid financial data
-let finalDesc = '';
-
-if (isSubItem && pendingDescription) {
-// Sub-item — prepend parent description
-finalDesc = `${pendingDescription} — ${desc || firstCell}`;
-} else {
-finalDesc = pendingDescription || desc;
-}
-
-if (!finalDesc || finalDesc.length < 3) {
-// Try to find description in any cell
-finalDesc = row.find(v => isDescriptionText(v || '') && (v || '').length > 5) || '';
-}
-
-if (finalDesc && finalDesc.length > 3) {
-let finalQty = qty;
-let finalRate = rate;
-let finalAmount = amount;
-let finalUnit = unit || 'Nos';
-
-// Calculate missing values
-if (finalAmount === 0 && finalQty > 0 && finalRate > 0) finalAmount = finalQty * finalRate;
-if (finalQty === 0 && finalRate > 0 && finalAmount > 0) finalQty = Math.round(finalAmount / finalRate);
-if (finalRate === 0 && finalQty > 0 && finalAmount > 0) finalRate = Math.round(finalAmount / finalQty);
-
-if (finalAmount > 0) {
-boqItems.push({
-item: finalDesc.substring(0, 300),
-unit: finalUnit.toUpperCase(),
-quantity: Math.round(finalQty * 100) / 100,
-rate: Math.round(finalRate * 100) / 100,
-amount: Math.round(finalAmount)
-});
-console.log(`BOQ item ${boqItems.length}: ${finalDesc.substring(0, 60)} | ${finalUnit} | ${finalQty} | ${finalRate} | ${finalAmount}`);
-}
-}
-
-// Reset pending only if not a sub-item with more sub-items coming
-if (!isSubItem) {
-pendingDescription = '';
-}
-
-} else if (desc && isDescriptionText(desc)) {
-// Description row without numbers — accumulate
-if (pendingDescription && !isSubItem) {
-pendingDescription += ' ' + desc;
-} else if (!isSubItem) {
-pendingDescription = desc;
-}
-} else if (!desc && !hasNumbers) {
-// Try other cells for description
-const anyDesc = row.find((v, idx) =>
-idx !== 0 && isDescriptionText(v || '') && (v || '').length > 10
-);
-if (anyDesc) {
-if (pendingDescription) {
-pendingDescription += ' ' + anyDesc;
-} else {
-pendingDescription = anyDesc;
-}
 }
 }
 }
@@ -580,7 +446,6 @@ if (colIdx > maxCol) maxCol = colIdx;
 
 const typeMatch = cell.match(/t="([^"]*)"/);
 const valueMatch = cell.match(/<v>([^<]*)<\/v>/);
-
 if (!valueMatch) { cellData.push({ col: colIdx, value: '' }); continue; }
 
 let value = valueMatch[1];
@@ -729,6 +594,7 @@ const typeMatch = bodyStr.match(/name="tenderType"\r\n\r\n([^\r\n]+)/);
 const titleMatch = bodyStr.match(/name="tenderTitle"\r\n\r\n([^\r\n]+)/);
 if (typeMatch) tenderType = typeMatch[1];
 if (titleMatch) tenderTitle = titleMatch[1];
+console.log('Type:', tenderType, '| Title:', tenderTitle.substring(0, 50));
 
 const token = await getAdobeToken();
 if (!token) { res.writeHead(500); res.end(JSON.stringify({ error: 'Adobe auth failed' })); return; }
