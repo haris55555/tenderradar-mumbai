@@ -143,8 +143,10 @@ return SUMMARY_KEYWORDS.some(keyword => rowStr.includes(keyword));
 
 function isNoteRow(row) {
 const firstCell = (row[0] || '').toLowerCase().trim();
+const secondCell = (row[1] || '').toLowerCase().trim();
 const rowStr = row.join(' ').toLowerCase().trim();
-return firstCell.startsWith('note') || rowStr.startsWith('note:') || rowStr.startsWith('note ');
+return firstCell.startsWith('note') || secondCell.startsWith('note') ||
+rowStr.startsWith('note:') || rowStr.startsWith('note ');
 }
 
 function isUnit(val) {
@@ -157,7 +159,7 @@ function isNumber(val) {
 if (!val) return false;
 const cleaned = val.toString().replace(/,/g, '').replace(/₹/g, '').trim();
 const n = parseFloat(cleaned);
-return !isNaN(n) && n > 0 && cleaned.length > 0;
+return !isNaN(n) && cleaned.length > 0;
 }
 
 function parseNumber(val) {
@@ -169,11 +171,19 @@ function isDescriptionText(val) {
 if (!val) return false;
 const v = val.trim();
 if (v.length < 3) return false;
-if (isNumber(v)) return false;
-if (isUnit(v)) return false;
 if (/^\d+(\.\d+)?$/.test(v)) return false;
+if (isUnit(v)) return false;
 if (/^[A-Z]$/.test(v)) return false;
 return /[a-zA-Z]/.test(v) && v.length > 3;
+}
+
+function hasRateInRow(row, rateCol, amountCol) {
+// Check if row has a rate (even with zero quantity/amount)
+const rate = rateCol >= 0 && rateCol < row.length ? parseNumber(row[rateCol] || '') : 0;
+const amount = amountCol >= 0 && amountCol < row.length ? parseNumber(row[amountCol] || '') : 0;
+const qty = 0; // we check separately
+// Has rate means there's a numeric rate value
+return rate > 0 || amount > 0;
 }
 
 function parseBOQDirectly(rows) {
@@ -181,7 +191,7 @@ const boqItems = [];
 let descCol = -1, unitCol = -1, qtyCol = -1, rateCol = -1, amountCol = -1;
 let headerRowIdx = -1;
 
-// Find header row using for loop (not forEach — forEach doesn't support break)
+// Find header row
 for (let i = 0; i < Math.min(rows.length, 30); i++) {
 const row = rows[i];
 const rowLower = row.map(v => (v || '').toLowerCase().trim());
@@ -192,7 +202,6 @@ const hasAmount = rowLower.some(v => v === 'amount' || v === 'amt');
 
 if (hasDesc && (hasQty || hasRate || hasAmount)) {
 headerRowIdx = i;
-// Use for loop not forEach to avoid illegal break
 for (let ci = 0; ci < rowLower.length; ci++) {
 const v = rowLower[ci];
 if ((v.includes('description') || v.includes('particulars')) && descCol === -1) descCol = ci;
@@ -209,14 +218,15 @@ break;
 if (headerRowIdx === -1) { console.log('No header found'); return []; }
 
 let pendingDescription = '';
+let parentDescription = ''; // Track parent item description for sub-items
 
 for (let i = headerRowIdx + 1; i < rows.length; i++) {
 const row = rows[i];
 if (!row || row.length === 0) continue;
 
-// ALWAYS check summary FIRST before anything else
+// ALWAYS check summary FIRST
 if (isSummaryRow(row)) {
-console.log(`Summary section at row ${i}: ${row.join(' | ').substring(0, 80)}, stopping`);
+console.log(`Summary at row ${i}, stopping`);
 break;
 }
 
@@ -238,18 +248,35 @@ const amountRaw = amountCol >= 0 && amountCol < row.length ? (row[amountCol] || 
 const qty = parseNumber(qtyRaw);
 const rate = parseNumber(rateRaw);
 const amount = parseNumber(amountRaw);
-const hasNumbers = (qty > 0 || rate > 0 || amount > 0);
+
+// Has numeric data in rate column (even if qty/amount is 0)
+const hasRate = rate > 0;
+const hasAmount = amount > 0;
+const hasNumericData = hasRate || hasAmount;
 
 const firstCell = (row[0] || '').trim();
 const isSubItem = /^[A-Za-z]$/.test(firstCell);
+// Check if this is a new main item (starts with a number)
+const isMainItem = /^\d+$/.test(firstCell);
 
-if (hasNumbers && amount > 0) {
+if (hasNumericData) {
+// This row has rate or amount data — it's a BOQ line item
 let finalDesc = '';
-if (isSubItem && pendingDescription) {
-finalDesc = `${pendingDescription} — ${desc || firstCell}`;
+
+if (isSubItem) {
+// Sub-item A, B etc — use parent description + sub description
+const subDesc = desc || firstCell;
+finalDesc = parentDescription
+? `${parentDescription} (${subDesc})`
+: subDesc;
 } else {
 finalDesc = pendingDescription || desc;
+// Update parent description for potential sub-items
+if (isMainItem && (pendingDescription || desc)) {
+parentDescription = pendingDescription || desc;
 }
+}
+
 if (!finalDesc || finalDesc.length < 3) {
 finalDesc = row.find(v => isDescriptionText(v || '') && (v || '').length > 5) || '';
 }
@@ -260,34 +287,45 @@ let finalRate = rate;
 let finalAmount = amount;
 let finalUnit = unit || 'Nos';
 
-if (finalAmount === 0 && finalQty > 0 && finalRate > 0) finalAmount = finalQty * finalRate;
-if (finalQty === 0 && finalRate > 0 && finalAmount > 0) finalQty = Math.round(finalAmount / finalRate);
+// Calculate missing values
+if (finalAmount === 0 && finalQty > 0 && finalRate > 0) finalAmount = Math.round(finalQty * finalRate * 100) / 100;
+if (finalQty === 0 && finalRate > 0 && finalAmount > 0) finalQty = Math.round((finalAmount / finalRate) * 100) / 100;
 if (finalRate === 0 && finalQty > 0 && finalAmount > 0) finalRate = Math.round(finalAmount / finalQty);
 
-if (finalAmount > 0) {
+// Include item even if amount is 0 (zero qty items are still valid BOQ items)
 boqItems.push({
 item: finalDesc.substring(0, 300),
 unit: finalUnit.toUpperCase(),
 quantity: Math.round(finalQty * 100) / 100,
 rate: Math.round(finalRate * 100) / 100,
-amount: Math.round(finalAmount)
+amount: Math.round(finalAmount * 100) / 100
 });
-console.log(`BOQ item ${boqItems.length}: ${finalDesc.substring(0, 60)} | ${finalUnit} | ${finalQty} | ${finalRate} | ${finalAmount}`);
+console.log(`BOQ item ${boqItems.length}: ${finalDesc.substring(0, 60)} | ${finalUnit} | qty:${finalQty} | rate:${finalRate} | amt:${finalAmount}`);
 }
+
+// Reset pending description after processing a main item
+if (!isSubItem) {
+pendingDescription = '';
 }
-if (!isSubItem) pendingDescription = '';
 
 } else if (desc && isDescriptionText(desc)) {
-if (pendingDescription && !isSubItem) {
-pendingDescription += ' ' + desc;
-} else if (!isSubItem) {
+// Description row without numbers — this is a parent item description
+if (isMainItem || (!isSubItem && !pendingDescription)) {
 pendingDescription = desc;
+parentDescription = desc; // Save as parent for sub-items
+} else if (pendingDescription && !isSubItem) {
+pendingDescription += ' ' + desc;
 }
-} else if (!desc && !hasNumbers) {
+} else if (!desc && !hasNumericData) {
+// Try to find description in any other cell
 const anyDesc = row.find((v, idx) => idx !== 0 && isDescriptionText(v || '') && (v || '').length > 10);
-if (anyDesc) {
-if (pendingDescription) pendingDescription += ' ' + anyDesc;
-else pendingDescription = anyDesc;
+if (anyDesc && !isSubItem) {
+if (pendingDescription) {
+pendingDescription += ' ' + anyDesc;
+} else {
+pendingDescription = anyDesc;
+parentDescription = anyDesc;
+}
 }
 }
 }
