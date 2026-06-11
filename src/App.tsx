@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef } from "react";
 
-// ── Types ──────────────────────────────────────────────────────────────────────
 interface BOQItem {
 item: string;
 unit: string;
@@ -38,7 +37,6 @@ riskFactors: string[];
 };
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
 function fmt(n: number): string {
 if (n >= 10000000) return "₹" + (n / 10000000).toFixed(2) + " Cr";
 if (n >= 100000) return "₹" + (n / 100000).toFixed(1) + " L";
@@ -50,7 +48,6 @@ function fmtNum(n: number): string {
 return n.toLocaleString('en-IN');
 }
 
-// ── Upload Zone Component ──────────────────────────────────────────────────────
 function UploadZone({ onUpload, loading }: { onUpload: (file: File) => void; loading: boolean }) {
 const [dragging, setDragging] = useState(false);
 const inputRef = useRef<HTMLInputElement>(null);
@@ -70,41 +67,14 @@ onDrop={handleDrop}
 onClick={() => !loading && inputRef.current?.click()}
 style={{
 border: `2px dashed ${dragging ? '#F5A623' : '#2A3F54'}`,
-borderRadius: '16px',
-padding: '60px 40px',
-textAlign: 'center',
+borderRadius: '16px', padding: '60px 40px', textAlign: 'center',
 cursor: loading ? 'not-allowed' : 'pointer',
 background: dragging ? 'rgba(245,166,35,0.05)' : 'rgba(26,42,58,0.5)',
 transition: 'all 0.2s',
 }}
 >
-<input
-ref={inputRef}
-type="file"
-accept=".pdf"
-style={{ display: 'none' }}
-onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f); e.target.value = ''; }}
-/>
-{loading ? (
-<div>
-<div style={{ fontSize: '48px', marginBottom: '16px' }}>⚙️</div>
-<div style={{ color: '#F5A623', fontSize: '18px', fontWeight: '700', marginBottom: '8px' }}>
-Reading your BOQ PDF...
-</div>
-<div style={{ color: '#6B7F8E', fontSize: '14px' }}>
-Adobe AI is extracting items. This takes 30–60 seconds.
-</div>
-<div style={{ marginTop: '24px', height: '4px', background: '#1A2A3A', borderRadius: '2px', overflow: 'hidden' }}>
-<div style={{
-height: '100%', width: '60%',
-background: 'linear-gradient(90deg, #F5A623, #FF8C00)',
-borderRadius: '2px',
-animation: 'shimmer 1.5s infinite',
-}} />
-</div>
-</div>
-) : (
-<div>
+<input ref={inputRef} type="file" accept=".pdf" style={{ display: 'none' }}
+onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f); e.target.value = ''; }} />
 <div style={{ fontSize: '56px', marginBottom: '20px' }}>📋</div>
 <div style={{ color: '#E8EDF2', fontSize: '22px', fontWeight: '700', marginBottom: '8px' }}>
 Upload your BOQ PDF
@@ -125,12 +95,9 @@ fontSize: '15px', fontWeight: '700',
 or drag and drop your PDF here
 </div>
 </div>
-)}
-</div>
 );
 }
 
-// ── Loading Steps Component ────────────────────────────────────────────────────
 function LoadingSteps({ step }: { step: number }) {
 const steps = [
 "Uploading PDF to Adobe AI...",
@@ -144,8 +111,7 @@ return (
 {steps.map((s, i) => (
 <div key={i} style={{
 display: 'flex', alignItems: 'center', gap: '12px',
-marginBottom: '12px', opacity: i <= step ? 1 : 0.3,
-transition: 'opacity 0.5s',
+marginBottom: '12px', opacity: i <= step ? 1 : 0.3, transition: 'opacity 0.5s',
 }}>
 <div style={{
 width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0,
@@ -166,14 +132,7 @@ fontWeight: i === step ? '600' : '400',
 );
 }
 
-// ── BOQ Table Component ────────────────────────────────────────────────────────
-function BOQTable({
-items,
-onRateChange,
-}: {
-items: BOQItem[];
-onRateChange: (idx: number, rate: number) => void;
-}) {
+function BOQTable({ items, onRateChange }: { items: BOQItem[]; onRateChange: (idx: number, rate: number) => void }) {
 return (
 <div style={{ overflowX: 'auto' }}>
 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
@@ -205,7 +164,7 @@ background: idx % 2 === 0 ? 'transparent' : 'rgba(26,42,58,0.3)',
 {item.quantity === 0 && (
 <span style={{
 marginLeft: '6px', fontSize: '10px', background: '#1A2A3A',
-color: '#6B7F8E', padding: '2px 6px', borderRadius: '4px'
+color: '#6B7F8E', padding: '2px 6px', borderRadius: '4px',
 }}>Not selected</span>
 )}
 </td>
@@ -222,14 +181,18 @@ color: '#6B7F8E', padding: '2px 6px', borderRadius: '4px'
 <input
 type="number"
 value={editedRate || ''}
-onChange={(e) => onRateChange(idx, parseFloat(e.target.value) || 0)}
+onFocus={(e) => e.target.select()}
+onChange={(e) => {
+const val = e.target.value;
+onRateChange(idx, val === '' ? 0 : parseFloat(val) || 0);
+}}
 style={{
 width: '110px', padding: '6px 10px',
 background: changed ? 'rgba(245,166,35,0.1)' : '#0F1923',
 border: `1px solid ${changed ? '#F5A623' : '#2A3F54'}`,
-borderRadius: '6px', color: changed ? '#F5A623' : '#E8EDF2',
-fontSize: '13px', fontWeight: '600',
-outline: 'none',
+borderRadius: '6px',
+color: changed ? '#F5A623' : '#E8EDF2',
+fontSize: '13px', fontWeight: '600', outline: 'none',
 }}
 />
 </div>
@@ -249,13 +212,11 @@ color: item.quantity === 0 ? '#3A5068' : '#00C896',
 );
 }
 
-// ── Profit Meter Component ─────────────────────────────────────────────────────
 function ProfitMeter({ margin }: { margin: number }) {
 const clamped = Math.max(-20, Math.min(40, margin));
 const pct = ((clamped + 20) / 60) * 100;
-const color = margin >= 12 ? '#00C896' : margin >= 7 ? '#F5A623' : '#FF4D4D';
-const label = margin >= 12 ? 'STRONG BID' : margin >= 7 ? 'MARGINAL' : 'LOSS RISK';
-
+const color = margin >= 10 ? '#00C896' : margin >= 6 ? '#F5A623' : '#FF4D4D';
+const label = margin >= 10 ? 'STRONG BID' : margin >= 6 ? 'MARGINAL' : 'LOSS RISK';
 return (
 <div style={{ marginBottom: '8px' }}>
 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
@@ -265,7 +226,7 @@ return (
 <div style={{ height: '8px', background: '#0F1923', borderRadius: '4px', overflow: 'hidden', marginBottom: '6px' }}>
 <div style={{
 height: '100%', width: `${pct}%`,
-background: `linear-gradient(90deg, #FF4D4D, #F5A623, #00C896)`,
+background: 'linear-gradient(90deg, #FF4D4D, #F5A623, #00C896)',
 borderRadius: '4px', transition: 'width 0.5s ease',
 }} />
 </div>
@@ -278,7 +239,53 @@ borderRadius: '4px', transition: 'width 0.5s ease',
 );
 }
 
-// ── Main App ───────────────────────────────────────────────────────────────────
+// Reusable percentage input
+function PctInput({
+label, sublabel, value, onChange, basis, color
+}: {
+label: string; sublabel: string; value: number;
+onChange: (v: number) => void; basis: string; color: string;
+}) {
+const [raw, setRaw] = useState(String(value));
+
+return (
+<div style={{
+background: '#0F1923', borderRadius: '10px', padding: '16px',
+border: '1px solid #2A3F54',
+}}>
+<div style={{ color: '#E8EDF2', fontSize: '13px', fontWeight: '700', marginBottom: '2px' }}>{label}</div>
+<div style={{ color: '#3A5068', fontSize: '11px', marginBottom: '12px', lineHeight: '1.4' }}>{sublabel}</div>
+<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+<input
+type="number" min="0" max="50" step="0.5"
+value={raw}
+onFocus={(e) => e.target.select()}
+onChange={(e) => {
+setRaw(e.target.value);
+const n = parseFloat(e.target.value);
+if (!isNaN(n) && n >= 0) onChange(n);
+}}
+onBlur={(e) => {
+const n = parseFloat(e.target.value);
+if (isNaN(n) || n < 0) { setRaw('0'); onChange(0); }
+else setRaw(String(n));
+}}
+style={{
+width: '70px', padding: '8px 10px',
+background: '#1A2A3A', border: `1px solid ${color}40`,
+borderRadius: '6px', color,
+fontSize: '16px', fontWeight: '800', outline: 'none',
+}}
+/>
+<div>
+<div style={{ color, fontSize: '16px', fontWeight: '800' }}>%</div>
+<div style={{ color: '#3A5068', fontSize: '10px' }}>{basis}</div>
+</div>
+</div>
+</div>
+);
+}
+
 export default function App() {
 const [uploadState, setUploadState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
 const [loadingStep, setLoadingStep] = useState(0);
@@ -287,19 +294,18 @@ const [items, setItems] = useState<BOQItem[]>([]);
 const [errorMsg, setErrorMsg] = useState('');
 const stepTimer = useRef<any>(null);
 
-// Additional cost inputs
 const [facilitation, setFacilitation] = useState(3);
 const [overhead, setOverhead] = useState(8);
 const [wastage, setWastage] = useState(5);
 const [labourEscalation, setLabourEscalation] = useState(2);
 const [bidPercent, setBidPercent] = useState(92);
+const [bidPercentRaw, setBidPercentRaw] = useState('92');
 
 const handleUpload = async (file: File) => {
 setUploadState('loading');
 setLoadingStep(0);
 setErrorMsg('');
 
-// Animate steps
 let step = 0;
 const advanceStep = () => {
 step = Math.min(step + 1, 4);
@@ -315,10 +321,8 @@ formData.append('tenderType', 'Civil');
 formData.append('tenderTitle', file.name.replace('.pdf', ''));
 
 const response = await fetch('https://boq-service-pov7.onrender.com/api/boq-upload', {
-method: 'POST',
-body: formData,
+method: 'POST', body: formData,
 });
-
 clearTimeout(stepTimer.current);
 
 if (!response.ok) {
@@ -353,7 +357,6 @@ setErrorMsg('');
 setLoadingStep(0);
 };
 
-// Live calculations
 const deptEstimate = result?.boq.departmentEstimate || 0;
 const expectedWinningBid = Math.round(deptEstimate * (bidPercent / 100));
 const executionCost = items.reduce((sum, item) => sum + (item.quantity * (item.editedRate ?? item.rate)), 0);
@@ -365,93 +368,78 @@ const totalRealCost = executionCost + facilitationCost + overheadCost + wastageC
 const realProfit = expectedWinningBid - totalRealCost;
 const profitMargin = expectedWinningBid > 0 ? Math.round((realProfit / expectedWinningBid) * 100) : 0;
 const workingCapital = Math.round(totalRealCost * 0.3);
-const bidDecision = profitMargin >= 12 ? 'BID' : profitMargin >= 7 ? 'REVIEW' : 'AVOID';
-const bidColor = profitMargin >= 12 ? '#00C896' : profitMargin >= 7 ? '#F5A623' : '#FF4D4D';
-const bidBg = profitMargin >= 12 ? 'rgba(0,200,150,0.1)' : profitMargin >= 7 ? 'rgba(245,166,35,0.1)' : 'rgba(255,77,77,0.1)';
+
+const bidDecision = profitMargin >= 10 ? 'BID' : profitMargin >= 6 ? 'REVIEW' : 'AVOID';
+const bidColor = profitMargin >= 10 ? '#00C896' : profitMargin >= 6 ? '#F5A623' : '#FF4D4D';
+const bidBg = profitMargin >= 10 ? 'rgba(0,200,150,0.1)' : profitMargin >= 6 ? 'rgba(245,166,35,0.1)' : 'rgba(255,77,77,0.1)';
+
+const bidReason = profitMargin >= 10
+? `Strong ${profitMargin}% margin — good candidate to bid on this tender`
+: profitMargin >= 6
+? `Marginal ${profitMargin}% margin — evaluate competition carefully before committing`
+: `Only ${profitMargin}% margin after all costs — high risk of financial loss`;
 
 return (
-<div style={{
-minHeight: '100vh',
-background: '#0F1923',
-fontFamily: "'Inter', 'DM Sans', sans-serif",
-color: '#E8EDF2',
-}}>
+<div style={{ minHeight: '100vh', background: '#0F1923', fontFamily: "'Inter', 'DM Sans', sans-serif", color: '#E8EDF2' }}>
 
 {/* Header */}
 <div style={{
-borderBottom: '1px solid #1A2A3A',
-padding: '20px 32px',
-display: 'flex',
-justifyContent: 'space-between',
-alignItems: 'center',
+borderBottom: '1px solid #1A2A3A', padding: '20px 32px',
+display: 'flex', justifyContent: 'space-between', alignItems: 'center',
 }}>
 <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
 <div style={{
 width: '40px', height: '40px',
 background: 'linear-gradient(135deg, #F5A623, #FF8C00)',
-borderRadius: '10px',
-display: 'flex', alignItems: 'center', justifyContent: 'center',
-fontSize: '20px',
+borderRadius: '10px', display: 'flex', alignItems: 'center',
+justifyContent: 'center', fontSize: '20px',
 }}>📐</div>
 <div>
 <div style={{ fontSize: '20px', fontWeight: '800', letterSpacing: '-0.5px' }}>
 TenderRadar <span style={{ color: '#F5A623' }}>Mumbai</span>
 </div>
 <div style={{ fontSize: '12px', color: '#3A5068', fontWeight: '500' }}>
-BOQ Profit Calculator for Mumbai Contractors
+BOQ Profit Calculator — Any Government Tender
 </div>
 </div>
 </div>
 {uploadState === 'done' && (
-<button
-onClick={handleReset}
-style={{
+<button onClick={handleReset} style={{
 background: 'transparent', border: '1px solid #2A3F54',
 color: '#6B7F8E', padding: '8px 18px', borderRadius: '8px',
 cursor: 'pointer', fontSize: '13px', fontWeight: '600',
-}}
->
-↩ Upload New PDF
-</button>
+}}>↩ Upload New PDF</button>
 )}
 </div>
 
 <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 24px' }}>
 
-{/* IDLE STATE */}
+{/* IDLE */}
 {uploadState === 'idle' && (
 <div style={{ maxWidth: '700px', margin: '0 auto' }}>
 <div style={{ textAlign: 'center', marginBottom: '48px' }}>
 <div style={{
 display: 'inline-block',
-background: 'rgba(245,166,35,0.1)',
-border: '1px solid rgba(245,166,35,0.2)',
+background: 'rgba(245,166,35,0.1)', border: '1px solid rgba(245,166,35,0.2)',
 borderRadius: '20px', padding: '6px 16px',
 color: '#F5A623', fontSize: '12px', fontWeight: '700',
 letterSpacing: '1px', marginBottom: '20px',
 }}>
 BEFORE YOU BID — KNOW YOUR PROFIT
 </div>
-<h1 style={{
-fontSize: '40px', fontWeight: '900', lineHeight: '1.15',
-letterSpacing: '-1px', marginBottom: '16px',
-color: '#E8EDF2',
-}}>
+<h1 style={{ fontSize: '40px', fontWeight: '900', lineHeight: '1.15', letterSpacing: '-1px', marginBottom: '16px' }}>
 Will this tender<br />
 <span style={{ color: '#F5A623' }}>make you money?</span>
 </h1>
-<p style={{ color: '#6B7F8E', fontSize: '16px', lineHeight: '1.7', marginBottom: '0' }}>
-Upload the BOQ PDF from mahatenders.gov.in.<br />
+<p style={{ color: '#6B7F8E', fontSize: '16px', lineHeight: '1.7' }}>
+Upload the BOQ PDF from any government tender portal.<br />
 Enter your actual rates. Get your real profit — including officer facilitation costs.
 </p>
 </div>
-
 <UploadZone onUpload={handleUpload} loading={false} />
-
-{/* How it works */}
 <div style={{ marginTop: '40px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
 {[
-{ icon: '📋', title: 'Upload BOQ', desc: 'PDF from mahatenders.gov.in' },
+{ icon: '📋', title: 'Upload BOQ', desc: 'Any government tender PDF' },
 { icon: '✏️', title: 'Enter Your Rates', desc: 'Your actual material & labour cost' },
 { icon: '💰', title: 'See Real Profit', desc: 'Including all hidden costs' },
 ].map((step, i) => (
@@ -468,13 +456,10 @@ border: '1px solid #2A3F54', textAlign: 'center',
 </div>
 )}
 
-{/* LOADING STATE */}
+{/* LOADING */}
 {uploadState === 'loading' && (
 <div style={{ maxWidth: '500px', margin: '0 auto' }}>
-<div style={{
-background: '#1A2A3A', borderRadius: '16px', padding: '40px',
-border: '1px solid #2A3F54',
-}}>
+<div style={{ background: '#1A2A3A', borderRadius: '16px', padding: '40px', border: '1px solid #2A3F54' }}>
 <div style={{ textAlign: 'center', marginBottom: '32px' }}>
 <div style={{ fontSize: '48px', marginBottom: '12px' }}>⚙️</div>
 <div style={{ color: '#E8EDF2', fontSize: '18px', fontWeight: '700' }}>Reading your BOQ PDF</div>
@@ -483,8 +468,7 @@ border: '1px solid #2A3F54',
 <LoadingSteps step={loadingStep} />
 <div style={{ marginTop: '24px', height: '3px', background: '#0F1923', borderRadius: '2px', overflow: 'hidden' }}>
 <div style={{
-height: '100%',
-width: `${((loadingStep + 1) / 5) * 100}%`,
+height: '100%', width: `${((loadingStep + 1) / 5) * 100}%`,
 background: 'linear-gradient(90deg, #F5A623, #FF8C00)',
 borderRadius: '2px', transition: 'width 1s ease',
 }} />
@@ -493,13 +477,10 @@ borderRadius: '2px', transition: 'width 1s ease',
 </div>
 )}
 
-{/* ERROR STATE */}
+{/* ERROR */}
 {uploadState === 'error' && (
 <div style={{ maxWidth: '500px', margin: '0 auto', textAlign: 'center' }}>
-<div style={{
-background: 'rgba(255,77,77,0.1)', borderRadius: '16px', padding: '40px',
-border: '1px solid rgba(255,77,77,0.2)',
-}}>
+<div style={{ background: 'rgba(255,77,77,0.1)', borderRadius: '16px', padding: '40px', border: '1px solid rgba(255,77,77,0.2)' }}>
 <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
 <div style={{ color: '#FF4D4D', fontSize: '18px', fontWeight: '700', marginBottom: '8px' }}>Upload Failed</div>
 <div style={{ color: '#6B7F8E', fontSize: '14px', marginBottom: '24px' }}>{errorMsg}</div>
@@ -512,21 +493,15 @@ fontWeight: '700', cursor: 'pointer',
 </div>
 )}
 
-{/* DONE STATE */}
+{/* DONE */}
 {uploadState === 'done' && result && (
 <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '24px', alignItems: 'start' }}>
 
-{/* Left — BOQ Table + Inputs */}
+{/* Left */}
 <div>
-{/* Source badge */}
-<div style={{
-display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-marginBottom: '16px', flexWrap: 'wrap', gap: '8px',
-}}>
+<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
 <div>
-<h2 style={{ fontSize: '18px', fontWeight: '800', margin: '0 0 4px 0' }}>
-Bill of Quantities
-</h2>
+<h2 style={{ fontSize: '18px', fontWeight: '800', margin: '0 0 6px 0' }}>Bill of Quantities</h2>
 <div style={{
 display: 'inline-flex', alignItems: 'center', gap: '6px',
 background: result.pdfRead ? 'rgba(0,200,150,0.1)' : 'rgba(245,166,35,0.1)',
@@ -543,16 +518,10 @@ Edit <span style={{ color: '#F5A623', fontWeight: '700' }}>Your Rate</span> colu
 </div>
 </div>
 
-{/* BOQ Table */}
-<div style={{
-background: '#1A2A3A', borderRadius: '12px',
-border: '1px solid #2A3F54', overflow: 'hidden',
-marginBottom: '24px',
-}}>
+<div style={{ background: '#1A2A3A', borderRadius: '12px', border: '1px solid #2A3F54', overflow: 'hidden', marginBottom: '12px' }}>
 <BOQTable items={items} onRateChange={handleRateChange} />
 </div>
 
-{/* Reset rates button */}
 <button
 onClick={() => setItems(prev => prev.map(item => ({ ...item, editedRate: item.rate })))}
 style={{
@@ -560,111 +529,66 @@ background: 'transparent', border: '1px solid #2A3F54',
 color: '#6B7F8E', padding: '8px 16px', borderRadius: '8px',
 cursor: 'pointer', fontSize: '12px', marginBottom: '32px',
 }}
->
-↩ Reset to PDF rates
-</button>
+>↩ Reset to PDF rates</button>
 
-{/* Additional Cost Inputs */}
-<div style={{
-background: '#1A2A3A', borderRadius: '12px',
-border: '1px solid #2A3F54', padding: '24px',
-marginBottom: '24px',
-}}>
-<h3 style={{ fontSize: '15px', fontWeight: '800', marginBottom: '4px' }}>
-Additional Costs
-</h3>
+{/* Additional Costs */}
+<div style={{ background: '#1A2A3A', borderRadius: '12px', border: '1px solid #2A3F54', padding: '24px', marginBottom: '24px' }}>
+<h3 style={{ fontSize: '15px', fontWeight: '800', marginBottom: '4px' }}>Additional Costs</h3>
 <p style={{ color: '#6B7F8E', fontSize: '13px', marginBottom: '24px' }}>
-These real costs are not in the BOQ but affect your actual profit
+Real costs not shown in BOQ — adjust to match your situation
 </p>
 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-{[
-{
-label: 'Officer Facilitation',
-sublabel: 'Payments to get work orders, inspections cleared',
-value: facilitation,
-setter: setFacilitation,
-basis: 'of winning bid',
-color: '#FF4D4D',
-},
-{
-label: 'Office Overhead',
-sublabel: 'Admin, staff, transport, site office costs',
-value: overhead,
-setter: setOverhead,
-basis: 'of execution cost',
-color: '#F5A623',
-},
-{
-label: 'Material Wastage',
-sublabel: 'On-site wastage, theft, spoilage',
-value: wastage,
-setter: setWastage,
-basis: 'of execution cost',
-color: '#F5A623',
-},
-{
-label: 'Labour Escalation',
-sublabel: 'Rate increase over project duration',
-value: labourEscalation,
-setter: setLabourEscalation,
-basis: 'of execution cost',
-color: '#F5A623',
-},
-].map((input) => (
-<div key={input.label} style={{
-background: '#0F1923', borderRadius: '10px', padding: '16px',
-border: '1px solid #2A3F54',
-}}>
-<div style={{ color: '#E8EDF2', fontSize: '13px', fontWeight: '700', marginBottom: '2px' }}>
-{input.label}
-</div>
-<div style={{ color: '#3A5068', fontSize: '11px', marginBottom: '12px', lineHeight: '1.4' }}>
-{input.sublabel}
-</div>
-<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-<input
-type="number"
-min="0"
-max="30"
-step="0.5"
-value={input.value}
-onChange={(e) => input.setter(parseFloat(e.target.value) || 0)}
-style={{
-width: '70px', padding: '8px 10px',
-background: '#1A2A3A', border: `1px solid ${input.color}40`,
-borderRadius: '6px', color: input.color,
-fontSize: '16px', fontWeight: '800', outline: 'none',
-}}
+<PctInput
+label="Officer Facilitation"
+sublabel="Payments to clear work orders, inspections, approvals"
+value={facilitation} onChange={setFacilitation}
+basis="% of winning bid" color="#FF4D4D"
 />
-<div>
-<div style={{ color: input.color, fontSize: '16px', fontWeight: '800' }}>%</div>
-<div style={{ color: '#3A5068', fontSize: '10px' }}>{input.basis}</div>
-</div>
-</div>
-</div>
-))}
+<PctInput
+label="Office Overhead"
+sublabel="Admin, staff, transport, site office costs"
+value={overhead} onChange={setOverhead}
+basis="% of execution cost" color="#F5A623"
+/>
+<PctInput
+label="Material Wastage"
+sublabel="On-site wastage, theft, spoilage allowance"
+value={wastage} onChange={setWastage}
+basis="% of execution cost" color="#F5A623"
+/>
+<PctInput
+label="Labour Escalation"
+sublabel="Rate increase over project duration"
+value={labourEscalation} onChange={setLabourEscalation}
+basis="% of execution cost" color="#F5A623"
+/>
 </div>
 
-{/* Bid percentage */}
-<div style={{
-marginTop: '16px', background: '#0F1923', borderRadius: '10px',
-padding: '16px', border: '1px solid #2A3F54',
-}}>
+{/* Bid % */}
+<div style={{ marginTop: '16px', background: '#0F1923', borderRadius: '10px', padding: '16px', border: '1px solid #2A3F54' }}>
 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
 <div>
 <div style={{ color: '#E8EDF2', fontSize: '13px', fontWeight: '700' }}>Your Bid Percentage</div>
 <div style={{ color: '#3A5068', fontSize: '11px', marginTop: '2px' }}>
-How much below dept estimate will you quote? (Typical: 88–95%)
+% of dept estimate you plan to quote — e.g. 92 means you bid ₹92L on a ₹1Cr tender (8% below)
 </div>
 </div>
 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
 <input
-type="number"
-min="70"
-max="100"
-step="0.5"
-value={bidPercent}
-onChange={(e) => setBidPercent(parseFloat(e.target.value) || 92)}
+type="number" min="70" max="100" step="0.5"
+value={bidPercentRaw}
+onFocus={(e) => e.target.select()}
+onChange={(e) => {
+setBidPercentRaw(e.target.value);
+const n = parseFloat(e.target.value);
+if (!isNaN(n) && n >= 70 && n <= 100) setBidPercent(n);
+}}
+onBlur={(e) => {
+const n = parseFloat(e.target.value);
+if (isNaN(n) || n < 70) { setBidPercentRaw('70'); setBidPercent(70); }
+else if (n > 100) { setBidPercentRaw('100'); setBidPercent(100); }
+else setBidPercentRaw(String(n));
+}}
 style={{
 width: '75px', padding: '8px 10px',
 background: '#1A2A3A', border: '1px solid #00C89640',
@@ -679,15 +603,11 @@ fontSize: '16px', fontWeight: '800', outline: 'none',
 </div>
 </div>
 
-{/* Right — Live Profit Dashboard */}
+{/* Right — Dashboard */}
 <div style={{ position: 'sticky', top: '24px' }}>
 
 {/* Bid Decision */}
-<div style={{
-background: bidBg, border: `2px solid ${bidColor}40`,
-borderRadius: '16px', padding: '24px', marginBottom: '16px',
-textAlign: 'center',
-}}>
+<div style={{ background: bidBg, border: `2px solid ${bidColor}40`, borderRadius: '16px', padding: '24px', marginBottom: '16px', textAlign: 'center' }}>
 <div style={{ color: bidColor, fontSize: '11px', fontWeight: '800', letterSpacing: '2px', marginBottom: '8px' }}>
 BID DECISION
 </div>
@@ -695,68 +615,48 @@ BID DECISION
 {bidDecision === 'BID' ? '✅' : bidDecision === 'REVIEW' ? '⚠️' : '❌'} {bidDecision}
 </div>
 <ProfitMeter margin={profitMargin} />
-<div style={{ color: '#6B7F8E', fontSize: '12px', marginTop: '8px' }}>
-{result?.boq.bidRecommendationReason}
+<div style={{ color: '#6B7F8E', fontSize: '12px', marginTop: '8px', lineHeight: '1.5' }}>
+{bidReason}
 </div>
 </div>
 
-{/* Key Numbers */}
-<div style={{
-background: '#1A2A3A', borderRadius: '12px',
-border: '1px solid #2A3F54', padding: '20px',
-marginBottom: '16px',
-}}>
+{/* Financial Summary */}
+<div style={{ background: '#1A2A3A', borderRadius: '12px', border: '1px solid #2A3F54', padding: '20px', marginBottom: '16px' }}>
 <div style={{ color: '#6B7F8E', fontSize: '11px', fontWeight: '700', letterSpacing: '1px', marginBottom: '16px' }}>
 FINANCIAL SUMMARY
 </div>
 {[
-{ label: 'Dept Estimate', value: fmt(deptEstimate), color: '#E8EDF2', sub: 'Government\'s budget' },
+{ label: 'Dept Estimate', value: fmt(deptEstimate), color: '#E8EDF2', sub: "Government's budget" },
 { label: 'Your Winning Bid', value: fmt(expectedWinningBid), color: '#00C896', sub: `${bidPercent}% of estimate` },
-{ label: 'Execution Cost', value: fmt(executionCost), color: '#E8EDF2', sub: 'Sum of BOQ items' },
-{ label: 'Facilitation', value: fmt(facilitationCost), color: '#FF4D4D', sub: `${facilitation}% of bid` },
+{ label: 'Execution Cost', value: fmt(executionCost), color: '#E8EDF2', sub: 'Sum of BOQ items at your rates' },
+{ label: 'Facilitation Cost', value: fmt(facilitationCost), color: '#FF4D4D', sub: `${facilitation}% of bid` },
 { label: 'Overhead + Wastage', value: fmt(overheadCost + wastageCost + labourEscCost), color: '#F5A623', sub: 'All additional costs' },
 { label: 'Total Real Cost', value: fmt(totalRealCost), color: '#E8EDF2', sub: 'Everything you spend', bold: true },
-{ label: 'Net Profit', value: fmt(Math.abs(realProfit)), color: realProfit >= 0 ? '#00C896' : '#FF4D4D', sub: realProfit >= 0 ? 'You keep this' : 'You lose this', bold: true },
+{ label: realProfit >= 0 ? 'Net Profit' : 'Net Loss', value: fmt(Math.abs(realProfit)), color: realProfit >= 0 ? '#00C896' : '#FF4D4D', sub: realProfit >= 0 ? 'You keep this' : 'You lose this', bold: true },
 ].map((row) => (
-<div key={row.label} style={{
-display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-padding: '10px 0', borderBottom: '1px solid #0F1923',
-}}>
+<div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #0F1923' }}>
 <div>
 <div style={{ color: '#6B7F8E', fontSize: '12px' }}>{row.label}</div>
 <div style={{ color: '#3A5068', fontSize: '10px' }}>{row.sub}</div>
 </div>
-<div style={{
-color: row.color, fontSize: row.bold ? '15px' : '14px',
-fontWeight: row.bold ? '800' : '600',
-fontFamily: 'monospace',
-}}>
-{realProfit < 0 && row.label === 'Net Profit' ? '-' : ''}{row.value}
+<div style={{ color: row.color, fontSize: row.bold ? '15px' : '14px', fontWeight: row.bold ? '800' : '600', fontFamily: 'monospace' }}>
+{realProfit < 0 && row.label === 'Net Loss' ? '-' : ''}{row.value}
 </div>
 </div>
 ))}
 </div>
 
-{/* Working Capital */}
-<div style={{
-background: '#1A2A3A', borderRadius: '12px',
-border: '1px solid #2A3F54', padding: '20px',
-marginBottom: '16px',
-}}>
-<div style={{ color: '#6B7F8E', fontSize: '11px', fontWeight: '700', letterSpacing: '1px', marginBottom: '12px' }}>
-CASH FLOW
-</div>
+{/* Cash Flow */}
+<div style={{ background: '#1A2A3A', borderRadius: '12px', border: '1px solid #2A3F54', padding: '20px', marginBottom: '16px' }}>
+<div style={{ color: '#6B7F8E', fontSize: '11px', fontWeight: '700', letterSpacing: '1px', marginBottom: '12px' }}>CASH FLOW</div>
 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
 {[
 { label: 'Working Capital', value: fmt(workingCapital), color: '#FF4D4D', sub: 'Need upfront' },
 { label: 'RA Cycle', value: '60 days', color: '#6B7F8E', sub: 'Govt pays every' },
 { label: 'Timeline', value: `${result.boq.executionDays} days`, color: '#6B7F8E', sub: 'To complete' },
-{ label: 'ROI', value: executionCost > 0 ? `${Math.round((realProfit / totalRealCost) * 100)}%` : '—', color: realProfit > 0 ? '#00C896' : '#FF4D4D', sub: 'Return on investment' },
+{ label: 'ROI', value: totalRealCost > 0 ? `${Math.round((realProfit / totalRealCost) * 100)}%` : '—', color: realProfit > 0 ? '#00C896' : '#FF4D4D', sub: 'Return on investment' },
 ].map((item) => (
-<div key={item.label} style={{
-background: '#0F1923', borderRadius: '8px', padding: '12px',
-border: '1px solid #2A3F54',
-}}>
+<div key={item.label} style={{ background: '#0F1923', borderRadius: '8px', padding: '12px', border: '1px solid #2A3F54' }}>
 <div style={{ color: '#6B7F8E', fontSize: '10px', fontWeight: '700', marginBottom: '4px' }}>{item.label}</div>
 <div style={{ color: item.color, fontSize: '16px', fontWeight: '800' }}>{item.value}</div>
 <div style={{ color: '#3A5068', fontSize: '10px', marginTop: '2px' }}>{item.sub}</div>
@@ -767,17 +667,10 @@ border: '1px solid #2A3F54',
 
 {/* Risk Factors */}
 {result.boq.riskFactors?.length > 0 && (
-<div style={{
-background: 'rgba(245,166,35,0.05)', borderRadius: '12px',
-border: '1px solid rgba(245,166,35,0.15)', padding: '16px',
-}}>
-<div style={{ color: '#F5A623', fontSize: '11px', fontWeight: '700', letterSpacing: '1px', marginBottom: '10px' }}>
-⚠ RISK FACTORS
-</div>
+<div style={{ background: 'rgba(245,166,35,0.05)', borderRadius: '12px', border: '1px solid rgba(245,166,35,0.15)', padding: '16px' }}>
+<div style={{ color: '#F5A623', fontSize: '11px', fontWeight: '700', letterSpacing: '1px', marginBottom: '10px' }}>⚠ RISK FACTORS</div>
 {result.boq.riskFactors.map((r, i) => (
-<div key={i} style={{ color: '#6B7F8E', fontSize: '12px', marginBottom: '6px', lineHeight: '1.5' }}>
-• {r}
-</div>
+<div key={i} style={{ color: '#6B7F8E', fontSize: '12px', marginBottom: '6px', lineHeight: '1.5' }}>• {r}</div>
 ))}
 </div>
 )}
@@ -792,10 +685,6 @@ border: '1px solid rgba(245,166,35,0.15)', padding: '16px',
 input[type=number]::-webkit-outer-spin-button,
 input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
 input[type=number] { -moz-appearance: textfield; }
-@keyframes shimmer {
-0% { transform: translateX(-100%); }
-100% { transform: translateX(200%); }
-}
 `}</style>
 </div>
 );
