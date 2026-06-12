@@ -1,9 +1,10 @@
 import http from 'http';
-import { inflateRawSync } from 'zlib';
+import { spawn } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 
 const GEMINI_KEY = process.env.GEMINI_KEY || '';
-const ADOBE_CLIENT_ID = process.env.ADOBE_CLIENT_ID || '';
-const ADOBE_CLIENT_SECRET = process.env.ADOBE_CLIENT_SECRET || '';
 
 // ============ AI ESTIMATED RATE — UNIVERSAL CLASSIFIER ============
 function classifyAndEstimate(description, unit, pdfRate) {
@@ -469,16 +470,10 @@ return boqItems;
 }
 
 // ============ FALLBACK PARSER for interleaved BOQ+Measurement Sheet PDFs ============
-// Pattern: item rows look like "Sr.No | ItemCode | Description..."
-// e.g. "72 | R3-RW-3-15 | Providing & Fixing 80 mm thick..."
-// Item codes look like R3-XX-YY-NN or R3-XXNN-x etc.
-const ITEM_CODE_PATTERN = /^[A-Z]\d[-\s]?[A-Z]{1,3}[-\s]?[A-Z0-9-]{2,15}$/i;
-
 function looksLikeItemCode(val) {
 if (!val) return false;
 const v = val.trim().replace(/\s+/g, '');
 if (v.length < 5 || v.length > 25) return false;
-// Must start with letter+digit (e.g. R3) and contain at least 2 hyphens
 return /^[A-Z]\d/.test(v) && (v.match(/-/g) || []).length >= 1 && /[A-Z]/i.test(v);
 }
 
@@ -498,7 +493,6 @@ if (!row || row.length === 0) continue;
 const nonEmpty = row.map(v => (v || '').trim()).filter(v => v.length > 0);
 if (nonEmpty.length === 0) continue;
 
-// Detect new item start: a cell that's a Sr.No followed (anywhere in row) by a cell that looks like an item code
 let srNoIdx = -1, codeIdx = -1;
 for (let ci = 0; ci < row.length; ci++) {
 const val = (row[ci] || '').trim();
@@ -511,11 +505,9 @@ break;
 }
 
 if (srNoIdx !== -1 && codeIdx !== -1 && codeIdx > srNoIdx) {
-// New item starts here - save previous item if it has enough info
 if (current && current.description.length > 10) {
 items.push(current);
 }
-// Description is everything after the code cell
 const descParts = [];
 for (let ci = codeIdx + 1; ci < row.length; ci++) {
 const v = (row[ci] || '').trim();
@@ -534,7 +526,6 @@ needsRate: true
 continue;
 }
 
-// If we're tracking an item, look for "Say X Unit" to close it with quantity
 if (current) {
 const rowStr = row.join(' ');
 const sayMatch = rowStr.match(/Say\s*\|?\s*([\d,]+\.?\d*)\s*\|?\s*([A-Za-z.]+)\s*$/i);
@@ -546,7 +537,6 @@ current = null;
 continue;
 }
 
-// Also check for a row that's JUST "Say | ... | NUMBER | UNIT" split across cells
 if (nonEmpty[0] && nonEmpty[0].toLowerCase() === 'say' && nonEmpty.length >= 2) {
 const lastVal = nonEmpty[nonEmpty.length - 1];
 const secondLastVal = nonEmpty[nonEmpty.length - 2];
@@ -559,9 +549,6 @@ continue;
 }
 }
 
-// If description seems incomplete (no measurement started yet, looks like continuation text)
-// and this row doesn't look like a measurement breakdown (no "Say", not starting with room names pattern)
-// append to description if it's still short and this looks like flowing text
 if (current.description.length < 150 && nonEmpty.length <= 2) {
 const textVal = nonEmpty.find(v => isDescriptionText(v) && !looksLikeSrNo(v));
 if (textVal && !textVal.toLowerCase().includes('say') && parseNumber(textVal) === 0) {
@@ -571,12 +558,10 @@ current.description += ' ' + textVal;
 }
 }
 
-// Push last item if valid
 if (current && current.description.length > 10) {
 items.push(current);
 }
 
-// Filter and finalize items
 const validItems = items
 .filter(it => it.description.length > 10 && it.quantity > 0)
 .map(it => ({
@@ -594,192 +579,47 @@ console.log(`Fallback parser found ${validItems.length} items needing rate input
 return validItems;
 }
 
-async function getAdobeToken() {
+// ============ PDFPLUMBER EXTRACTION via Python subprocess ============
+function extractTablesWithPdfplumber(pdfPath) {
+return new Promise((resolve, reject) => {
+const py = spawn('python3', [path.join(process.cwd(), 'extract.py'), pdfPath]);
+let stdout = '';
+let stderr = '';
+
+py.stdout.on('data', (data) => { stdout += data.toString(); });
+py.stderr.on('data', (data) => { stderr += data.toString(); });
+
+py.on('close', (code) => {
+if (code !== 0) {
+console.log('Python extraction error:', stderr.substring(0, 500));
+reject(new Error('PDF extraction failed: ' + stderr.substring(0, 200)));
+return;
+}
 try {
-const params = new URLSearchParams();
-params.append('client_id', ADOBE_CLIENT_ID);
-params.append('client_secret', ADOBE_CLIENT_SECRET);
-params.append('grant_type', 'client_credentials');
-params.append('scope', 'openid,AdobeID,read_organizations,dc.annotate,dc.annotate.readonly,dc.archive,dc.print.high,additional_info.job_function,additional_info.projectedProductContext');
-const response = await fetch('https://ims-na1.adobelogin.com/ims/token/v3', {
-method: 'POST',
-headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-body: params.toString(),
-signal: AbortSignal.timeout(15000)
-});
-const data = JSON.parse(await response.text());
-if (data.access_token) { console.log('Adobe token obtained'); return data.access_token; }
-return null;
-} catch (e) { console.log('Adobe token error:', e.message); return null; }
-}
-
-async function downloadPDF(url) {
-try {
-const response = await fetch(url, {
-headers: {
-'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-'Accept': 'application/pdf,*/*',
-'Referer': 'https://portal.mcgm.gov.in/',
-},
-signal: AbortSignal.timeout(25000)
-});
-if (!response.ok) return null;
-const buffer = await response.arrayBuffer();
-return Buffer.from(buffer);
-} catch (e) { return null; }
-}
-
-async function extractWithAdobe(pdfBuffer, token) {
-try {
-const uploadRes = await fetch('https://pdf-services.adobe.io/assets', {
-method: 'POST',
-headers: { 'Authorization': `Bearer ${token}`, 'X-API-Key': ADOBE_CLIENT_ID, 'Content-Type': 'application/json' },
-body: JSON.stringify({ mediaType: 'application/pdf' }),
-signal: AbortSignal.timeout(15000)
-});
-const uploadData = await uploadRes.json();
-if (!uploadData.uploadUri || !uploadData.assetID) return null;
-await fetch(uploadData.uploadUri, { method: 'PUT', headers: { 'Content-Type': 'application/pdf' }, body: pdfBuffer, signal: AbortSignal.timeout(60000) });
-const extractRes = await fetch('https://pdf-services.adobe.io/operation/extractpdf', {
-method: 'POST',
-headers: { 'Authorization': `Bearer ${token}`, 'X-API-Key': ADOBE_CLIENT_ID, 'Content-Type': 'application/json' },
-body: JSON.stringify({ assetID: uploadData.assetID, elementsToExtract: ['text', 'tables'] }),
-signal: AbortSignal.timeout(15000)
-});
-const jobLocation = extractRes.headers.get('location');
-if (!jobLocation) return null;
-for (let i = 0; i < 12; i++) {
-await new Promise(r => setTimeout(r, 5000));
-const pollRes = await fetch(jobLocation, { headers: { 'Authorization': `Bearer ${token}`, 'X-API-Key': ADOBE_CLIENT_ID }, signal: AbortSignal.timeout(10000) });
-const pollData = await pollRes.json();
-console.log('Poll:', pollData.status);
-if (pollData.status === 'done') {
-const downloadUri = pollData.resource?.downloadUri;
-if (!downloadUri) return null;
-const zipRes = await fetch(downloadUri, { signal: AbortSignal.timeout(30000) });
-const zipBuffer = Buffer.from(await zipRes.arrayBuffer());
-console.log('ZIP size:', zipBuffer.length);
-return zipBuffer;
-}
-if (pollData.status === 'failed') return null;
-}
-return null;
-} catch (e) { console.log('Adobe error:', e.message); return null; }
-}
-
-function parseZipEntries(zipBuffer) {
-const entries = {};
-let pos = 0;
-while (pos < zipBuffer.length - 4) {
-if (zipBuffer[pos] === 0x50 && zipBuffer[pos+1] === 0x4B &&
-zipBuffer[pos+2] === 0x03 && zipBuffer[pos+3] === 0x04) {
-const compression = zipBuffer.readUInt16LE(pos + 8);
-const compressedSize = zipBuffer.readUInt32LE(pos + 18);
-const nameLen = zipBuffer.readUInt16LE(pos + 26);
-const extraLen = zipBuffer.readUInt16LE(pos + 28);
-const name = zipBuffer.slice(pos + 30, pos + 30 + nameLen).toString('utf8');
-const dataStart = pos + 30 + nameLen + extraLen;
-entries[name] = { compression, data: zipBuffer.slice(dataStart, dataStart + compressedSize) };
-pos = dataStart + compressedSize;
-} else { pos++; }
-}
-return entries;
-}
-
-function decompressEntry(entry) {
-if (entry.compression === 0) return entry.data;
-if (entry.compression === 8) {
-try { return inflateRawSync(entry.data); } catch (e) { return null; }
-}
-return null;
-}
-
-function extractRowsFromXlsx(xlsxBuffer) {
-try {
-const xlsxEntries = parseZipEntries(xlsxBuffer);
-let sharedStrings = [];
-
-const ssEntry = xlsxEntries['xl/sharedStrings.xml'];
-if (ssEntry) {
-const ssBuffer = decompressEntry(ssEntry);
-if (ssBuffer) {
-const ssXml = ssBuffer.toString('utf8');
-const siMatches = ssXml.match(/<si>[\s\S]*?<\/si>/g) || [];
-sharedStrings = siMatches.map(si => {
-const texts = si.match(/<t[^>]*>([^<]*)<\/t>/g) || [];
-return texts.map(t => t.replace(/<[^>]+>/g, ''))
-.join('')
-.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-.replace(/_x000D_/g, '').trim();
-});
-}
-}
-
-const sheetEntry = xlsxEntries['xl/worksheets/sheet1.xml'];
-if (!sheetEntry) return [];
-const sheetBuffer = decompressEntry(sheetEntry);
-if (!sheetBuffer) return [];
-
-const sheetXml = sheetBuffer.toString('utf8');
-const rowMatches = sheetXml.match(/<row[^>]*>[\s\S]*?<\/row>/g) || [];
-const allRows = [];
-
-for (const rowXml of rowMatches) {
-const cellMatches = rowXml.match(/<c[^>]*r="([^"]*)"[^>]*>[\s\S]*?<\/c>/g) || [];
-if (cellMatches.length === 0) continue;
-
-let maxCol = 0;
-const cellData = [];
-
-for (const cell of cellMatches) {
-const refMatch = cell.match(/r="([A-Z]+)(\d+)"/);
-if (!refMatch) continue;
-const colLetters = refMatch[1];
-let colIdx = 0;
-for (let ci = 0; ci < colLetters.length; ci++) {
-colIdx = colIdx * 26 + (colLetters.charCodeAt(ci) - 64);
-}
-colIdx -= 1;
-if (colIdx > maxCol) maxCol = colIdx;
-
-const typeMatch = cell.match(/t="([^"]*)"/);
-const valueMatch = cell.match(/<v>([^<]*)<\/v>/);
-if (!valueMatch) { cellData.push({ col: colIdx, value: '' }); continue; }
-
-let value = valueMatch[1];
-if (typeMatch && typeMatch[1] === 's') value = sharedStrings[parseInt(value)] || '';
-value = value.replace(/_x000D_/g, '').replace(/\s+/g, ' ').trim();
-cellData.push({ col: colIdx, value });
-}
-
-if (cellData.length > 0) {
-const rowArray = new Array(maxCol + 1).fill('');
-for (const { col, value } of cellData) rowArray[col] = value;
-if (rowArray.some(v => v.length > 0)) allRows.push(rowArray);
-}
-}
-
-return allRows;
+const tables = JSON.parse(stdout);
+resolve(tables);
 } catch (e) {
-console.log('XLSX parse error:', e.message);
-return [];
+console.log('Failed to parse Python output:', stdout.substring(0, 500));
+reject(new Error('Failed to parse extraction output'));
 }
+});
+
+py.on('error', (err) => {
+reject(new Error('Failed to start Python: ' + err.message));
+});
+});
 }
 
-async function parseBOQFromZip(zipBuffer) {
-try {
-const entries = parseZipEntries(zipBuffer);
-const xlsxFiles = Object.keys(entries).filter(f => f.endsWith('.xlsx'));
-console.log('XLSX files:', xlsxFiles.length);
+function processExtractedTables(tables) {
+console.log(`Pdfplumber extracted ${tables.length} tables`);
 
 let allBoqItems = [];
 let unmatchedRows = [];
 let tenderValue = 0;
 
-for (const xlsxFile of xlsxFiles) {
-const xlsxBuffer = decompressEntry(entries[xlsxFile]);
-if (!xlsxBuffer) continue;
-const rows = extractRowsFromXlsx(xlsxBuffer);
+for (let t = 0; t < tables.length; t++) {
+const rows = tables[t];
+if (!rows || rows.length === 0) continue;
 
 const hasBoqHeader = rows.some(row => {
 const rl = row.map(v => (v || '').toLowerCase());
@@ -788,16 +628,14 @@ rl.some(v => v.includes('qty') || v.includes('quantity') || v.includes('rate') |
 });
 
 if (hasBoqHeader) {
-console.log(`Processing ${xlsxFile} (${rows.length} rows) as potential BOQ table`);
+console.log(`Processing table ${t} (${rows.length} rows) as potential BOQ table`);
 const items = parseTable(rows);
 if (items.length > 0) {
 allBoqItems = allBoqItems.concat(items);
 } else {
-// Header found but no items extracted - might still have useful rows for fallback
 unmatchedRows = unmatchedRows.concat(rows);
 }
 } else {
-// No clean header - collect for fallback parser
 unmatchedRows = unmatchedRows.concat(rows);
 }
 
@@ -812,10 +650,8 @@ if (amount > tenderValue) tenderValue = amount;
 console.log('Clean-table items:', allBoqItems.length);
 console.log('Unmatched rows for fallback:', unmatchedRows.length);
 
-// Run fallback parser on unmatched rows for items not caught by clean table parsing
 if (unmatchedRows.length > 0) {
 const fallbackItems = fallbackParseInterleaved(unmatchedRows);
-// Avoid duplicates: skip fallback items whose description significantly overlaps an already-found item
 const existingDescs = new Set(allBoqItems.map(it => it.item.substring(0, 60).toLowerCase()));
 const newFallbackItems = fallbackItems.filter(it => !existingDescs.has(it.item.substring(0, 60).toLowerCase()));
 console.log('Fallback items added (after dedup):', newFallbackItems.length);
@@ -835,11 +671,6 @@ tenderValue: estimatedCostFromItems > 0 ? estimatedCostFromItems : tenderValue
 };
 }
 return { extractionSuccess: false, boqItems: [], tenderValue };
-
-} catch (e) {
-console.log('ZIP parse error:', e.message);
-return { extractionSuccess: false, boqItems: [], tenderValue: 0 };
-}
 }
 
 async function getBidReason(type, deptEstimate, profitMargin) {
@@ -893,6 +724,7 @@ req.on('end', async () => {
 const body = Buffer.concat(chunks);
 
 if (req.method === 'POST' && req.url === '/api/boq-upload') {
+let tempPdfPath = null;
 try {
 const contentType = req.headers['content-type'] || '';
 const boundaryMatch = contentType.match(/boundary=([^\s;]+)/);
@@ -913,13 +745,14 @@ if (typeMatch) tenderType = typeMatch[1];
 if (titleMatch) tenderTitle = titleMatch[1];
 console.log('Type:', tenderType, '| Title:', tenderTitle.substring(0, 50));
 
-const token = await getAdobeToken();
-if (!token) { res.writeHead(500); res.end(JSON.stringify({ error: 'Adobe auth failed' })); return; }
+// Write PDF to temp file for pdfplumber
+tempPdfPath = path.join(os.tmpdir(), `boq_${Date.now()}.pdf`);
+fs.writeFileSync(tempPdfPath, pdfBuffer);
 
-const zipBuffer = await extractWithAdobe(pdfBuffer, token);
-if (!zipBuffer) { res.writeHead(500); res.end(JSON.stringify({ error: 'PDF extraction failed' })); return; }
+console.log('Extracting tables with pdfplumber...');
+const tables = await extractTablesWithPdfplumber(tempPdfPath);
+const parsed = processExtractedTables(tables);
 
-const parsed = await parseBOQFromZip(zipBuffer);
 console.log('Result - success:', parsed.extractionSuccess, 'items:', parsed.boqItems?.length, 'value:', parsed.tenderValue);
 
 let deptEstimate = parsed.tenderValue > 0 ? parsed.tenderValue : 5000000;
@@ -970,84 +803,11 @@ message
 
 } catch (error) {
 console.log('Upload error:', error.message);
-res.writeHead(500); res.end(JSON.stringify({ error: 'Upload failed', details: String(error) }));
+res.writeHead(500); res.end(JSON.stringify({ error: 'Upload failed', details: String(error.message) }));
+} finally {
+if (tempPdfPath && fs.existsSync(tempPdfPath)) {
+try { fs.unlinkSync(tempPdfPath); } catch (e) {}
 }
-return;
-}
-
-if (req.method === 'POST' && req.url === '/api/boq') {
-try {
-const { tenderTitle, tenderValue, tenderValueNum, tenderType, organisation, pdfUrl } = JSON.parse(body.toString());
-console.log('BOQ request:', tenderTitle?.substring(0, 50), '| type:', tenderType);
-
-let deptEstimate = 0;
-if (tenderValueNum && tenderValueNum > 100000) deptEstimate = tenderValueNum;
-if (!deptEstimate) {
-const v = (tenderValue || '').replace(/,/g, '');
-if (v.includes('Cr')) deptEstimate = parseFloat(v) * 10000000;
-else if (v.includes('L')) deptEstimate = parseFloat(v) * 100000;
-else { const n = parseFloat(v.replace(/[^0-9.]/g, '')); if (n > 100000) deptEstimate = n; }
-}
-if (!deptEstimate || deptEstimate < 100000) deptEstimate = 5000000;
-
-let boqItems = [];
-let dataSource = 'pwd_estimation';
-let pdfRead = false;
-let realValueFromPDF = 0;
-
-if (pdfUrl && pdfUrl.startsWith('http') && ADOBE_CLIENT_ID && ADOBE_CLIENT_SECRET) {
-const token = await getAdobeToken();
-if (token) {
-const pdfBuffer = await downloadPDF(pdfUrl);
-if (pdfBuffer && pdfBuffer.length > 1000) {
-const zipBuffer = await extractWithAdobe(pdfBuffer, token);
-if (zipBuffer) {
-const parsed = await parseBOQFromZip(zipBuffer);
-if (parsed.tenderValue > 0) { realValueFromPDF = parsed.tenderValue; deptEstimate = parsed.tenderValue; }
-if (parsed.extractionSuccess && parsed.boqItems?.length > 0) {
-boqItems = parsed.boqItems; dataSource = 'actual_pdf'; pdfRead = true;
-}
-}
-}
-}
-}
-
-if (boqItems.length === 0) {
-boqItems = generateEstimatedBOQ(tenderType || '', deptEstimate);
-dataSource = realValueFromPDF > 0 ? 'pdf_value_estimated_boq' : 'pwd_estimation';
-}
-
-const executionCost = boqItems.reduce((sum, item) => sum + (item.quantity * (item.aiRate || item.rate || 0)), 0);
-const expectedWinningBid = Math.round(deptEstimate * 0.92);
-const expectedProfit = expectedWinningBid - executionCost;
-const profitMargin = expectedWinningBid > 0 ? Math.round((expectedProfit / expectedWinningBid) * 100) : 0;
-const defaults = getDefaultsForType(tenderType || '');
-const bidReason = await getBidReason(tenderType || 'Civil', deptEstimate, profitMargin);
-
-let message = '📊 BOQ estimated using 2026 Mumbai market rates';
-if (pdfRead) message = `✅ Real BOQ extracted from tender PDF — ${boqItems.length} items found`;
-else if (realValueFromPDF > 0) message = `📄 Real tender value ₹${(realValueFromPDF / 10000000).toFixed(2)} Cr extracted — BOQ estimated using 2026 Mumbai rates`;
-
-res.writeHead(200, { 'Content-Type': 'application/json' });
-res.end(JSON.stringify({
-success: true,
-boq: {
-dataSource, departmentEstimate: deptEstimate, expectedWinningBid, executionCost,
-expectedProfit, profitMargin, workingCapitalNeeded: Math.round(executionCost * 0.3),
-raCycleDays: 60,
-bidRecommendation: profitMargin >= 10 ? 'YES' : profitMargin >= 7 ? 'REVIEW' : 'NO',
-bidRecommendationReason: bidReason || `${profitMargin}% margin on ${tenderType} tender in Mumbai`,
-boqItems, materialCost: Math.round(executionCost * 0.45), labourCost: Math.round(executionCost * 0.25),
-equipmentCost: Math.round(executionCost * 0.15), overheadCost: Math.round(executionCost * 0.10),
-contingency: Math.round(executionCost * 0.05), keyMaterials: defaults.keyMaterials,
-majorEquipment: defaults.majorEquipment, executionDays: defaults.executionDays, riskFactors: defaults.riskFactors,
-},
-pdfRead, message
-}));
-
-} catch (error) {
-console.log('Error:', error.message);
-res.writeHead(500); res.end(JSON.stringify({ error: 'BOQ analysis failed' }));
 }
 return;
 }
