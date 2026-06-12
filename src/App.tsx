@@ -5,6 +5,7 @@ item: string;
 unit: string;
 quantity: number;
 rate: number;
+aiRate: number;
 amount: number;
 editedRate?: number;
 }
@@ -103,7 +104,7 @@ const steps = [
 "Uploading PDF to Adobe AI...",
 "Extracting tables from document...",
 "Identifying BOQ line items...",
-"Reading quantities and rates...",
+"Calculating AI execution rates...",
 "Preparing your calculator...",
 ];
 return (
@@ -138,7 +139,7 @@ return (
 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
 <thead>
 <tr style={{ background: '#0F1923' }}>
-{['#', 'Description of Work', 'Unit', 'Qty', 'PDF Rate (₹)', 'Your Rate (₹)', 'Your Amount'].map(h => (
+{['#', 'Description of Work', 'Unit', 'Qty', 'PDF Rate', 'AI Estimate', 'Your Rate', 'Your Amount'].map(h => (
 <th key={h} style={{
 padding: '12px 14px', textAlign: 'left',
 color: '#6B7F8E', fontSize: '11px', fontWeight: '700',
@@ -150,16 +151,18 @@ borderBottom: '1px solid #1A2A3A',
 </thead>
 <tbody>
 {items.map((item, idx) => {
-const editedRate = item.editedRate ?? item.rate;
+const aiRate = item.aiRate ?? item.rate;
+const editedRate = item.editedRate ?? aiRate;
 const yourAmount = item.quantity * editedRate;
-const changed = editedRate !== item.rate;
+const changed = editedRate !== aiRate;
+const savingsPct = item.rate > 0 ? Math.round(((item.rate - aiRate) / item.rate) * 100) : 0;
 return (
 <tr key={idx} style={{
 borderBottom: '1px solid #1A2A3A',
 background: idx % 2 === 0 ? 'transparent' : 'rgba(26,42,58,0.3)',
 }}>
 <td style={{ padding: '12px 14px', color: '#3A5068', fontWeight: '700' }}>{idx + 1}</td>
-<td style={{ padding: '12px 14px', color: '#E8EDF2', maxWidth: '280px', lineHeight: '1.5' }}>
+<td style={{ padding: '12px 14px', color: '#E8EDF2', maxWidth: '260px', lineHeight: '1.5' }}>
 {item.item}
 {item.quantity === 0 && (
 <span style={{
@@ -175,6 +178,14 @@ color: '#6B7F8E', padding: '2px 6px', borderRadius: '4px',
 <td style={{ padding: '12px 14px', color: '#6B7F8E', whiteSpace: 'nowrap' }}>
 ₹{fmtNum(item.rate)}
 </td>
+<td style={{ padding: '12px 14px', whiteSpace: 'nowrap' }}>
+<div style={{ color: '#00C896', fontWeight: '700' }}>₹{fmtNum(aiRate)}</div>
+{savingsPct !== 0 && (
+<div style={{ color: savingsPct > 0 ? '#00C896' : '#FF4D4D', fontSize: '10px', marginTop: '1px' }}>
+{savingsPct > 0 ? '↓' : '↑'} {Math.abs(savingsPct)}% vs PDF
+</div>
+)}
+</td>
 <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
 <span style={{ color: '#6B7F8E', fontSize: '13px' }}>₹</span>
@@ -187,7 +198,7 @@ const val = e.target.value;
 onRateChange(idx, val === '' ? 0 : parseFloat(val) || 0);
 }}
 style={{
-width: '110px', padding: '6px 10px',
+width: '100px', padding: '6px 10px',
 background: changed ? 'rgba(245,166,35,0.1)' : '#0F1923',
 border: `1px solid ${changed ? '#F5A623' : '#2A3F54'}`,
 borderRadius: '6px',
@@ -199,7 +210,7 @@ fontSize: '13px', fontWeight: '600', outline: 'none',
 </td>
 <td style={{
 padding: '12px 14px', fontWeight: '700', whiteSpace: 'nowrap',
-color: item.quantity === 0 ? '#3A5068' : '#00C896',
+color: item.quantity === 0 ? '#3A5068' : '#E8EDF2',
 }}>
 {item.quantity === 0 ? '—' : fmt(yourAmount)}
 </td>
@@ -325,7 +336,6 @@ const [items, setItems] = useState<BOQItem[]>([]);
 const [errorMsg, setErrorMsg] = useState('');
 const stepTimer = useRef<any>(null);
 
-// Cost inputs
 const [facilitation, setFacilitation] = useState(3);
 const [overhead, setOverhead] = useState(8);
 const [wastage, setWastage] = useState(5);
@@ -333,7 +343,6 @@ const [labourEscalation, setLabourEscalation] = useState(2);
 const [bidPercent, setBidPercent] = useState(92);
 const [bidPercentRaw, setBidPercentRaw] = useState('92');
 
-// Working capital inputs
 const [projectMonths, setProjectMonths] = useState(6);
 const [raCycleDays, setRaCycleDays] = useState(60);
 
@@ -369,8 +378,7 @@ throw new Error(err.error || 'Upload failed');
 const data: UploadResult = await response.json();
 if (data.success && data.boq) {
 setResult(data);
-setItems(data.boq.boqItems.map(item => ({ ...item, editedRate: item.rate })));
-// Set project months from execution days
+setItems(data.boq.boqItems.map(item => ({ ...item, editedRate: item.aiRate ?? item.rate })));
 if (data.boq.executionDays) {
 setProjectMonths(Math.ceil(data.boq.executionDays / 30));
 }
@@ -397,10 +405,9 @@ setErrorMsg('');
 setLoadingStep(0);
 };
 
-// Live calculations
 const deptEstimate = result?.boq.departmentEstimate || 0;
 const expectedWinningBid = Math.round(deptEstimate * (bidPercent / 100));
-const executionCost = items.reduce((sum, item) => sum + (item.quantity * (item.editedRate ?? item.rate)), 0);
+const executionCost = items.reduce((sum, item) => sum + (item.quantity * (item.editedRate ?? item.aiRate ?? item.rate)), 0);
 const facilitationCost = Math.round(expectedWinningBid * (facilitation / 100));
 const overheadCost = Math.round(executionCost * (overhead / 100));
 const wastageCost = Math.round(executionCost * (wastage / 100));
@@ -409,7 +416,6 @@ const totalRealCost = executionCost + facilitationCost + overheadCost + wastageC
 const realProfit = expectedWinningBid - totalRealCost;
 const profitMargin = expectedWinningBid > 0 ? Math.round((realProfit / expectedWinningBid) * 100) : 0;
 
-// Working capital calculations
 const monthlySpend = projectMonths > 0 ? Math.round(totalRealCost / projectMonths) : 0;
 const raCycleMonths = raCycleDays / 30;
 const minWorkingCapital = Math.round(monthlySpend * (raCycleMonths + 1));
@@ -424,6 +430,10 @@ const bidReason = profitMargin >= 10
 : profitMargin >= 6
 ? `Marginal ${profitMargin}% margin — evaluate competition carefully before committing`
 : `Only ${profitMargin}% margin after all costs — high risk of financial loss`;
+
+// Total of AI estimated rates (default scenario, before user edits)
+const aiExecutionCost = items.reduce((sum, item) => sum + (item.quantity * (item.aiRate ?? item.rate)), 0);
+const pdfBasedCost = items.reduce((sum, item) => sum + (item.quantity * item.rate), 0);
 
 return (
 <div style={{ minHeight: '100vh', background: '#0F1923', fontFamily: "'Inter', 'DM Sans', sans-serif", color: '#E8EDF2' }}>
@@ -458,7 +468,7 @@ cursor: 'pointer', fontSize: '13px', fontWeight: '600',
 )}
 </div>
 
-<div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 24px' }}>
+<div style={{ maxWidth: '1280px', margin: '0 auto', padding: '32px 24px' }}>
 
 {/* IDLE */}
 {uploadState === 'idle' && (
@@ -479,14 +489,14 @@ Will this tender<br />
 </h1>
 <p style={{ color: '#6B7F8E', fontSize: '16px', lineHeight: '1.7' }}>
 Upload the BOQ PDF from any government tender portal.<br />
-Enter your actual rates. Get your real profit — including officer facilitation costs.
+We estimate real execution rates. You confirm or adjust. See your true profit.
 </p>
 </div>
 <UploadZone onUpload={handleUpload} />
 <div style={{ marginTop: '40px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
 {[
 { icon: '📋', title: 'Upload BOQ', desc: 'Any government tender PDF — BMC, PWD, MMRDA, CPWD' },
-{ icon: '✏️', title: 'Enter Your Rates', desc: 'Your actual material & labour cost per item' },
+{ icon: '🤖', title: 'AI Estimates Rates', desc: 'Real execution cost per item, not just SOR rate' },
 { icon: '💰', title: 'See Real Profit', desc: 'Including facilitation, overhead & working capital' },
 ].map((step, i) => (
 <div key={i} style={{
@@ -545,7 +555,6 @@ fontWeight: '700', cursor: 'pointer',
 
 {/* Left Column */}
 <div>
-{/* BOQ Table Header */}
 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
 <div>
 <h2 style={{ fontSize: '18px', fontWeight: '800', margin: '0 0 6px 0' }}>Bill of Quantities</h2>
@@ -560,8 +569,18 @@ fontSize: '12px', fontWeight: '700',
 {result.pdfRead ? '✅' : '📊'} {result.message}
 </div>
 </div>
-<div style={{ color: '#6B7F8E', fontSize: '13px' }}>
-Edit <span style={{ color: '#F5A623', fontWeight: '700' }}>Your Rate</span> column with your actual costs
+</div>
+
+{/* Legend */}
+<div style={{ display: 'flex', gap: '16px', marginBottom: '12px', flexWrap: 'wrap' }}>
+<div style={{ fontSize: '12px', color: '#6B7F8E' }}>
+<span style={{ color: '#6B7F8E', fontWeight: '700' }}>PDF Rate</span> = Government's SOR rate (reference)
+</div>
+<div style={{ fontSize: '12px', color: '#6B7F8E' }}>
+<span style={{ color: '#00C896', fontWeight: '700' }}>AI Estimate</span> = Real execution cost (our analysis)
+</div>
+<div style={{ fontSize: '12px', color: '#6B7F8E' }}>
+<span style={{ color: '#F5A623', fontWeight: '700' }}>Your Rate</span> = Edit if you know better
 </div>
 </div>
 
@@ -570,14 +589,24 @@ Edit <span style={{ color: '#F5A623', fontWeight: '700' }}>Your Rate</span> colu
 <BOQTable items={items} onRateChange={handleRateChange} />
 </div>
 
+<div style={{ display: 'flex', gap: '12px', marginBottom: '32px', flexWrap: 'wrap' }}>
+<button
+onClick={() => setItems(prev => prev.map(item => ({ ...item, editedRate: item.aiRate ?? item.rate })))}
+style={{
+background: 'transparent', border: '1px solid #2A3F54',
+color: '#6B7F8E', padding: '8px 16px', borderRadius: '8px',
+cursor: 'pointer', fontSize: '12px',
+}}
+>↩ Reset to AI Estimates</button>
 <button
 onClick={() => setItems(prev => prev.map(item => ({ ...item, editedRate: item.rate })))}
 style={{
 background: 'transparent', border: '1px solid #2A3F54',
 color: '#6B7F8E', padding: '8px 16px', borderRadius: '8px',
-cursor: 'pointer', fontSize: '12px', marginBottom: '32px',
+cursor: 'pointer', fontSize: '12px',
 }}
->↩ Reset to PDF rates</button>
+>Use PDF Rates Instead</button>
+</div>
 
 {/* Additional Costs */}
 <div style={{ background: '#1A2A3A', borderRadius: '12px', border: '1px solid #2A3F54', padding: '24px', marginBottom: '24px' }}>
@@ -672,13 +701,11 @@ suffix="days" color="#F5A623" min={15} max={180}
 />
 </div>
 
-{/* Working Capital Results */}
 <div style={{ background: '#0F1923', borderRadius: '10px', padding: '20px', border: '1px solid #2A3F54' }}>
 <div style={{ color: '#6B7F8E', fontSize: '11px', fontWeight: '700', letterSpacing: '1px', marginBottom: '16px' }}>
 WORKING CAPITAL ANALYSIS
 </div>
 
-{/* Monthly spend */}
 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #1A2A3A' }}>
 <div>
 <div style={{ color: '#E8EDF2', fontSize: '13px', fontWeight: '600' }}>Monthly Spend</div>
@@ -689,7 +716,6 @@ WORKING CAPITAL ANALYSIS
 </div>
 </div>
 
-{/* Minimum working capital */}
 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #1A2A3A' }}>
 <div>
 <div style={{ color: '#FF4D4D', fontSize: '13px', fontWeight: '600' }}>Minimum Capital Needed</div>
@@ -702,7 +728,6 @@ WORKING CAPITAL ANALYSIS
 </div>
 </div>
 
-{/* Recommended working capital */}
 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #1A2A3A' }}>
 <div>
 <div style={{ color: '#F5A623', fontSize: '13px', fontWeight: '600' }}>Recommended Capital</div>
@@ -715,7 +740,6 @@ WORKING CAPITAL ANALYSIS
 </div>
 </div>
 
-{/* Bank loan note */}
 <div style={{ marginTop: '14px', background: 'rgba(0,200,150,0.05)', borderRadius: '8px', padding: '12px', border: '1px solid rgba(0,200,150,0.1)' }}>
 <div style={{ color: '#00C896', fontSize: '12px', fontWeight: '700', marginBottom: '4px' }}>
 🏦 For Bank Loan Application
@@ -747,15 +771,34 @@ BID DECISION
 </div>
 </div>
 
+{/* Rate Comparison */}
+<div style={{ background: '#1A2A3A', borderRadius: '12px', border: '1px solid #2A3F54', padding: '20px', marginBottom: '16px' }}>
+<div style={{ color: '#6B7F8E', fontSize: '11px', fontWeight: '700', letterSpacing: '1px', marginBottom: '12px' }}>
+RATE COMPARISON (TOTAL)
+</div>
+<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #0F1923' }}>
+<div style={{ color: '#6B7F8E', fontSize: '12px' }}>If using PDF rates</div>
+<div style={{ color: '#6B7F8E', fontSize: '14px', fontWeight: '700', fontFamily: 'monospace' }}>{fmt(pdfBasedCost)}</div>
+</div>
+<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #0F1923' }}>
+<div style={{ color: '#00C896', fontSize: '12px', fontWeight: '600' }}>AI estimated execution</div>
+<div style={{ color: '#00C896', fontSize: '14px', fontWeight: '700', fontFamily: 'monospace' }}>{fmt(aiExecutionCost)}</div>
+</div>
+<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0' }}>
+<div style={{ color: '#F5A623', fontSize: '12px', fontWeight: '600' }}>Your edited total</div>
+<div style={{ color: '#F5A623', fontSize: '14px', fontWeight: '700', fontFamily: 'monospace' }}>{fmt(executionCost)}</div>
+</div>
+</div>
+
 {/* Financial Summary */}
 <div style={{ background: '#1A2A3A', borderRadius: '12px', border: '1px solid #2A3F54', padding: '20px', marginBottom: '16px' }}>
 <div style={{ color: '#6B7F8E', fontSize: '11px', fontWeight: '700', letterSpacing: '1px', marginBottom: '16px' }}>
 FINANCIAL SUMMARY
 </div>
 {[
-{ label: 'Dept Estimate', value: fmt(deptEstimate), color: '#E8EDF2', sub: "Government's budget" },
+{ label: 'Dept Estimate', value: fmt(deptEstimate), color: '#E8EDF2', sub: "Sum of BOQ at PDF/SOR rates" },
 { label: 'Your Winning Bid', value: fmt(expectedWinningBid), color: '#00C896', sub: `${bidPercent}% of estimate` },
-{ label: 'Execution Cost', value: fmt(executionCost), color: '#E8EDF2', sub: 'Sum of BOQ at your rates' },
+{ label: 'Execution Cost', value: fmt(executionCost), color: '#E8EDF2', sub: 'At your edited rates' },
 { label: 'Facilitation Cost', value: fmt(facilitationCost), color: '#FF4D4D', sub: `${facilitation}% of bid` },
 { label: 'Overhead + Wastage + Escalation', value: fmt(overheadCost + wastageCost + labourEscCost), color: '#F5A623', sub: 'All additional costs' },
 { label: 'Total Real Cost', value: fmt(totalRealCost), color: '#E8EDF2', sub: 'Everything you spend', bold: true },
