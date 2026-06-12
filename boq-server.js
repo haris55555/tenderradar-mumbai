@@ -6,142 +6,111 @@ const ADOBE_CLIENT_ID = process.env.ADOBE_CLIENT_ID || '';
 const ADOBE_CLIENT_SECRET = process.env.ADOBE_CLIENT_SECRET || '';
 
 // ============ AI ESTIMATED RATE — UNIVERSAL CLASSIFIER ============
-// Maps any BOQ item (any department, any tender type) to a construction
-// fundamental category, then computes a realistic execution cost.
-
 function classifyAndEstimate(description, unit, pdfRate) {
 const d = (description || '').toLowerCase();
 const u = (unit || '').toLowerCase().replace(/\./g, '');
 
-// 1. STEEL REINFORCEMENT (MT) — Fe500D market price + binding labour
 if ((d.includes('reinforcement') || d.includes('steel bar') || d.includes('fe500') || d.includes('tmt')) &&
 (u === 'mt' || u.includes('mt'))) {
-return Math.round(63500 + 2800); // material + binding labour per MT
+return Math.round(63500 + 2800);
 }
 
-// 2. RCC CONCRETE (Cum) — grade dependent
-if ((d.includes('concrete') || d.includes('cc') || d.includes('r.c.c') || d.includes('rcc') || d.includes('p/l') || d.includes('rmc')) &&
+if ((d.includes('concrete') || d.includes(' cc ') || d.includes('r.c.c') || d.includes('rcc') || d.includes('p/l') || d.includes('rmc')) &&
 (u === 'cum' || u.includes('cum'))) {
-if (d.includes('m-40') || d.includes('m40') || d.includes('m-45') || d.includes('m45')) {
-return Math.round(pdfRate * 0.93); // high-grade RMC, market-driven, close to PDF
-}
-if (d.includes('m-25') || d.includes('m25') || d.includes('m-30') || d.includes('m30')) {
+if (d.includes('m-40') || d.includes('m40') || d.includes('m-45') || d.includes('m45')) return Math.round(pdfRate * 0.93);
+if (d.includes('m-25') || d.includes('m25') || d.includes('m-30') || d.includes('m30')) return Math.round(pdfRate * 0.90);
+if (d.includes('m-15') || d.includes('m15') || d.includes('m-10') || d.includes('m10') || d.includes('lean concrete') || d.includes('pcc')) return Math.round(pdfRate * 0.88);
 return Math.round(pdfRate * 0.90);
 }
-if (d.includes('m-15') || d.includes('m15') || d.includes('m-10') || d.includes('m10') || d.includes('lean concrete') || d.includes('pcc')) {
-return Math.round(pdfRate * 0.88);
-}
-return Math.round(pdfRate * 0.90); // default RCC
-}
 
-// 3. EXCAVATION — manual/machine, soil/rock
 if (d.includes('excavat') && (u === 'cum' || u.includes('cum'))) {
-if (d.includes('chisel') || d.includes('breaker') || d.includes('hard rock') || d.includes('pneumatic')) {
-return Math.round(pdfRate * 0.78); // breaker rental is the dominant cost, labour cheaper than SOR assumes
-}
-return Math.round(pdfRate * 0.65); // standard soil excavation — JCB efficient, big margin
+if (d.includes('chisel') || d.includes('breaker') || d.includes('hard rock') || d.includes('pneumatic')) return Math.round(pdfRate * 0.78);
+return Math.round(pdfRate * 0.65);
 }
 
-// 4. EARTHWORK FILLING/EMBANKMENT (Cum)
 if ((d.includes('earth work') || d.includes('p/l earth') || d.includes('embankment') || d.includes('filling') || d.includes('top layer of earth') || d.includes('stabilised soil')) &&
 (u === 'cum' || u.includes('cum') || u === 'sqm')) {
 return Math.round(pdfRate * 0.70);
 }
 
-// 5. BRICK / STONE MASONRY (Cum)
 if ((d.includes('brick') || d.includes('masonry') || d.includes('rubble')) && (u === 'cum' || u.includes('cum'))) {
 return Math.round(pdfRate * 0.88);
 }
 
-// 6. FORMWORK / SHUTTERING / CENTERING (Sqm)
 if ((d.includes('centering') || d.includes('shuttering') || d.includes('formwork') || d.includes('form work')) &&
 (u === 'sqm' || u.includes('sqm'))) {
 return Math.round(pdfRate * 0.85);
 }
 
-// 7. GRANULAR SUBBASE / WMM / GSB (Cum or Sqm)
 if (d.includes('sub base') || d.includes('subbase') || d.includes('wet mix macadam') || d.includes('wmm') ||
 d.includes('gsb') || d.includes('granular') || d.includes('crushed stone') || d.includes('rubble soling') ||
 d.includes('metal gradation')) {
 return Math.round(pdfRate * 0.80);
 }
 
-// 8. BITUMINOUS WORK — DBM, BC, premix, tack coat, prime coat, mastic
 if (d.includes('bitumen') || d.includes('bituminous') || d.includes('dbm') || d.includes('premix') ||
 d.includes('tack coat') || d.includes('prime coat') || d.includes('mastic') || d.includes('asphalt')) {
-return Math.round(pdfRate * 0.87); // bitumen is commodity-priced, close to SOR
+return Math.round(pdfRate * 0.87);
 }
 
-// 9. PIPES — RCC/HDPE/DI/Stoneware/PVC (Rmt/m)
 if (d.includes('pipe') && (u === 'rmt' || u === 'm' || u.includes('mtr') || u === 'rm')) {
-if (d.includes('hdpe') || d.includes('di pipe') || d.includes('m.s') || d.includes('ms pipe')) {
-return Math.round(pdfRate * 0.85); // pipe material is market-priced commodity
-}
-return Math.round(pdfRate * 0.78); // RCC/stoneware pipes — local manufacture, cheaper
+if (d.includes('hdpe') || d.includes('di pipe') || d.includes('m.s') || d.includes('ms pipe')) return Math.round(pdfRate * 0.85);
+return Math.round(pdfRate * 0.78);
 }
 
-// 10. MANHOLES / CHAMBERS / CI COVERS / FRAMES (Nos/Each)
 if ((d.includes('manhole') || d.includes('cover') || d.includes('frame') || d.includes('chamber') || d.includes('grating')) &&
 (u === 'no' || u === 'nos' || u === 'each')) {
-if (d.includes('c.i') || d.includes('ci ') || d.includes('cast iron') || d.includes('m.s')) {
-return Math.round(pdfRate * 0.82); // casting weight-based, market price of CI/MS
-}
+if (d.includes('c.i') || d.includes('ci ') || d.includes('cast iron') || d.includes('m.s')) return Math.round(pdfRate * 0.82);
 return Math.round(pdfRate * 0.75);
 }
 
-// 11. KERB STONES / WATER CHANNELS / ROAD FURNITURE (Rmt)
 if ((d.includes('kerb') || d.includes('water dished') || d.includes('water table') || d.includes('tree guard')) &&
 (u === 'rmt' || u.includes('rmt') || u === 'rm')) {
 return Math.round(pdfRate * 0.78);
 }
 
-// 12. STEEL FABRICATION — railings, bollards, grills, signage
 if ((d.includes('railing') || d.includes('bollard') || d.includes('grill') || d.includes('fabricat') ||
 d.includes('sign') || d.includes('board')) && d.includes('m.s')) {
-return Math.round(pdfRate * 0.75); // MS fabrication — labour + material both negotiable
+return Math.round(pdfRate * 0.75);
 }
 
-// 13. ROAD MARKING / THERMOPLASTIC / STUDS
 if (d.includes('road marking') || d.includes('thermoplastic') || d.includes('retro reflective') || d.includes('road stud')) {
 return Math.round(pdfRate * 0.80);
 }
 
-// 14. ELECTRICAL — cables, panels, conduits, earthing
+// ELECTRICAL — cables, switchgear, panels, fixtures, fans
 if (d.includes('cable') || d.includes('conduit') || d.includes('panel') || d.includes('earthing') ||
-d.includes('electrical') || d.includes('xlpe')) {
+d.includes('electrical') || d.includes('xlpe') || d.includes('mcb') || d.includes('elcb') ||
+d.includes('switchfuse') || d.includes('distribution board') || d.includes('wiring') ||
+d.includes('tubelight') || d.includes('fixture') || d.includes('fan') || d.includes('bulkhead') ||
+d.includes('tpn') || d.includes('led')) {
 return Math.round(pdfRate * 0.85);
 }
 
-// 15. PLASTERING / FINISHING / FLOORING / TILES
 if (d.includes('plaster') || d.includes('flooring') || d.includes('tactile') || d.includes('tile') ||
 d.includes('paint') || d.includes('stencil')) {
 return Math.round(pdfRate * 0.82);
 }
 
-// 16. DEMOLITION / CUTTING / REMOVING / DISMANTLING
 if (d.includes('demolition') || d.includes('cutting') || d.includes('removing') || d.includes('dismantl') ||
-d.includes('cutting down') || d.includes('extra')) {
-return Math.round(pdfRate * 0.70); // mostly labour, cheap
+d.includes('extra')) {
+return Math.round(pdfRate * 0.70);
 }
 
-// 17. SOAK PIT / DOWEL BARS / JOINT FILLERS / MISC CIVIL
 if (d.includes('soak pit') || d.includes('dowel') || d.includes('joint') || d.includes('thermocole') ||
 d.includes('admixture') || d.includes('waterproof')) {
 return Math.round(pdfRate * 0.80);
 }
 
-// 18. SURVEY / TESTING / LABOUR-ONLY SERVICES
 if (d.includes('survey') || d.includes('testing') || d.includes('transplant') || d.includes('cutting down of tree') ||
 d.includes('publicity') || d.includes('cbo') || d.includes('procuring')) {
 return Math.round(pdfRate * 0.75);
 }
 
-// 19. SHORING / STRUTTING (sq.m)
 if (d.includes('shoring') || d.includes('strutting')) {
 return Math.round(pdfRate * 0.75);
 }
 
-// FALLBACK — generic contractor execution discount
 return Math.round(pdfRate * 0.85);
 }
 
@@ -265,7 +234,7 @@ const KNOWN_UNITS = [
 'month', 'day', 'hr', 'ton', 'quintal', 'bag', 'pair',
 'cbo', 'each', 'no', 'num', 'per', 'point', 'trip', 'visit',
 'lump', 'seat', 'sq.m.', 'sq.ft.', 'sq.m', 'rs/kg', 'm', 'mm',
-'shift', 'm.depth'
+'shift', 'm.depth', 'mtr.', 'nos.', 'set.'
 ];
 
 const SUMMARY_KEYWORDS = [
@@ -274,7 +243,8 @@ const SUMMARY_KEYWORDS = [
 'water charges', 'sewerage charges', 'supervision charges',
 'total project cost', 'project cost', 'cost after rebate',
 'physical contingency', 'cost contingency', 'grand total',
-'net amount', 'taxable amount', 'total amount in rs'
+'net amount', 'taxable amount', 'total amount in rs',
+'total :', 'total:', 'grand total', 'sub total', 'subtotal'
 ];
 
 function isSummaryRow(row) {
@@ -293,7 +263,7 @@ rowStr.startsWith('note:') || rowStr.startsWith('note ');
 function isHeaderRepeatRow(row) {
 const rowLower = row.map(v => (v || '').toLowerCase().trim());
 const hasDesc = rowLower.some(v => v.includes('description'));
-const hasSrNo = rowLower.some(v => v.includes('sr.no') || v.includes('sr no') || v === 'sr.no.');
+const hasSrNo = rowLower.some(v => v.includes('sr.no') || v.includes('sr no') || v === 'sr.no.' || v === 'sr no');
 const hasQtyOrAmount = rowLower.some(v => v.includes('qty') || v.includes('quantity') || v.includes('amount'));
 return (hasDesc && (hasSrNo || hasQtyOrAmount));
 }
@@ -326,12 +296,26 @@ if (/^[A-Z]$/.test(v)) return false;
 return /[a-zA-Z]/.test(v) && v.length > 3;
 }
 
-function parseBOQDirectly(rows) {
-const boqItems = [];
-let descCol = -1, unitCol = -1, qtyCol = -1, rateCol = -1, amountCol = -1;
-let headerRowIdx = -1;
+// Checks if a row looks like a category header (e.g. "Switchgears" - no numbers, short, all in one cell)
+function isCategoryHeaderRow(row, descCol, qtyCol, rateCol, amountCol) {
+const nonEmptyVals = row.filter(v => (v || '').trim().length > 0);
+if (nonEmptyVals.length === 0 || nonEmptyVals.length > 2) return false;
 
-for (let i = 0; i < Math.min(rows.length, 30); i++) {
+// Check if rate/qty/amount columns are all empty for this row
+const qty = qtyCol >= 0 && qtyCol < row.length ? parseNumber(row[qtyCol]) : 0;
+const rate = rateCol >= 0 && rateCol < row.length ? parseNumber(row[rateCol]) : 0;
+const amount = amountCol >= 0 && amountCol < row.length ? parseNumber(row[amountCol]) : 0;
+
+if (qty > 0 || rate > 0 || amount > 0) return false;
+
+// The single non-empty value should be short descriptive text (category name)
+const val = nonEmptyVals[0];
+return isDescriptionText(val) && val.length < 40;
+}
+
+// Detect header columns for a single table's rows
+function detectHeader(rows) {
+for (let i = 0; i < Math.min(rows.length, 15); i++) {
 const row = rows[i];
 const rowLower = row.map(v => (v || '').toLowerCase().trim());
 const hasDesc = rowLower.some(v => v.includes('description') || v.includes('particulars'));
@@ -340,7 +324,7 @@ const hasRate = rowLower.some(v => v === 'rate' || v.startsWith('rate'));
 const hasAmount = rowLower.some(v => v.includes('amount') || v === 'amt');
 
 if (hasDesc && (hasQty || hasRate || hasAmount)) {
-headerRowIdx = i;
+let descCol = -1, unitCol = -1, qtyCol = -1, rateCol = -1, amountCol = -1;
 for (let ci = 0; ci < rowLower.length; ci++) {
 const v = rowLower[ci];
 if ((v.includes('description') || v.includes('particulars')) && descCol === -1) descCol = ci;
@@ -349,13 +333,48 @@ if ((v.includes('qty') || v.includes('quantity')) && qtyCol === -1) qtyCol = ci;
 if ((v === 'rate' || v === 'rate (rs)' || v.startsWith('rate')) && rateCol === -1) rateCol = ci;
 if ((v.includes('amount') || v === 'amt') && amountCol === -1) amountCol = ci;
 }
-console.log(`Header at row ${i}: desc=${descCol} unit=${unitCol} qty=${qtyCol} rate=${rateCol} amount=${amountCol}`);
-break;
+return { headerRowIdx: i, descCol, unitCol, qtyCol, rateCol, amountCol };
 }
 }
+return null;
+}
 
-if (headerRowIdx === -1) { console.log('No header found'); return []; }
+// Check if this table is a "Measurement Sheet" type (not a real BOQ)
+// Measurement sheets have headers like Nos|Length|Width|Height without a clean Rate+Amount
+function isMeasurementSheet(rows, header) {
+const { rateCol, amountCol } = header;
+// If both rate AND amount columns are missing, it's likely a measurement sheet
+if (rateCol === -1 && amountCol === -1) return true;
 
+// Check header row for "length", "width", "height" which indicate dimension breakdown sheets
+const headerRow = rows[header.headerRowIdx].map(v => (v || '').toLowerCase());
+const hasDimensions = headerRow.some(v => v.includes('length')) &&
+headerRow.some(v => v.includes('width')) &&
+headerRow.some(v => v.includes('height'));
+if (hasDimensions) return true;
+
+return false;
+}
+
+// Parse a single table's rows using its own detected header
+function parseTable(rows) {
+const header = detectHeader(rows);
+if (!header) return [];
+
+if (isMeasurementSheet(rows, header)) {
+console.log(' -> Skipped: Measurement Sheet style table');
+return [];
+}
+
+const { headerRowIdx, descCol, unitCol, qtyCol, rateCol, amountCol } = header;
+console.log(` -> Header at row ${headerRowIdx}: desc=${descCol} unit=${unitCol} qty=${qtyCol} rate=${rateCol} amount=${amountCol}`);
+
+if (descCol === -1 || (rateCol === -1 && amountCol === -1)) {
+console.log(' -> Skipped: no description or no rate/amount column');
+return [];
+}
+
+const boqItems = [];
 let pendingDescription = '';
 let parentDescription = '';
 
@@ -364,12 +383,18 @@ const row = rows[i];
 if (!row || row.length === 0) continue;
 
 if (isSummaryRow(row)) {
-console.log(`Summary at row ${i}, stopping`);
+console.log(` -> Summary at row ${i}, stopping`);
 break;
 }
 
 if (isNoteRow(row)) continue;
 if (isHeaderRepeatRow(row)) continue;
+if (isCategoryHeaderRow(row, descCol, qtyCol, rateCol, amountCol)) {
+console.log(` -> Category header skipped at row ${i}: ${row.join(' ').substring(0, 40)}`);
+pendingDescription = '';
+parentDescription = '';
+continue;
+}
 
 const rowStr = row.join(' ').trim();
 if (rowStr.length < 2) continue;
@@ -384,9 +409,7 @@ const qty = parseNumber(qtyRaw);
 const rate = parseNumber(rateRaw);
 const amount = parseNumber(amountRaw);
 
-const hasRateVal = rate > 0;
-const hasAmountVal = amount > 0;
-const hasNumericData = hasRateVal || hasAmountVal;
+const hasNumericData = rate > 0 || amount > 0;
 
 const firstCell = (row[0] || '').trim();
 const isSubItem = /^[A-Za-z]$/.test(firstCell);
@@ -420,7 +443,6 @@ if (finalAmount === 0 && finalQty > 0 && finalRate > 0) finalAmount = Math.round
 if (finalQty === 0 && finalRate > 0 && finalAmount > 0) finalQty = Math.round((finalAmount / finalRate) * 100) / 100;
 if (finalRate === 0 && finalQty > 0 && finalAmount > 0) finalRate = Math.round(finalAmount / finalQty);
 
-// Compute AI Estimated Rate using universal classifier
 const aiRate = finalRate > 0 ? classifyAndEstimate(finalDesc, finalUnit, finalRate) : 0;
 
 boqItems.push({
@@ -431,7 +453,6 @@ rate: Math.round(finalRate * 100) / 100,
 amount: Math.round(finalAmount * 100) / 100,
 aiRate: aiRate
 });
-console.log(`BOQ item ${boqItems.length}: ${finalDesc.substring(0, 45)} | ${finalUnit} | qty:${finalQty} | pdf:${finalRate} | ai:${aiRate}`);
 }
 
 if (!isSubItem) pendingDescription = '';
@@ -452,7 +473,7 @@ else { pendingDescription = anyDesc; parentDescription = anyDesc; }
 }
 }
 
-console.log(`Direct parser found ${boqItems.length} BOQ items`);
+console.log(` -> Found ${boqItems.length} items in this table`);
 return boqItems;
 }
 
@@ -634,14 +655,13 @@ const entries = parseZipEntries(zipBuffer);
 const xlsxFiles = Object.keys(entries).filter(f => f.endsWith('.xlsx'));
 console.log('XLSX files:', xlsxFiles.length);
 
-let allRows = [];
+let allBoqItems = [];
 let tenderValue = 0;
 
 for (const xlsxFile of xlsxFiles) {
 const xlsxBuffer = decompressEntry(entries[xlsxFile]);
 if (!xlsxBuffer) continue;
 const rows = extractRowsFromXlsx(xlsxBuffer);
-console.log(`${xlsxFile}: ${rows.length} rows`);
 
 const hasBoqHeader = rows.some(row => {
 const rl = row.map(v => (v || '').toLowerCase());
@@ -650,10 +670,14 @@ rl.some(v => v.includes('qty') || v.includes('quantity') || v.includes('rate') |
 });
 
 if (hasBoqHeader) {
-console.log(`BOQ data in ${xlsxFile}`);
-allRows = allRows.concat(rows);
+console.log(`Processing ${xlsxFile} (${rows.length} rows) as potential BOQ table`);
+const items = parseTable(rows);
+if (items.length > 0) {
+allBoqItems = allBoqItems.concat(items);
+}
 }
 
+// Extract tender value from any file
 for (const row of rows) {
 for (const val of row) {
 const amount = extractRupeeAmount(val || '');
@@ -662,23 +686,15 @@ if (amount > tenderValue) tenderValue = amount;
 }
 }
 
-if (allRows.length === 0) {
-for (const xlsxFile of xlsxFiles) {
-const xlsxBuffer = decompressEntry(entries[xlsxFile]);
-if (!xlsxBuffer) continue;
-allRows = allRows.concat(extractRowsFromXlsx(xlsxBuffer));
-}
-}
+console.log('Total items across all tables:', allBoqItems.length);
+console.log('Tender value found:', tenderValue);
 
-console.log('Total rows:', allRows.length, '| Tender value:', tenderValue);
-const boqItems = parseBOQDirectly(allRows);
+const estimatedCostFromItems = allBoqItems.reduce((sum, item) => sum + (item.amount || 0), 0);
 
-const estimatedCostFromItems = boqItems.reduce((sum, item) => sum + (item.amount || 0), 0);
-
-if (boqItems.length > 0) {
+if (allBoqItems.length > 0) {
 return {
 extractionSuccess: true,
-boqItems,
+boqItems: allBoqItems,
 tenderValue: estimatedCostFromItems > 0 ? estimatedCostFromItems : tenderValue
 };
 }
@@ -784,7 +800,6 @@ boqItems = generateEstimatedBOQ(tenderType, deptEstimate);
 dataSource = parsed.tenderValue > 100000 ? 'pdf_value_estimated_boq' : 'pwd_estimation';
 }
 
-// Execution cost based on AI estimated rates (real execution cost)
 const executionCost = boqItems.reduce((sum, item) => sum + (item.quantity * (item.aiRate ?? item.rate)), 0);
 const expectedWinningBid = Math.round(deptEstimate * 0.92);
 const expectedProfit = expectedWinningBid - executionCost;
