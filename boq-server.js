@@ -233,7 +233,7 @@ const KNOWN_UNITS = [
 'month', 'day', 'hr', 'ton', 'quintal', 'bag', 'pair',
 'cbo', 'each', 'no', 'num', 'per', 'point', 'trip', 'visit',
 'lump', 'seat', 'sq.m.', 'sq.ft.', 'sq.m', 'rs/kg', 'm', 'mm',
-'shift', 'm.depth', 'mtr.', 'nos.', 'set.'
+'shift', 'm.depth', 'mtr.', 'nos.', 'set.', 'sqm.', 'rmt.', 'each.'
 ];
 
 const SUMMARY_KEYWORDS = [
@@ -441,7 +441,8 @@ unit: finalUnit.toUpperCase(),
 quantity: Math.round(finalQty * 100) / 100,
 rate: Math.round(finalRate * 100) / 100,
 amount: Math.round(finalAmount * 100) / 100,
-aiRate: aiRate
+aiRate: aiRate,
+needsRate: false
 });
 }
 
@@ -465,6 +466,132 @@ else { pendingDescription = anyDesc; parentDescription = anyDesc; }
 
 console.log(` -> Found ${boqItems.length} items in this table`);
 return boqItems;
+}
+
+// ============ FALLBACK PARSER for interleaved BOQ+Measurement Sheet PDFs ============
+// Pattern: item rows look like "Sr.No | ItemCode | Description..."
+// e.g. "72 | R3-RW-3-15 | Providing & Fixing 80 mm thick..."
+// Item codes look like R3-XX-YY-NN or R3-XXNN-x etc.
+const ITEM_CODE_PATTERN = /^[A-Z]\d[-\s]?[A-Z]{1,3}[-\s]?[A-Z0-9-]{2,15}$/i;
+
+function looksLikeItemCode(val) {
+if (!val) return false;
+const v = val.trim().replace(/\s+/g, '');
+if (v.length < 5 || v.length > 25) return false;
+// Must start with letter+digit (e.g. R3) and contain at least 2 hyphens
+return /^[A-Z]\d/.test(v) && (v.match(/-/g) || []).length >= 1 && /[A-Z]/i.test(v);
+}
+
+function looksLikeSrNo(val) {
+if (!val) return false;
+return /^\d{1,4}$/.test(val.trim());
+}
+
+function fallbackParseInterleaved(allRows) {
+const items = [];
+let current = null;
+
+for (let i = 0; i < allRows.length; i++) {
+const row = allRows[i];
+if (!row || row.length === 0) continue;
+
+const nonEmpty = row.map(v => (v || '').trim()).filter(v => v.length > 0);
+if (nonEmpty.length === 0) continue;
+
+// Detect new item start: a cell that's a Sr.No followed (anywhere in row) by a cell that looks like an item code
+let srNoIdx = -1, codeIdx = -1;
+for (let ci = 0; ci < row.length; ci++) {
+const val = (row[ci] || '').trim();
+if (srNoIdx === -1 && looksLikeSrNo(val) && parseInt(val) > 0 && parseInt(val) < 1000) {
+srNoIdx = ci;
+} else if (srNoIdx !== -1 && codeIdx === -1 && looksLikeItemCode(val)) {
+codeIdx = ci;
+break;
+}
+}
+
+if (srNoIdx !== -1 && codeIdx !== -1 && codeIdx > srNoIdx) {
+// New item starts here - save previous item if it has enough info
+if (current && current.description.length > 10) {
+items.push(current);
+}
+// Description is everything after the code cell
+const descParts = [];
+for (let ci = codeIdx + 1; ci < row.length; ci++) {
+const v = (row[ci] || '').trim();
+if (v.length > 0) descParts.push(v);
+}
+current = {
+srNo: row[srNoIdx].trim(),
+itemCode: row[codeIdx].trim().replace(/\s+/g, ''),
+description: descParts.join(' '),
+quantity: 0,
+unit: '',
+rate: 0,
+amount: 0,
+needsRate: true
+};
+continue;
+}
+
+// If we're tracking an item, look for "Say X Unit" to close it with quantity
+if (current) {
+const rowStr = row.join(' ');
+const sayMatch = rowStr.match(/Say\s*\|?\s*([\d,]+\.?\d*)\s*\|?\s*([A-Za-z.]+)\s*$/i);
+if (sayMatch) {
+current.quantity = parseNumber(sayMatch[1]);
+current.unit = sayMatch[2].toUpperCase().replace(/\./g, '');
+items.push(current);
+current = null;
+continue;
+}
+
+// Also check for a row that's JUST "Say | ... | NUMBER | UNIT" split across cells
+if (nonEmpty[0] && nonEmpty[0].toLowerCase() === 'say' && nonEmpty.length >= 2) {
+const lastVal = nonEmpty[nonEmpty.length - 1];
+const secondLastVal = nonEmpty[nonEmpty.length - 2];
+if (isUnit(lastVal) && isNumber(secondLastVal)) {
+current.quantity = parseNumber(secondLastVal);
+current.unit = lastVal.toUpperCase().replace(/\./g, '');
+items.push(current);
+current = null;
+continue;
+}
+}
+
+// If description seems incomplete (no measurement started yet, looks like continuation text)
+// and this row doesn't look like a measurement breakdown (no "Say", not starting with room names pattern)
+// append to description if it's still short and this looks like flowing text
+if (current.description.length < 150 && nonEmpty.length <= 2) {
+const textVal = nonEmpty.find(v => isDescriptionText(v) && !looksLikeSrNo(v));
+if (textVal && !textVal.toLowerCase().includes('say') && parseNumber(textVal) === 0) {
+current.description += ' ' + textVal;
+}
+}
+}
+}
+
+// Push last item if valid
+if (current && current.description.length > 10) {
+items.push(current);
+}
+
+// Filter and finalize items
+const validItems = items
+.filter(it => it.description.length > 10 && it.quantity > 0)
+.map(it => ({
+item: it.description.substring(0, 300),
+unit: it.unit || 'NOS',
+quantity: it.quantity,
+rate: 0,
+amount: 0,
+aiRate: 0,
+needsRate: true,
+itemCode: it.itemCode
+}));
+
+console.log(`Fallback parser found ${validItems.length} items needing rate input`);
+return validItems;
 }
 
 async function getAdobeToken() {
@@ -646,6 +773,7 @@ const xlsxFiles = Object.keys(entries).filter(f => f.endsWith('.xlsx'));
 console.log('XLSX files:', xlsxFiles.length);
 
 let allBoqItems = [];
+let unmatchedRows = [];
 let tenderValue = 0;
 
 for (const xlsxFile of xlsxFiles) {
@@ -664,13 +792,13 @@ console.log(`Processing ${xlsxFile} (${rows.length} rows) as potential BOQ table
 const items = parseTable(rows);
 if (items.length > 0) {
 allBoqItems = allBoqItems.concat(items);
+} else {
+// Header found but no items extracted - might still have useful rows for fallback
+unmatchedRows = unmatchedRows.concat(rows);
 }
-} else if (rows.length > 10) {
-// Debug: show files that were SKIPPED with significant row counts
-console.log(`SKIPPED ${xlsxFile} (${rows.length} rows) - no BOQ header. Sample rows:`);
-for (let r = 0; r < Math.min(4, rows.length); r++) {
-console.log(` Row ${r}: ${rows[r].join(' | ').substring(0, 180)}`);
-}
+} else {
+// No clean header - collect for fallback parser
+unmatchedRows = unmatchedRows.concat(rows);
 }
 
 for (const row of rows) {
@@ -679,6 +807,19 @@ const amount = extractRupeeAmount(val || '');
 if (amount > tenderValue) tenderValue = amount;
 }
 }
+}
+
+console.log('Clean-table items:', allBoqItems.length);
+console.log('Unmatched rows for fallback:', unmatchedRows.length);
+
+// Run fallback parser on unmatched rows for items not caught by clean table parsing
+if (unmatchedRows.length > 0) {
+const fallbackItems = fallbackParseInterleaved(unmatchedRows);
+// Avoid duplicates: skip fallback items whose description significantly overlaps an already-found item
+const existingDescs = new Set(allBoqItems.map(it => it.item.substring(0, 60).toLowerCase()));
+const newFallbackItems = fallbackItems.filter(it => !existingDescs.has(it.item.substring(0, 60).toLowerCase()));
+console.log('Fallback items added (after dedup):', newFallbackItems.length);
+allBoqItems = allBoqItems.concat(newFallbackItems);
 }
 
 console.log('Total items across all tables:', allBoqItems.length);
@@ -795,15 +936,16 @@ boqItems = generateEstimatedBOQ(tenderType, deptEstimate);
 dataSource = parsed.tenderValue > 100000 ? 'pdf_value_estimated_boq' : 'pwd_estimation';
 }
 
-const executionCost = boqItems.reduce((sum, item) => sum + (item.quantity * (item.aiRate ?? item.rate)), 0);
+const executionCost = boqItems.reduce((sum, item) => sum + (item.quantity * (item.aiRate || item.rate || 0)), 0);
 const expectedWinningBid = Math.round(deptEstimate * 0.92);
 const expectedProfit = expectedWinningBid - executionCost;
 const profitMargin = expectedWinningBid > 0 ? Math.round((expectedProfit / expectedWinningBid) * 100) : 0;
 const defaults = getDefaultsForType(tenderType);
 const bidReason = await getBidReason(tenderType, deptEstimate, profitMargin);
 
+const needsRateCount = boqItems.filter(it => it.needsRate).length;
 const message = pdfRead
-? `✅ Real BOQ extracted from uploaded PDF — ${boqItems.length} items found`
+? `✅ Real BOQ extracted from uploaded PDF — ${boqItems.length} items found${needsRateCount > 0 ? ` (${needsRateCount} need rate input)` : ''}`
 : parsed.tenderValue > 100000
 ? `📄 Real tender value ₹${(parsed.tenderValue / 10000000).toFixed(2)} Cr extracted — BOQ estimated using 2026 Mumbai rates`
 : '📊 BOQ estimated using 2026 Mumbai market rates';
@@ -875,7 +1017,7 @@ boqItems = generateEstimatedBOQ(tenderType || '', deptEstimate);
 dataSource = realValueFromPDF > 0 ? 'pdf_value_estimated_boq' : 'pwd_estimation';
 }
 
-const executionCost = boqItems.reduce((sum, item) => sum + (item.quantity * (item.aiRate ?? item.rate)), 0);
+const executionCost = boqItems.reduce((sum, item) => sum + (item.quantity * (item.aiRate || item.rate || 0)), 0);
 const expectedWinningBid = Math.round(deptEstimate * 0.92);
 const expectedProfit = expectedWinningBid - executionCost;
 const profitMargin = expectedWinningBid > 0 ? Math.round((expectedProfit / expectedWinningBid) * 100) : 0;
