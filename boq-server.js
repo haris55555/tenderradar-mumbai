@@ -78,7 +78,6 @@ if (d.includes('road marking') || d.includes('thermoplastic') || d.includes('ret
 return Math.round(pdfRate * 0.80);
 }
 
-// ELECTRICAL — cables, switchgear, panels, fixtures, fans
 if (d.includes('cable') || d.includes('conduit') || d.includes('panel') || d.includes('earthing') ||
 d.includes('electrical') || d.includes('xlpe') || d.includes('mcb') || d.includes('elcb') ||
 d.includes('switchfuse') || d.includes('distribution board') || d.includes('wiring') ||
@@ -244,7 +243,7 @@ const SUMMARY_KEYWORDS = [
 'total project cost', 'project cost', 'cost after rebate',
 'physical contingency', 'cost contingency', 'grand total',
 'net amount', 'taxable amount', 'total amount in rs',
-'total :', 'total:', 'grand total', 'sub total', 'subtotal'
+'total :', 'total:', 'sub total', 'subtotal'
 ];
 
 function isSummaryRow(row) {
@@ -296,24 +295,20 @@ if (/^[A-Z]$/.test(v)) return false;
 return /[a-zA-Z]/.test(v) && v.length > 3;
 }
 
-// Checks if a row looks like a category header (e.g. "Switchgears" - no numbers, short, all in one cell)
 function isCategoryHeaderRow(row, descCol, qtyCol, rateCol, amountCol) {
 const nonEmptyVals = row.filter(v => (v || '').trim().length > 0);
 if (nonEmptyVals.length === 0 || nonEmptyVals.length > 2) return false;
 
-// Check if rate/qty/amount columns are all empty for this row
 const qty = qtyCol >= 0 && qtyCol < row.length ? parseNumber(row[qtyCol]) : 0;
 const rate = rateCol >= 0 && rateCol < row.length ? parseNumber(row[rateCol]) : 0;
 const amount = amountCol >= 0 && amountCol < row.length ? parseNumber(row[amountCol]) : 0;
 
 if (qty > 0 || rate > 0 || amount > 0) return false;
 
-// The single non-empty value should be short descriptive text (category name)
 const val = nonEmptyVals[0];
 return isDescriptionText(val) && val.length < 40;
 }
 
-// Detect header columns for a single table's rows
 function detectHeader(rows) {
 for (let i = 0; i < Math.min(rows.length, 15); i++) {
 const row = rows[i];
@@ -339,14 +334,10 @@ return { headerRowIdx: i, descCol, unitCol, qtyCol, rateCol, amountCol };
 return null;
 }
 
-// Check if this table is a "Measurement Sheet" type (not a real BOQ)
-// Measurement sheets have headers like Nos|Length|Width|Height without a clean Rate+Amount
 function isMeasurementSheet(rows, header) {
 const { rateCol, amountCol } = header;
-// If both rate AND amount columns are missing, it's likely a measurement sheet
 if (rateCol === -1 && amountCol === -1) return true;
 
-// Check header row for "length", "width", "height" which indicate dimension breakdown sheets
 const headerRow = rows[header.headerRowIdx].map(v => (v || '').toLowerCase());
 const hasDimensions = headerRow.some(v => v.includes('length')) &&
 headerRow.some(v => v.includes('width')) &&
@@ -356,7 +347,6 @@ if (hasDimensions) return true;
 return false;
 }
 
-// Parse a single table's rows using its own detected header
 function parseTable(rows) {
 const header = detectHeader(rows);
 if (!header) return [];
@@ -675,9 +665,14 @@ const items = parseTable(rows);
 if (items.length > 0) {
 allBoqItems = allBoqItems.concat(items);
 }
+} else if (rows.length > 10) {
+// Debug: show files that were SKIPPED with significant row counts
+console.log(`SKIPPED ${xlsxFile} (${rows.length} rows) - no BOQ header. Sample rows:`);
+for (let r = 0; r < Math.min(4, rows.length); r++) {
+console.log(` Row ${r}: ${rows[r].join(' | ').substring(0, 180)}`);
+}
 }
 
-// Extract tender value from any file
 for (const row of rows) {
 for (const val of row) {
 const amount = extractRupeeAmount(val || '');
