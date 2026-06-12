@@ -124,7 +124,8 @@ const KNOWN_UNITS = [
 'rmt', 'sqft', 'cft', 'mtr', 'unit', 'job', 'lot',
 'month', 'day', 'hr', 'ton', 'quintal', 'bag', 'pair',
 'cbo', 'each', 'no', 'num', 'per', 'point', 'trip', 'visit',
-'lump', 'seat', 'sq.m.', 'sq.ft.'
+'lump', 'seat', 'sq.m.', 'sq.ft.', 'sq.m', 'rs/kg', 'm', 'mm',
+'shift', 'm.depth'
 ];
 
 const SUMMARY_KEYWORDS = [
@@ -133,7 +134,7 @@ const SUMMARY_KEYWORDS = [
 'water charges', 'sewerage charges', 'supervision charges',
 'total project cost', 'project cost', 'cost after rebate',
 'physical contingency', 'cost contingency', 'grand total',
-'net amount', 'taxable amount'
+'net amount', 'taxable amount', 'total amount in rs'
 ];
 
 function isSummaryRow(row) {
@@ -147,6 +148,15 @@ const secondCell = (row[1] || '').toLowerCase().trim();
 const rowStr = row.join(' ').toLowerCase().trim();
 return firstCell.startsWith('note') || secondCell.startsWith('note') ||
 rowStr.startsWith('note:') || rowStr.startsWith('note ');
+}
+
+function isHeaderRepeatRow(row) {
+// Detects repeated header rows that appear mid-table (page breaks)
+const rowLower = row.map(v => (v || '').toLowerCase().trim());
+const hasDesc = rowLower.some(v => v.includes('description'));
+const hasSrNo = rowLower.some(v => v.includes('sr.no') || v.includes('sr no') || v === 'sr.no.');
+const hasQtyOrAmount = rowLower.some(v => v.includes('qty') || v.includes('quantity') || v.includes('amount'));
+return (hasDesc && (hasSrNo || hasQtyOrAmount));
 }
 
 function isUnit(val) {
@@ -177,15 +187,6 @@ if (/^[A-Z]$/.test(v)) return false;
 return /[a-zA-Z]/.test(v) && v.length > 3;
 }
 
-function hasRateInRow(row, rateCol, amountCol) {
-// Check if row has a rate (even with zero quantity/amount)
-const rate = rateCol >= 0 && rateCol < row.length ? parseNumber(row[rateCol] || '') : 0;
-const amount = amountCol >= 0 && amountCol < row.length ? parseNumber(row[amountCol] || '') : 0;
-const qty = 0; // we check separately
-// Has rate means there's a numeric rate value
-return rate > 0 || amount > 0;
-}
-
 function parseBOQDirectly(rows) {
 const boqItems = [];
 let descCol = -1, unitCol = -1, qtyCol = -1, rateCol = -1, amountCol = -1;
@@ -196,9 +197,9 @@ for (let i = 0; i < Math.min(rows.length, 30); i++) {
 const row = rows[i];
 const rowLower = row.map(v => (v || '').toLowerCase().trim());
 const hasDesc = rowLower.some(v => v.includes('description') || v.includes('particulars'));
-const hasQty = rowLower.some(v => v === 'quantity' || v === 'qty' || v === 'qnty');
+const hasQty = rowLower.some(v => v.includes('qty') || v.includes('quantity'));
 const hasRate = rowLower.some(v => v === 'rate' || v.startsWith('rate'));
-const hasAmount = rowLower.some(v => v === 'amount' || v === 'amt');
+const hasAmount = rowLower.some(v => v.includes('amount') || v === 'amt');
 
 if (hasDesc && (hasQty || hasRate || hasAmount)) {
 headerRowIdx = i;
@@ -206,9 +207,11 @@ for (let ci = 0; ci < rowLower.length; ci++) {
 const v = rowLower[ci];
 if ((v.includes('description') || v.includes('particulars')) && descCol === -1) descCol = ci;
 if ((isUnit(v) || v === 'unit' || v === 'per') && unitCol === -1) unitCol = ci;
-if ((v === 'quantity' || v === 'qty' || v === 'qnty') && qtyCol === -1) qtyCol = ci;
+// Match "qty", "quantity", "combined qty", "total qty" etc.
+if ((v.includes('qty') || v.includes('quantity')) && qtyCol === -1) qtyCol = ci;
 if ((v === 'rate' || v === 'rate (rs)' || v.startsWith('rate')) && rateCol === -1) rateCol = ci;
-if ((v === 'amount' || v === 'amt') && amountCol === -1) amountCol = ci;
+// Match "amount", "total amount", "amt" etc.
+if ((v.includes('amount') || v === 'amt') && amountCol === -1) amountCol = ci;
 }
 console.log(`Header at row ${i}: desc=${descCol} unit=${unitCol} qty=${qtyCol} rate=${rateCol} amount=${amountCol}`);
 break;
@@ -218,13 +221,13 @@ break;
 if (headerRowIdx === -1) { console.log('No header found'); return []; }
 
 let pendingDescription = '';
-let parentDescription = ''; // Track parent item description for sub-items
+let parentDescription = '';
 
 for (let i = headerRowIdx + 1; i < rows.length; i++) {
 const row = rows[i];
 if (!row || row.length === 0) continue;
 
-// ALWAYS check summary FIRST
+// Check summary FIRST
 if (isSummaryRow(row)) {
 console.log(`Summary at row ${i}, stopping`);
 break;
@@ -233,6 +236,12 @@ break;
 // Skip note rows
 if (isNoteRow(row)) {
 console.log(`Note row skipped at ${i}`);
+continue;
+}
+
+// Skip repeated header rows (appears on page breaks in multi-page BOQs)
+if (isHeaderRepeatRow(row)) {
+console.log(`Repeated header skipped at ${i}`);
 continue;
 }
 
@@ -249,50 +258,43 @@ const qty = parseNumber(qtyRaw);
 const rate = parseNumber(rateRaw);
 const amount = parseNumber(amountRaw);
 
-// Has numeric data in rate column (even if qty/amount is 0)
-const hasRate = rate > 0;
-const hasAmount = amount > 0;
-const hasNumericData = hasRate || hasAmount;
+const hasRateVal = rate > 0;
+const hasAmountVal = amount > 0;
+const hasQtyVal = qty > 0;
+const hasNumericData = hasRateVal || hasAmountVal;
 
 const firstCell = (row[0] || '').trim();
 const isSubItem = /^[A-Za-z]$/.test(firstCell);
-// Check if this is a new main item (starts with a number)
 const isMainItem = /^\d+$/.test(firstCell);
 
 if (hasNumericData) {
-// This row has rate or amount data — it's a BOQ line item
 let finalDesc = '';
 
 if (isSubItem) {
-// Sub-item A, B etc — use parent description + sub description
 const subDesc = desc || firstCell;
-finalDesc = parentDescription
-? `${parentDescription} (${subDesc})`
-: subDesc;
+finalDesc = parentDescription ? `${parentDescription} (${subDesc})` : subDesc;
 } else {
 finalDesc = pendingDescription || desc;
-// Update parent description for potential sub-items
 if (isMainItem && (pendingDescription || desc)) {
 parentDescription = pendingDescription || desc;
 }
 }
 
-if (!finalDesc || finalDesc.length < 3) {
-finalDesc = row.find(v => isDescriptionText(v || '') && (v || '').length > 5) || '';
+if (!finalDesc || finalDesc.length < 3 || !isDescriptionText(finalDesc)) {
+const altDesc = row.find(v => isDescriptionText(v || '') && (v || '').length > 5);
+if (altDesc) finalDesc = altDesc;
 }
 
-if (finalDesc && finalDesc.length > 3) {
+if (finalDesc && finalDesc.length > 3 && isDescriptionText(finalDesc)) {
 let finalQty = qty;
 let finalRate = rate;
 let finalAmount = amount;
 let finalUnit = unit || 'Nos';
 
-// Calculate missing values
 if (finalAmount === 0 && finalQty > 0 && finalRate > 0) finalAmount = Math.round(finalQty * finalRate * 100) / 100;
 if (finalQty === 0 && finalRate > 0 && finalAmount > 0) finalQty = Math.round((finalAmount / finalRate) * 100) / 100;
 if (finalRate === 0 && finalQty > 0 && finalAmount > 0) finalRate = Math.round(finalAmount / finalQty);
 
-// Include item even if amount is 0 (zero qty items are still valid BOQ items)
 boqItems.push({
 item: finalDesc.substring(0, 300),
 unit: finalUnit.toUpperCase(),
@@ -300,32 +302,23 @@ quantity: Math.round(finalQty * 100) / 100,
 rate: Math.round(finalRate * 100) / 100,
 amount: Math.round(finalAmount * 100) / 100
 });
-console.log(`BOQ item ${boqItems.length}: ${finalDesc.substring(0, 60)} | ${finalUnit} | qty:${finalQty} | rate:${finalRate} | amt:${finalAmount}`);
+console.log(`BOQ item ${boqItems.length}: ${finalDesc.substring(0, 50)} | ${finalUnit} | qty:${finalQty} | rate:${finalRate} | amt:${finalAmount}`);
 }
 
-// Reset pending description after processing a main item
-if (!isSubItem) {
-pendingDescription = '';
-}
+if (!isSubItem) pendingDescription = '';
 
 } else if (desc && isDescriptionText(desc)) {
-// Description row without numbers — this is a parent item description
 if (isMainItem || (!isSubItem && !pendingDescription)) {
 pendingDescription = desc;
-parentDescription = desc; // Save as parent for sub-items
+parentDescription = desc;
 } else if (pendingDescription && !isSubItem) {
 pendingDescription += ' ' + desc;
 }
 } else if (!desc && !hasNumericData) {
-// Try to find description in any other cell
 const anyDesc = row.find((v, idx) => idx !== 0 && isDescriptionText(v || '') && (v || '').length > 10);
 if (anyDesc && !isSubItem) {
-if (pendingDescription) {
-pendingDescription += ' ' + anyDesc;
-} else {
-pendingDescription = anyDesc;
-parentDescription = anyDesc;
-}
+if (pendingDescription) pendingDescription += ' ' + anyDesc;
+else { pendingDescription = anyDesc; parentDescription = anyDesc; }
 }
 }
 }
@@ -520,12 +513,11 @@ const xlsxBuffer = decompressEntry(entries[xlsxFile]);
 if (!xlsxBuffer) continue;
 const rows = extractRowsFromXlsx(xlsxBuffer);
 console.log(`${xlsxFile}: ${rows.length} rows`);
-rows.forEach((row, i) => console.log(`Row ${i}:`, row.join(' | ')));
 
 const hasBoqHeader = rows.some(row => {
 const rl = row.map(v => (v || '').toLowerCase());
 return rl.some(v => v.includes('description') || v.includes('particulars')) &&
-rl.some(v => v === 'quantity' || v === 'qty' || v === 'rate' || v === 'amount');
+rl.some(v => v.includes('qty') || v.includes('quantity') || v.includes('rate') || v.includes('amount'));
 });
 
 if (hasBoqHeader) {
@@ -552,8 +544,16 @@ allRows = allRows.concat(extractRowsFromXlsx(xlsxBuffer));
 console.log('Total rows:', allRows.length, '| Tender value:', tenderValue);
 const boqItems = parseBOQDirectly(allRows);
 
+// Calculate actual estimated cost = sum of all BOQ item amounts
+// (this excludes GST, contingency, supervision charges etc.)
+const estimatedCostFromItems = boqItems.reduce((sum, item) => sum + (item.amount || 0), 0);
+
 if (boqItems.length > 0) {
-return { extractionSuccess: true, boqItems, tenderValue };
+return {
+extractionSuccess: true,
+boqItems,
+tenderValue: estimatedCostFromItems > 0 ? estimatedCostFromItems : tenderValue
+};
 }
 return { extractionSuccess: false, boqItems: [], tenderValue };
 
@@ -643,7 +643,7 @@ if (!zipBuffer) { res.writeHead(500); res.end(JSON.stringify({ error: 'PDF extra
 const parsed = await parseBOQFromZip(zipBuffer);
 console.log('Result - success:', parsed.extractionSuccess, 'items:', parsed.boqItems?.length, 'value:', parsed.tenderValue);
 
-let deptEstimate = parsed.tenderValue > 100000 ? parsed.tenderValue : 5000000;
+let deptEstimate = parsed.tenderValue > 0 ? parsed.tenderValue : 5000000;
 let boqItems = [];
 let pdfRead = false;
 let dataSource = 'pwd_estimation';
@@ -660,7 +660,7 @@ dataSource = parsed.tenderValue > 100000 ? 'pdf_value_estimated_boq' : 'pwd_esti
 const executionCost = boqItems.reduce((sum, item) => sum + (item.amount || 0), 0);
 const expectedWinningBid = Math.round(deptEstimate * 0.92);
 const expectedProfit = expectedWinningBid - executionCost;
-const profitMargin = Math.round((expectedProfit / expectedWinningBid) * 100);
+const profitMargin = expectedWinningBid > 0 ? Math.round((expectedProfit / expectedWinningBid) * 100) : 0;
 const defaults = getDefaultsForType(tenderType);
 const bidReason = await getBidReason(tenderType, deptEstimate, profitMargin);
 
@@ -723,7 +723,7 @@ if (pdfBuffer && pdfBuffer.length > 1000) {
 const zipBuffer = await extractWithAdobe(pdfBuffer, token);
 if (zipBuffer) {
 const parsed = await parseBOQFromZip(zipBuffer);
-if (parsed.tenderValue > 100000) { realValueFromPDF = parsed.tenderValue; deptEstimate = parsed.tenderValue; }
+if (parsed.tenderValue > 0) { realValueFromPDF = parsed.tenderValue; deptEstimate = parsed.tenderValue; }
 if (parsed.extractionSuccess && parsed.boqItems?.length > 0) {
 boqItems = parsed.boqItems; dataSource = 'actual_pdf'; pdfRead = true;
 }
@@ -740,7 +740,7 @@ dataSource = realValueFromPDF > 0 ? 'pdf_value_estimated_boq' : 'pwd_estimation'
 const executionCost = boqItems.reduce((sum, item) => sum + (item.amount || 0), 0);
 const expectedWinningBid = Math.round(deptEstimate * 0.92);
 const expectedProfit = expectedWinningBid - executionCost;
-const profitMargin = Math.round((expectedProfit / expectedWinningBid) * 100);
+const profitMargin = expectedWinningBid > 0 ? Math.round((expectedProfit / expectedWinningBid) * 100) : 0;
 const defaults = getDefaultsForType(tenderType || '');
 const bidReason = await getBidReason(tenderType || 'Civil', deptEstimate, profitMargin);
 
