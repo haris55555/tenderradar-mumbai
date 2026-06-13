@@ -629,6 +629,7 @@ rl.some(v => v.includes('qty') || v.includes('quantity') || v.includes('rate') |
 
 if (hasBoqHeader) {
 console.log(`Processing table ${t} (${rows.length} rows) as potential BOQ table`);
+console.log('Table ${t} rows 0-3:' ,JSON.stringify(rows.slice(0,4)));  
 const items = parseTable(rows);
 if (items.length > 0) {
 allBoqItems = allBoqItems.concat(items);
