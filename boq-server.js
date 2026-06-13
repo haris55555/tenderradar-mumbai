@@ -613,8 +613,11 @@ function processExtractedTables(tables) {
 console.log(`Pdfplumber extracted ${tables.length} tables`);
 
 let allBoqItems = [];
-let unmatchedRows = [];
 let tenderValue = 0;
+
+// Step 1: Separate tables into BOQ-header tables and non-header tables
+const boqHeaderTables = [];
+const nonHeaderRows = [];
 
 for (let t = 0; t < tables.length; t++) {
 const rows = tables[t];
@@ -627,15 +630,9 @@ rl.some(v => v.includes('qty') || v.includes('quantity') || v.includes('rate') |
 });
 
 if (hasBoqHeader) {
-console.log(`Processing table ${t} (${rows.length} rows) as potential BOQ table`);
-const items = parseTable(rows);
-if (items.length > 0) {
-allBoqItems = allBoqItems.concat(items);
+boqHeaderTables.push({ tableIdx: t, rows });
 } else {
-unmatchedRows = unmatchedRows.concat(rows);
-}
-} else {
-unmatchedRows = unmatchedRows.concat(rows);
+nonHeaderRows.push(...rows);
 }
 
 for (const row of rows) {
@@ -646,11 +643,51 @@ if (amount > tenderValue) tenderValue = amount;
 }
 }
 
-console.log('Clean-table items:', allBoqItems.length);
-console.log('Unmatched rows for fallback:', unmatchedRows.length);
+console.log(`Found ${boqHeaderTables.length} tables with BOQ headers`);
 
-if (unmatchedRows.length > 0) {
-const fallbackItems = fallbackParseInterleaved(unmatchedRows);
+// Step 2: For each BOQ header table, also collect ALL subsequent non-header
+// rows until next BOQ header table — this handles multi-page BOQ tables
+// where continuation pages lose their headers
+if (boqHeaderTables.length > 0) {
+// Sort by table index
+boqHeaderTables.sort((a, b) => a.tableIdx - b.tableIdx);
+
+for (let bi = 0; bi < boqHeaderTables.length; bi++) {
+const startIdx = boqHeaderTables[bi].tableIdx;
+const endIdx = bi + 1 < boqHeaderTables.length ? boqHeaderTables[bi + 1].tableIdx : tables.length;
+
+// Collect rows from this header table plus all continuation tables until next header
+let combinedRows = [...boqHeaderTables[bi].rows];
+for (let t = startIdx + 1; t < endIdx; t++) {
+if (tables[t] && tables[t].length > 0) {
+// Only add if NOT a measurement sheet (no Length/Width/Height columns)
+const rowsLower = tables[t].map(row => row.map(v => (v || '').toLowerCase()));
+const hasDimensions = rowsLower.some(row =>
+row.some(v => v.includes('length')) &&
+row.some(v => v.includes('width'))
+);
+if (!hasDimensions) {
+combinedRows = combinedRows.concat(tables[t]);
+}
+}
+}
+
+console.log(`Processing BOQ table ${startIdx} with ${combinedRows.length} combined rows (including continuations)`);
+const items = parseTable(combinedRows);
+if (items.length > 0) {
+allBoqItems = allBoqItems.concat(items);
+console.log(` -> Got ${items.length} items from this combined table`);
+}
+}
+}
+
+console.log('Clean-table items:', allBoqItems.length);
+
+// Step 3: Run fallback on truly unmatched rows for any remaining items
+if (nonHeaderRows.length > 0 && allBoqItems.length < 50) {
+// Only run fallback if clean parsing gave very few items
+console.log('Running fallback on', nonHeaderRows.length, 'unmatched rows');
+const fallbackItems = fallbackParseInterleaved(nonHeaderRows);
 const existingDescs = new Set(allBoqItems.map(it => it.item.substring(0, 60).toLowerCase()));
 const newFallbackItems = fallbackItems.filter(it => !existingDescs.has(it.item.substring(0, 60).toLowerCase()));
 console.log('Fallback items added (after dedup):', newFallbackItems.length);
@@ -671,6 +708,8 @@ tenderValue: estimatedCostFromItems > 0 ? estimatedCostFromItems : tenderValue
 }
 return { extractionSuccess: false, boqItems: [], tenderValue };
 }
+
+
 
 async function getBidReason(type, deptEstimate, profitMargin) {
 try {
