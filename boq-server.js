@@ -47,18 +47,10 @@ return Math.round(pdfRate * 0.85);
 
 function getDefaultsForType(type) {
 const t = (type || '').toLowerCase();
-if (t.includes('road') || t.includes('infrastructure')) {
-return { keyMaterials: ['Bituminous Macadam DBM Grade II', 'WBM Aggregate 40mm', 'Cement Concrete M30', 'TMT Steel Fe500D'], majorEquipment: ['Road Roller 10T Vibratory', 'Sensor Paver Machine', 'JCB Excavator 3CX', 'Tipper Trucks 10MT'], riskFactors: ['Heavy monsoon damage to fresh bituminous surface', 'Underground utility conflicts in urban roads', 'Traffic diversion management in busy Mumbai roads'], executionDays: 120 };
-}
-if (t.includes('sewer') || t.includes('sewerage') || t.includes('drain')) {
-return { keyMaterials: ['NP3 RCC Hume Pipes', 'Cement OPC 53 Grade', 'River Sand Zone II', 'Brick Masonry Class A'], majorEquipment: ['JCB 3CX Excavator', 'Dewatering Pump 10HP', 'Concrete Mixer 500L', 'Hydraulic Crane 10T'], riskFactors: ['High water table in coastal Mumbai areas', 'Existing utility crossing at depth', 'Monsoon flooding risk for open trenches'], executionDays: 150 };
-}
-if (t.includes('sanitary') || t.includes('water') || t.includes('pipeline') || t.includes('pump')) {
-return { keyMaterials: ['DI Pipes K9 Class IS 8329', 'Sluice Valves IS 14846', 'Cement OPC 53 Grade', 'Coarse Sand Bedding'], majorEquipment: ['Pipe Laying Excavator', 'JCB 3CX Excavator', 'Hydraulic Pipe Bending Machine', 'Pressure Testing Equipment'], riskFactors: ['Water supply disruption to residents during work', 'Pressure testing failures at joints', 'Soil condition variations across Mumbai zones'], executionDays: 90 };
-}
-if (t.includes('electrical') || t.includes('mechanical')) {
-return { keyMaterials: ['Aluminium/Copper Cables IS 694', 'MS Conduit Pipes', 'Distribution Panels', 'Earthing Materials'], majorEquipment: ['Cable Laying Machine', 'Hydraulic Crane 5T', 'Cable Drum Trailer', 'Megger Testing Equipment'], riskFactors: ['Live electrical hazards during installation', 'Shutdown coordination required', 'Specialized licensed electricians required'], executionDays: 60 };
-}
+if (t.includes('road') || t.includes('infrastructure')) return { keyMaterials: ['Bituminous Macadam DBM Grade II', 'WBM Aggregate 40mm', 'Cement Concrete M30', 'TMT Steel Fe500D'], majorEquipment: ['Road Roller 10T Vibratory', 'Sensor Paver Machine', 'JCB Excavator 3CX', 'Tipper Trucks 10MT'], riskFactors: ['Heavy monsoon damage to fresh bituminous surface', 'Underground utility conflicts in urban roads', 'Traffic diversion management in busy Mumbai roads'], executionDays: 120 };
+if (t.includes('sewer') || t.includes('sewerage') || t.includes('drain')) return { keyMaterials: ['NP3 RCC Hume Pipes', 'Cement OPC 53 Grade', 'River Sand Zone II', 'Brick Masonry Class A'], majorEquipment: ['JCB 3CX Excavator', 'Dewatering Pump 10HP', 'Concrete Mixer 500L', 'Hydraulic Crane 10T'], riskFactors: ['High water table in coastal Mumbai areas', 'Existing utility crossing at depth', 'Monsoon flooding risk for open trenches'], executionDays: 150 };
+if (t.includes('sanitary') || t.includes('water') || t.includes('pipeline') || t.includes('pump')) return { keyMaterials: ['DI Pipes K9 Class IS 8329', 'Sluice Valves IS 14846', 'Cement OPC 53 Grade', 'Coarse Sand Bedding'], majorEquipment: ['Pipe Laying Excavator', 'JCB 3CX Excavator', 'Hydraulic Pipe Bending Machine', 'Pressure Testing Equipment'], riskFactors: ['Water supply disruption to residents during work', 'Pressure testing failures at joints', 'Soil condition variations across Mumbai zones'], executionDays: 90 };
+if (t.includes('electrical') || t.includes('mechanical')) return { keyMaterials: ['Aluminium/Copper Cables IS 694', 'MS Conduit Pipes', 'Distribution Panels', 'Earthing Materials'], majorEquipment: ['Cable Laying Machine', 'Hydraulic Crane 5T', 'Cable Drum Trailer', 'Megger Testing Equipment'], riskFactors: ['Live electrical hazards during installation', 'Shutdown coordination required', 'Specialized licensed electricians required'], executionDays: 60 };
 return { keyMaterials: ['Cement OPC 53 Grade Ultratech', 'TMT Steel Fe500D TATA/JSW', 'River Sand Zone II', '20mm Graded Aggregate'], majorEquipment: ['JCB 3CX Excavator', 'Concrete Transit Mixer', 'Plate Compactor', 'Tipper Truck 10MT'], riskFactors: ['Urban area work with restricted access', 'Monsoon season work stoppage Jun-Sep', 'Utility shifting coordination required'], executionDays: 120 };
 }
 
@@ -91,27 +83,8 @@ if (match) { const num = parseFloat(match[1].replace(/,/g, '')); if (num > 10000
 return 0;
 }
 
-const KNOWN_UNITS = ['cum', 'sqm', 'rm', 'nos', 'mt', 'kg', 'ltr', 'ls', 'set', 'rmt', 'sqft', 'cft', 'mtr', 'unit', 'job', 'lot', 'month', 'day', 'hr', 'ton', 'quintal', 'bag', 'pair', 'cbo', 'each', 'no', 'num', 'per', 'point', 'trip', 'visit', 'lump', 'seat', 'sq.m.', 'sq.ft.', 'sq.m', 'rs/kg', 'm', 'mm', 'shift', 'm.depth', 'mtr.', 'nos.', 'set.', 'sqm.', 'rmt.', 'each.'];
-const SUMMARY_KEYWORDS = ['estimated cost', 'contractors rebate', "contractor's rebate", 'gst 18', 'contract sum', 'contingency', 'contract cost', 'water charges', 'sewerage charges', 'supervision charges', 'total project cost', 'project cost', 'cost after rebate', 'physical contingency', 'cost contingency', 'grand total', 'net amount', 'taxable amount', 'total amount in rs', 'total :', 'total:', 'sub total', 'subtotal'];
-
-function isSummaryRow(row) {
-const rowStr = row.join(' ').toLowerCase().trim();
-return SUMMARY_KEYWORDS.some(keyword => rowStr.includes(keyword));
-}
-
-function isNoteRow(row) {
-const firstCell = (row[0] || '').toLowerCase().trim();
-const rowStr = row.join(' ').toLowerCase().trim();
-return firstCell.startsWith('note') || rowStr.startsWith('note:') || rowStr.startsWith('note ');
-}
-
-function isHeaderRepeatRow(row) {
-const rowLower = row.map(v => (v || '').toLowerCase().trim());
-const hasDesc = rowLower.some(v => v.includes('description'));
-const hasSrNo = rowLower.some(v => v.includes('sr.no') || v.includes('sr no'));
-const hasQtyOrAmount = rowLower.some(v => v.includes('qty') || v.includes('quantity') || v.includes('amount'));
-return (hasDesc && (hasSrNo || hasQtyOrAmount));
-}
+const KNOWN_UNITS = ['cum', 'sqm', 'rm', 'nos', 'mt', 'kg', 'ltr', 'ls', 'set', 'rmt', 'sqft', 'cft', 'mtr', 'unit', 'job', 'lot', 'month', 'day', 'hr', 'ton', 'quintal', 'bag', 'pair', 'cbo', 'each', 'no', 'num', 'per', 'point', 'trip', 'visit', 'lump', 'seat', 'sq.m', 'rs/kg', 'm', 'mm', 'shift', 'mtr.', 'nos.', 'set.', 'sqm.', 'rmt.', 'each.'];
+const SUMMARY_KEYWORDS = ['estimated cost', 'contractors rebate', "contractor's rebate", 'gst 18', 'contract sum', 'contingency', 'contract cost', 'water charges', 'sewerage charges', 'supervision charges', 'total project cost', 'project cost', 'cost after rebate', 'physical contingency', 'cost contingency', 'grand total', 'net amount', 'taxable amount', 'total amount in rs'];
 
 function isUnit(val) {
 if (!val) return false;
@@ -127,11 +100,217 @@ return parseFloat(val.toString().replace(/,/g, '').replace(/Rs/gi, '').trim()) |
 function isDescriptionText(val) {
 if (!val) return false;
 const v = val.trim();
-if (v.length < 3) return false;
+if (v.length < 4) return false;
 if (/^\d+(\.\d+)?$/.test(v)) return false;
 if (isUnit(v)) return false;
-if (/^[A-Z]$/.test(v)) return false;
-return /[a-zA-Z]/.test(v) && v.length > 3;
+return /[a-zA-Z]/.test(v) && v.length > 4;
+}
+
+// ============ TEXT-BASED BOQ PARSER ============
+// Parses raw text extracted page by page from pdfplumber
+// Much more robust for complex PDFs with fragmented table cells
+
+function parseBoqFromText(pages) {
+const items = [];
+const allText = pages.join('\n');
+const lines = allText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+console.log(`Text parser: ${pages.length} pages, ${lines.length} lines total`);
+
+// Pattern 1: Look for lines that contain item code pattern followed by numbers
+// BOQ item line pattern: [Sr.No] [ItemCode] [Description...] [Unit] [Rate] [Qty] [Amount]
+// or spread across multiple lines ending with numeric values
+
+// Strategy: scan all lines, identify item boundaries by Sr.No pattern (digit at start)
+// then collect text until we find a line with 2+ numbers (rate, qty, amount)
+
+let currentItem = null;
+let currentDesc = '';
+let itemCounter = 0;
+const STOP_KEYWORDS = ['estimated cost', 'total amount', 'grand total', 'gst', 'contingency', 'supervision', 'total project'];
+
+for (let i = 0; i < lines.length; i++) {
+const line = lines[i];
+const lineLower = line.toLowerCase();
+
+// Stop at summary section
+if (STOP_KEYWORDS.some(k => lineLower.includes(k))) {
+if (currentItem && currentItem.desc.length > 10) {
+items.push(currentItem);
+currentItem = null;
+}
+continue;
+}
+
+// Skip measurement sheet lines (contain dimensions like Nos/Length/Width/Height pattern)
+if (lineLower.includes('length') && lineLower.includes('width') && lineLower.includes('height')) continue;
+if (line.match(/^\s*\d+\s+[\d.]+\s+[\d.]+\s+[\d.]+\s+[\d.]+\s*$/)) continue; // pure dimension row
+
+// Detect new item start: line starts with a number (Sr.No)
+const srNoMatch = line.match(/^(\d{1,3})\s+(.+)/);
+if (srNoMatch) {
+const srNo = parseInt(srNoMatch[1]);
+const rest = srNoMatch[2].trim();
+
+// Check if this looks like a BOQ item start
+// (sr no between 1-200, followed by item code or description)
+if (srNo >= 1 && srNo <= 200) {
+// Save previous item if valid
+if (currentItem && currentItem.desc.length > 10) {
+const parsed = tryParseItemNumbers(currentItem.desc, currentItem.numLines);
+if (parsed) {
+items.push({
+item: cleanDesc(currentItem.desc),
+unit: parsed.unit,
+quantity: parsed.qty,
+rate: parsed.rate,
+amount: parsed.amount,
+aiRate: parsed.rate > 0 ? classifyAndEstimate(currentItem.desc, parsed.unit, parsed.rate) : 0,
+needsRate: parsed.rate === 0
+});
+}
+}
+currentItem = { srNo, desc: rest, numLines: [] };
+continue;
+}
+}
+
+if (currentItem) {
+// Check if this line contains numbers that could be rate/qty/amount
+const numbers = extractNumbersFromLine(line);
+if (numbers.length >= 2) {
+currentItem.numLines.push({ line, numbers });
+} else if (isDescriptionText(line) && line.length > 5 && !line.match(/^[A-Z]{1,4}-[\d]/)) {
+// Description continuation
+currentItem.desc += ' ' + line;
+}
+}
+}
+
+// Save last item
+if (currentItem && currentItem.desc.length > 10) {
+const parsed = tryParseItemNumbers(currentItem.desc, currentItem.numLines);
+if (parsed) {
+items.push({
+item: cleanDesc(currentItem.desc),
+unit: parsed.unit,
+quantity: parsed.qty,
+rate: parsed.rate,
+amount: parsed.amount,
+aiRate: parsed.rate > 0 ? classifyAndEstimate(currentItem.desc, parsed.unit, parsed.rate) : 0,
+needsRate: parsed.rate === 0
+});
+}
+}
+
+console.log(`Text parser found ${items.length} items`);
+return items;
+}
+
+function extractNumbersFromLine(line) {
+const matches = line.match(/[\d,]+\.?\d*/g) || [];
+return matches.map(m => parseFloat(m.replace(/,/g, ''))).filter(n => !isNaN(n) && n > 0);
+}
+
+function tryParseItemNumbers(desc, numLines) {
+// Try to extract unit, qty, rate, amount from collected numeric lines
+// The last numeric line before a new item typically has: qty, rate, amount
+
+// Look for a unit in the description or numeric lines
+let unit = 'Nos';
+const unitMatch = desc.match(/\b(Sqm|Cum|Rmt|Nos|NOS|MT|Kg|Ltr|Mtr|Each|Set|Ls|Rm|No)\b/i);
+if (unitMatch) unit = unitMatch[1].toUpperCase();
+
+// Also check numeric lines for unit
+for (const nl of numLines) {
+const um = nl.line.match(/\b(Sqm|Cum|Rmt|Nos|NOS|MT|Kg|Ltr|Mtr|Each|Set|Ls|Rm|No)\b/i);
+if (um) { unit = um[1].toUpperCase(); break; }
+}
+
+// Find the line most likely to have qty, rate, amount
+// Typically: 3 numbers where last is largest (amount = qty * rate)
+let bestRate = 0, bestQty = 0, bestAmount = 0;
+
+for (const nl of numLines) {
+const nums = nl.numbers.filter(n => n > 0 && n < 100000000);
+if (nums.length >= 2) {
+// Try combinations: find 3 nums where n1 * n2 ≈ n3
+for (let a = 0; a < nums.length; a++) {
+for (let b = a + 1; b < nums.length; b++) {
+for (let c = b + 1; c < nums.length; c++) {
+const product1 = nums[a] * nums[b];
+const product2 = nums[a] * nums[c];
+const product3 = nums[b] * nums[c];
+if (Math.abs(product1 - nums[c]) / (nums[c] + 1) < 0.05) {
+bestQty = nums[a]; bestRate = nums[b]; bestAmount = nums[c]; break;
+}
+if (Math.abs(product2 - nums[b]) / (nums[b] + 1) < 0.05) {
+bestQty = nums[a]; bestRate = nums[c]; bestAmount = nums[b]; break;
+}
+if (Math.abs(product3 - nums[a]) / (nums[a] + 1) < 0.05) {
+bestQty = nums[b]; bestRate = nums[c]; bestAmount = nums[a]; break;
+}
+}
+if (bestRate > 0) break;
+}
+if (bestRate > 0) break;
+}
+
+// If no perfect match, take last 3 numbers as qty, rate, amount
+if (bestRate === 0 && nums.length >= 3) {
+const last3 = nums.slice(-3);
+bestQty = last3[0];
+bestRate = last3[1];
+bestAmount = last3[2];
+} else if (bestRate === 0 && nums.length === 2) {
+// Only rate and amount, derive qty
+bestRate = nums[0];
+bestAmount = nums[1];
+bestQty = bestRate > 0 ? Math.round((bestAmount / bestRate) * 100) / 100 : 0;
+}
+}
+if (bestRate > 0 && bestAmount > 0) break;
+}
+
+// Validate: amount should be approximately qty * rate (within 10%)
+if (bestQty > 0 && bestRate > 0 && bestAmount > 0) {
+const computed = bestQty * bestRate;
+if (Math.abs(computed - bestAmount) / bestAmount > 0.15) {
+// Mismatch - try to fix by deriving qty from amount/rate
+bestQty = Math.round((bestAmount / bestRate) * 100) / 100;
+}
+}
+
+return { unit, qty: bestQty, rate: bestRate, amount: bestAmount };
+}
+
+function cleanDesc(desc) {
+// Remove item codes (R3-CS-XX-YY patterns), excess whitespace, numbers at start
+return desc
+.replace(/^[A-Z0-9]+-[A-Z0-9]+-[A-Z0-9]+-?[A-Z0-9]*/g, '')
+.replace(/\s+/g, ' ')
+.trim()
+.substring(0, 300);
+}
+
+// ============ TABLE-BASED PARSER (for simple clean PDFs) ============
+function isHeaderRepeatRow(row) {
+const rowLower = row.map(v => (v || '').toLowerCase().trim());
+const hasDesc = rowLower.some(v => v.includes('description'));
+const hasSrNo = rowLower.some(v => v.includes('sr.no') || v.includes('sr no'));
+const hasQtyOrAmount = rowLower.some(v => v.includes('qty') || v.includes('quantity') || v.includes('amount'));
+return (hasDesc && (hasSrNo || hasQtyOrAmount));
+}
+
+function isNoteRow(row) {
+const firstCell = (row[0] || '').toLowerCase().trim();
+const rowStr = row.join(' ').toLowerCase().trim();
+return firstCell.startsWith('note') || rowStr.startsWith('note:') || rowStr.startsWith('note ');
+}
+
+function isSummaryRow(row) {
+const rowStr = row.join(' ').toLowerCase().trim();
+return SUMMARY_KEYWORDS.some(keyword => rowStr.includes(keyword));
 }
 
 function detectHeader(rows) {
@@ -142,7 +321,6 @@ const hasDesc = rowLower.some(v => v.includes('description') || v.includes('part
 const hasQty = rowLower.some(v => v.includes('qty') || v.includes('quantity'));
 const hasRate = rowLower.some(v => v === 'rate' || v.startsWith('rate'));
 const hasAmount = rowLower.some(v => v.includes('amount') || v === 'amt');
-
 if (hasDesc && (hasQty || hasRate || hasAmount)) {
 let descCol = -1, unitCol = -1, qtyCol = -1, rateCol = -1, amountCol = -1;
 for (let ci = 0; ci < rowLower.length; ci++) {
@@ -153,17 +331,7 @@ if ((v.includes('qty') || v.includes('quantity')) && qtyCol === -1) qtyCol = ci;
 if ((v === 'rate' || v === 'rate (rs)' || v.startsWith('rate')) && rateCol === -1) rateCol = ci;
 if ((v.includes('amount') || v === 'amt') && amountCol === -1) amountCol = ci;
 }
-// If qty not found, infer from position between rate and amount
-if (qtyCol === -1 && rateCol !== -1 && amountCol !== -1 && amountCol > rateCol + 1) {
-qtyCol = rateCol + 1;
-}
-// If qty still not found, scan adjacent cells for split headers
-if (qtyCol === -1) {
-for (let ci = 0; ci < rowLower.length - 1; ci++) {
-const combined = (rowLower[ci] + ' ' + rowLower[ci + 1]).trim();
-if (combined.includes('qty') || combined.includes('quantity')) { qtyCol = ci + 1; break; }
-}
-}
+if (qtyCol === -1 && rateCol !== -1 && amountCol !== -1 && amountCol > rateCol + 1) qtyCol = rateCol + 1;
 console.log(`Header at row ${i}: desc=${descCol} unit=${unitCol} qty=${qtyCol} rate=${rateCol} amount=${amountCol}`);
 return { headerRowIdx: i, descCol, unitCol, qtyCol, rateCol, amountCol };
 }
@@ -175,142 +343,17 @@ function isMeasurementSheet(rows, header) {
 const { rateCol, amountCol } = header;
 if (rateCol === -1 && amountCol === -1) return true;
 const headerRow = rows[header.headerRowIdx].map(v => (v || '').toLowerCase());
-const hasDimensions = headerRow.some(v => v.includes('length')) && headerRow.some(v => v.includes('width')) && headerRow.some(v => v.includes('height'));
-if (hasDimensions) return true;
-return false;
+return headerRow.some(v => v.includes('length')) && headerRow.some(v => v.includes('width')) && headerRow.some(v => v.includes('height'));
 }
 
-// ============ NUMERIC ANCHOR PARSER ============
-// For complex PDFs where pdfplumber splits items across many rows,
-// find rows with actual amounts → these anchor each item → collect description backwards
-function parseTableWithNumericAnchor(rows, header) {
-const { headerRowIdx, descCol, unitCol, qtyCol, rateCol, amountCol } = header;
-const boqItems = [];
-
-if (amountCol === -1 && rateCol === -1) return [];
-
-// Find all rows that have a meaningful amount or rate value
-const anchorRows = [];
-for (let i = headerRowIdx + 1; i < rows.length; i++) {
-const row = rows[i];
-if (!row || row.length === 0) continue;
-if (isSummaryRow(row)) break;
-if (isNoteRow(row)) continue;
-if (isHeaderRepeatRow(row)) continue;
-
-const rate = rateCol >= 0 && rateCol < row.length ? parseNumber(row[rateCol]) : 0;
-const amount = amountCol >= 0 && amountCol < row.length ? parseNumber(row[amountCol]) : 0;
-const qty = qtyCol >= 0 && qtyCol < row.length ? parseNumber(row[qtyCol]) : 0;
-
-// A valid item anchor has rate > 0 OR (amount > 0 and amount looks like a real item amount not just a sub-calculation)
-if (rate > 50 || (amount > 100 && rate >= 0)) {
-anchorRows.push({ rowIdx: i, rate, amount, qty, unit: unitCol >= 0 ? (row[unitCol] || '').trim() : '' });
-}
-}
-
-console.log(` -> Found ${anchorRows.length} numeric anchor rows`);
-
-// For each anchor, collect description from rows between previous anchor and this one
-for (let ai = 0; ai < anchorRows.length; ai++) {
-const anchor = anchorRows[ai];
-const prevAnchorRowIdx = ai > 0 ? anchorRows[ai - 1].rowIdx : headerRowIdx;
-const startSearchIdx = prevAnchorRowIdx + 1;
-const endSearchIdx = anchor.rowIdx;
-
-// Collect all text from desc column between previous anchor and this one
-const descParts = [];
-for (let ri = startSearchIdx; ri <= endSearchIdx; ri++) {
-const row = rows[ri];
-if (!row || row.length === 0) continue;
-if (isHeaderRepeatRow(row)) continue;
-
-// Collect from desc column
-const cellDesc = descCol >= 0 && descCol < row.length ? (row[descCol] || '').trim() : '';
-if (cellDesc && cellDesc.length > 2 && !isUnit(cellDesc)) {
-descParts.push(cellDesc);
-}
-
-// Also collect any other text cells that look like description
-for (let ci = 0; ci < row.length; ci++) {
-if (ci === descCol || ci === unitCol || ci === qtyCol || ci === rateCol || ci === amountCol) continue;
-const cellVal = (row[ci] || '').trim();
-if (cellVal.length > 8 && isDescriptionText(cellVal) && parseNumber(cellVal) === 0) {
-descParts.push(cellVal);
-}
-}
-}
-
-// Build description - join unique parts
-const seen = new Set();
-const uniqueParts = descParts.filter(p => { if (seen.has(p)) return false; seen.add(p); return true; });
-const finalDesc = uniqueParts.join(' ').substring(0, 300).trim();
-
-if (!finalDesc || finalDesc.length < 5) continue;
-
-let finalQty = anchor.qty;
-let finalRate = anchor.rate;
-let finalAmount = anchor.amount;
-let finalUnit = anchor.unit || 'Nos';
-
-if (finalAmount === 0 && finalQty > 0 && finalRate > 0) finalAmount = Math.round(finalQty * finalRate * 100) / 100;
-if (finalQty === 0 && finalRate > 0 && finalAmount > 0) finalQty = Math.round((finalAmount / finalRate) * 100) / 100;
-if (finalRate === 0 && finalQty > 0 && finalAmount > 0) finalRate = Math.round(finalAmount / finalQty);
-
-const aiRate = finalRate > 0 ? classifyAndEstimate(finalDesc, finalUnit, finalRate) : 0;
-
-boqItems.push({
-item: finalDesc,
-unit: finalUnit.toUpperCase(),
-quantity: Math.round(finalQty * 100) / 100,
-rate: Math.round(finalRate * 100) / 100,
-amount: Math.round(finalAmount * 100) / 100,
-aiRate,
-needsRate: false
-});
-}
-
-console.log(` -> Numeric anchor parser found ${boqItems.length} items`);
-return boqItems;
-}
-
-// ============ STANDARD TABLE PARSER (for clean tables) ============
-function parseTable(rows) {
+function parseTableClean(rows) {
 const header = detectHeader(rows);
 if (!header) return [];
-
-if (isMeasurementSheet(rows, header)) {
-console.log(' -> Skipped: Measurement Sheet style table');
-return [];
-}
+if (isMeasurementSheet(rows, header)) { console.log(' -> Skipped: Measurement Sheet'); return []; }
 
 const { headerRowIdx, descCol, unitCol, qtyCol, rateCol, amountCol } = header;
-console.log(` -> Header at row ${headerRowIdx}: desc=${descCol} unit=${unitCol} qty=${qtyCol} rate=${rateCol} amount=${amountCol}`);
+if (descCol === -1 || (rateCol === -1 && amountCol === -1)) { console.log(' -> Skipped: missing columns'); return []; }
 
-if (descCol === -1 || (rateCol === -1 && amountCol === -1)) {
-console.log(' -> Skipped: no description or no rate/amount column');
-return [];
-}
-
-// First try standard parsing
-const standardItems = parseTableStandard(rows, header);
-
-// If standard parsing got very few items relative to the table size,
-// try numeric anchor approach which handles fragmented cell structures
-const expectedMinItems = Math.floor(rows.length / 15); // rough estimate: ~15 rows per item
-if (standardItems.length < expectedMinItems && rows.length > 100) {
-console.log(` -> Standard parser got ${standardItems.length} items, trying numeric anchor for ${rows.length} rows`);
-const anchorItems = parseTableWithNumericAnchor(rows, header);
-if (anchorItems.length > standardItems.length) {
-console.log(` -> Numeric anchor found more items (${anchorItems.length}), using those`);
-return anchorItems;
-}
-}
-
-return standardItems;
-}
-
-function parseTableStandard(rows, header) {
-const { headerRowIdx, descCol, unitCol, qtyCol, rateCol, amountCol } = header;
 const boqItems = [];
 let pendingDescription = '';
 let parentDescription = '';
@@ -318,138 +361,44 @@ let parentDescription = '';
 for (let i = headerRowIdx + 1; i < rows.length; i++) {
 const row = rows[i];
 if (!row || row.length === 0) continue;
-if (isSummaryRow(row)) { console.log(` -> Summary at row ${i}, stopping`); break; }
+if (isSummaryRow(row)) break;
 if (isNoteRow(row)) continue;
 if (isHeaderRepeatRow(row)) continue;
 
-const rowStr = row.join(' ').trim();
-if (rowStr.length < 2) continue;
-
 const desc = descCol >= 0 && descCol < row.length ? (row[descCol] || '').trim() : '';
 const unit = unitCol >= 0 && unitCol < row.length ? (row[unitCol] || '').trim() : '';
-const qtyRaw = qtyCol >= 0 && qtyCol < row.length ? (row[qtyCol] || '').trim() : '';
-const rateRaw = rateCol >= 0 && rateCol < row.length ? (row[rateCol] || '').trim() : '';
-const amountRaw = amountCol >= 0 && amountCol < row.length ? (row[amountCol] || '').trim() : '';
-
-const qty = parseNumber(qtyRaw);
-const rate = parseNumber(rateRaw);
-const amount = parseNumber(amountRaw);
+const qty = parseNumber(qtyCol >= 0 && qtyCol < row.length ? row[qtyCol] : '');
+const rate = parseNumber(rateCol >= 0 && rateCol < row.length ? row[rateCol] : '');
+const amount = parseNumber(amountCol >= 0 && amountCol < row.length ? row[amountCol] : '');
 const hasNumericData = rate > 0 || amount > 0;
-
 const firstCell = (row[0] || '').trim();
 const isSubItem = /^[A-Za-z]$/.test(firstCell);
 const isMainItem = /^\d+$/.test(firstCell);
 
 if (hasNumericData) {
-let finalDesc = '';
-if (isSubItem) {
-const subDesc = desc || firstCell;
-finalDesc = parentDescription ? `${parentDescription} (${subDesc})` : subDesc;
-} else {
-finalDesc = pendingDescription || desc;
+let finalDesc = isSubItem ? (parentDescription ? `${parentDescription} (${desc || firstCell})` : (desc || firstCell)) : (pendingDescription || desc);
 if (isMainItem && (pendingDescription || desc)) parentDescription = pendingDescription || desc;
-}
-
-if (!finalDesc || finalDesc.length < 3 || !isDescriptionText(finalDesc)) {
-const altDesc = row.find(v => isDescriptionText(v || '') && (v || '').length > 5);
-if (altDesc) finalDesc = altDesc;
-}
-
+if (!finalDesc || finalDesc.length < 3 || !isDescriptionText(finalDesc)) { const alt = row.find(v => isDescriptionText(v || '') && (v || '').length > 5); if (alt) finalDesc = alt; }
 if (finalDesc && finalDesc.length > 3 && isDescriptionText(finalDesc)) {
-let finalQty = qty;
-let finalRate = rate;
-let finalAmount = amount;
-let finalUnit = unit || 'Nos';
-
-if (finalAmount === 0 && finalQty > 0 && finalRate > 0) finalAmount = Math.round(finalQty * finalRate * 100) / 100;
-if (finalQty === 0 && finalRate > 0 && finalAmount > 0) finalQty = Math.round((finalAmount / finalRate) * 100) / 100;
-if (finalRate === 0 && finalQty > 0 && finalAmount > 0) finalRate = Math.round(finalAmount / finalQty);
-
-const aiRate = finalRate > 0 ? classifyAndEstimate(finalDesc, finalUnit, finalRate) : 0;
-boqItems.push({ item: finalDesc.substring(0, 300), unit: finalUnit.toUpperCase(), quantity: Math.round(finalQty * 100) / 100, rate: Math.round(finalRate * 100) / 100, amount: Math.round(finalAmount * 100) / 100, aiRate, needsRate: false });
+let fQty = qty, fRate = rate, fAmount = amount, fUnit = unit || 'Nos';
+if (fAmount === 0 && fQty > 0 && fRate > 0) fAmount = Math.round(fQty * fRate * 100) / 100;
+if (fQty === 0 && fRate > 0 && fAmount > 0) fQty = Math.round((fAmount / fRate) * 100) / 100;
+if (fRate === 0 && fQty > 0 && fAmount > 0) fRate = Math.round(fAmount / fQty);
+const aiRate = fRate > 0 ? classifyAndEstimate(finalDesc, fUnit, fRate) : 0;
+boqItems.push({ item: finalDesc.substring(0, 300), unit: fUnit.toUpperCase(), quantity: Math.round(fQty * 100) / 100, rate: Math.round(fRate * 100) / 100, amount: Math.round(fAmount * 100) / 100, aiRate, needsRate: false });
 }
 if (!isSubItem) pendingDescription = '';
-
 } else if (desc && isDescriptionText(desc)) {
 if (isMainItem || (!isSubItem && !pendingDescription)) { pendingDescription = desc; parentDescription = desc; }
 else { pendingDescription += ' ' + desc; }
 } else if (!desc && !hasNumericData) {
 const anyDesc = row.find((v, idx) => idx !== 0 && isDescriptionText(v || '') && (v || '').length > 10);
-if (anyDesc && !isSubItem) {
-if (pendingDescription) pendingDescription += ' ' + anyDesc;
-else { pendingDescription = anyDesc; parentDescription = anyDesc; }
-}
+if (anyDesc && !isSubItem) { if (pendingDescription) pendingDescription += ' ' + anyDesc; else { pendingDescription = anyDesc; parentDescription = anyDesc; } }
 }
 }
 
-console.log(` -> Standard parser found ${boqItems.length} items`);
+console.log(` -> Clean table parser found ${boqItems.length} items`);
 return boqItems;
-}
-
-function looksLikeItemCode(val) {
-if (!val) return false;
-const v = val.trim().replace(/\s+/g, '');
-if (v.length < 5 || v.length > 25) return false;
-return /^[A-Z]\d/.test(v) && (v.match(/-/g) || []).length >= 1 && /[A-Z]/i.test(v);
-}
-
-function looksLikeSrNo(val) {
-if (!val) return false;
-return /^\d{1,4}$/.test(val.trim());
-}
-
-function fallbackParseInterleaved(allRows) {
-const items = [];
-let current = null;
-
-for (let i = 0; i < allRows.length; i++) {
-const row = allRows[i];
-if (!row || row.length === 0) continue;
-const nonEmpty = row.map(v => (v || '').trim()).filter(v => v.length > 0);
-if (nonEmpty.length === 0) continue;
-
-let srNoIdx = -1, codeIdx = -1;
-for (let ci = 0; ci < row.length; ci++) {
-const val = (row[ci] || '').trim();
-if (srNoIdx === -1 && looksLikeSrNo(val) && parseInt(val) > 0 && parseInt(val) < 1000) { srNoIdx = ci; }
-else if (srNoIdx !== -1 && codeIdx === -1 && looksLikeItemCode(val)) { codeIdx = ci; break; }
-}
-
-if (srNoIdx !== -1 && codeIdx !== -1 && codeIdx > srNoIdx) {
-if (current && current.description.length > 10) items.push(current);
-const descParts = [];
-for (let ci = codeIdx + 1; ci < row.length; ci++) { const v = (row[ci] || '').trim(); if (v.length > 0) descParts.push(v); }
-current = { srNo: row[srNoIdx].trim(), itemCode: row[codeIdx].trim().replace(/\s+/g, ''), description: descParts.join(' '), quantity: 0, unit: '', rate: 0, amount: 0, needsRate: true };
-continue;
-}
-
-if (current) {
-const rowStr = row.join(' ');
-const sayMatch = rowStr.match(/Say\s*\|?\s*([\d,]+\.?\d*)\s*\|?\s*([A-Za-z.]+)\s*$/i);
-if (sayMatch) { current.quantity = parseNumber(sayMatch[1]); current.unit = sayMatch[2].toUpperCase().replace(/\./g, ''); items.push(current); current = null; continue; }
-
-if (nonEmpty[0] && nonEmpty[0].toLowerCase() === 'say' && nonEmpty.length >= 2) {
-const lastVal = nonEmpty[nonEmpty.length - 1];
-const secondLastVal = nonEmpty[nonEmpty.length - 2];
-if (isUnit(lastVal) && parseNumber(secondLastVal) > 0) { current.quantity = parseNumber(secondLastVal); current.unit = lastVal.toUpperCase().replace(/\./g, ''); items.push(current); current = null; continue; }
-}
-
-if (current.description.length < 150 && nonEmpty.length <= 2) {
-const textVal = nonEmpty.find(v => isDescriptionText(v) && !looksLikeSrNo(v));
-if (textVal && !textVal.toLowerCase().includes('say') && parseNumber(textVal) === 0) current.description += ' ' + textVal;
-}
-}
-}
-
-if (current && current.description.length > 10) items.push(current);
-
-const validItems = items.filter(it => it.description.length > 10 && it.quantity > 0).map(it => ({
-item: it.description.substring(0, 300), unit: it.unit || 'NOS', quantity: it.quantity,
-rate: 0, amount: 0, aiRate: 0, needsRate: true, itemCode: it.itemCode
-}));
-
-console.log(`Fallback parser found ${validItems.length} items needing rate input`);
-return validItems;
 }
 
 function extractTablesWithPdfplumber(pdfPath) {
@@ -461,99 +410,66 @@ py.stdout.on('data', (data) => { stdout += data.toString(); });
 py.stderr.on('data', (data) => { stderr += data.toString(); });
 py.on('close', (code) => {
 if (code !== 0) { console.log('Python extraction error:', stderr.substring(0, 500)); reject(new Error('PDF extraction failed: ' + stderr.substring(0, 200))); return; }
-try { const tables = JSON.parse(stdout); resolve(tables); }
-catch (e) { console.log('Failed to parse Python output:', stdout.substring(0, 500)); reject(new Error('Failed to parse extraction output')); }
+try { const result = JSON.parse(stdout); resolve(result); }
+catch (e) { console.log('Failed to parse Python output:', stdout.substring(0, 200)); reject(new Error('Failed to parse extraction output')); }
 });
 py.on('error', (err) => { reject(new Error('Failed to start Python: ' + err.message)); });
 });
 }
 
-function processExtractedTables(tables) {
-console.log(`Pdfplumber extracted ${tables.length} tables`);
+function processExtracted(extracted) {
+// Handle both text mode and table mode output from extract.py
+if (extracted && extracted.mode === 'text' && extracted.pages) {
+console.log(`Text mode: ${extracted.pages.length} pages`);
+
+// Try text-based parsing first (better for complex PDFs)
+const textItems = parseBoqFromText(extracted.pages);
+console.log(`Text parser found ${textItems.length} items`);
+
+let tenderValue = 0;
+for (const page of extracted.pages) {
+const match = page.match(/(?:Total Amount|Estimated Cost)[^\d]*([\d,]+(?:\.\d+)?)/i);
+if (match) {
+const val = parseFloat(match[1].replace(/,/g, ''));
+if (val > tenderValue) tenderValue = val;
+}
+}
+
+const estimatedCostFromItems = textItems.reduce((sum, item) => sum + (item.amount || 0), 0);
+
+if (textItems.length > 10) {
+return { extractionSuccess: true, boqItems: textItems, tenderValue: estimatedCostFromItems > 0 ? estimatedCostFromItems : tenderValue };
+}
+return { extractionSuccess: false, boqItems: [], tenderValue };
+}
+
+// Fallback: treat as array of tables (old format)
+const tables = Array.isArray(extracted) ? extracted : [];
+console.log(`Table mode: ${tables.length} tables`);
 
 let allBoqItems = [];
 let tenderValue = 0;
 
-// Find all tables with BOQ headers
-const boqHeaderTables = [];
-const nonHeaderRows = [];
-
 for (let t = 0; t < tables.length; t++) {
 const rows = tables[t];
 if (!rows || rows.length === 0) continue;
-
 const hasBoqHeader = rows.some(row => {
 const rl = row.map(v => (v || '').toLowerCase());
 return rl.some(v => v.includes('description') || v.includes('particulars')) &&
 rl.some(v => v.includes('qty') || v.includes('quantity') || v.includes('rate') || v.includes('amount'));
 });
-
 if (hasBoqHeader) {
-boqHeaderTables.push({ tableIdx: t, rows });
-} else {
-nonHeaderRows.push(...rows);
+console.log(`Processing table ${t} (${rows.length} rows)`);
+const items = parseTableClean(rows);
+if (items.length > 0) allBoqItems = allBoqItems.concat(items);
 }
-
 for (const row of rows) {
-for (const val of row) {
-const amount = extractRupeeAmount(val || '');
-if (amount > tenderValue) tenderValue = amount;
+for (const val of row) { const amount = extractRupeeAmount(val || ''); if (amount > tenderValue) tenderValue = amount; }
 }
 }
-}
-
-console.log(`Found ${boqHeaderTables.length} tables with BOQ headers`);
-boqHeaderTables.sort((a, b) => a.tableIdx - b.tableIdx);
-
-for (let bi = 0; bi < boqHeaderTables.length; bi++) {
-const startIdx = boqHeaderTables[bi].tableIdx;
-const endIdx = bi + 1 < boqHeaderTables.length ? boqHeaderTables[bi + 1].tableIdx : tables.length;
-
-// Combine this header table with all non-measurement-sheet continuation tables
-let combinedRows = [...boqHeaderTables[bi].rows];
-for (let t = startIdx + 1; t < endIdx; t++) {
-if (!tables[t] || tables[t].length === 0) continue;
-// Skip measurement sheets (have Length/Width/Height headers)
-const rowsLower = tables[t].map(row => row.map(v => (v || '').toLowerCase()));
-const hasDimensions = rowsLower.some(row => row.some(v => v.includes('length')) && row.some(v => v.includes('width')));
-// Skip tables that have another BOQ header (will be processed separately)
-const hasAnotherBOQHeader = tables[t].some(row => {
-const rl = row.map(v => (v || '').toLowerCase());
-return rl.some(v => v.includes('description')) && rl.some(v => v.includes('rate') || v.includes('amount'));
-});
-if (!hasDimensions && !hasAnotherBOQHeader) {
-combinedRows = combinedRows.concat(tables[t]);
-}
-}
-
-console.log(`Processing BOQ table ${startIdx} with ${combinedRows.length} combined rows`);
-const items = parseTable(combinedRows);
-if (items.length > 0) {
-allBoqItems = allBoqItems.concat(items);
-console.log(` -> Got ${items.length} items from BOQ table ${startIdx}`);
-}
-}
-
-console.log('Clean-table items:', allBoqItems.length);
-
-// Run fallback only if we got very few items
-if (allBoqItems.length < 50 && nonHeaderRows.length > 0) {
-console.log('Running fallback on', nonHeaderRows.length, 'unmatched rows');
-const fallbackItems = fallbackParseInterleaved(nonHeaderRows);
-const existingDescs = new Set(allBoqItems.map(it => it.item.substring(0, 60).toLowerCase()));
-const newFallbackItems = fallbackItems.filter(it => !existingDescs.has(it.item.substring(0, 60).toLowerCase()));
-console.log('Fallback items added (after dedup):', newFallbackItems.length);
-allBoqItems = allBoqItems.concat(newFallbackItems);
-}
-
-console.log('Total items across all tables:', allBoqItems.length);
-console.log('Tender value found:', tenderValue);
 
 const estimatedCostFromItems = allBoqItems.reduce((sum, item) => sum + (item.amount || 0), 0);
-
-if (allBoqItems.length > 0) {
-return { extractionSuccess: true, boqItems: allBoqItems, tenderValue: estimatedCostFromItems > 0 ? estimatedCostFromItems : tenderValue };
-}
+if (allBoqItems.length > 0) return { extractionSuccess: true, boqItems: allBoqItems, tenderValue: estimatedCostFromItems > 0 ? estimatedCostFromItems : tenderValue };
 return { extractionSuccess: false, boqItems: [], tenderValue };
 }
 
@@ -625,9 +541,9 @@ console.log('Type:', tenderType, '| Title:', tenderTitle.substring(0, 50));
 tempPdfPath = path.join(os.tmpdir(), `boq_${Date.now()}.pdf`);
 fs.writeFileSync(tempPdfPath, pdfBuffer);
 
-console.log('Extracting tables with pdfplumber...');
-const tables = await extractTablesWithPdfplumber(tempPdfPath);
-const parsed = processExtractedTables(tables);
+console.log('Extracting with pdfplumber...');
+const extracted = await extractTablesWithPdfplumber(tempPdfPath);
+const parsed = processExtracted(extracted);
 
 console.log('Result - success:', parsed.extractionSuccess, 'items:', parsed.boqItems?.length, 'value:', parsed.tenderValue);
 
