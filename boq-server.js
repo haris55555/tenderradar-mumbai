@@ -608,5 +608,8 @@ res.writeHead(404); res.end(JSON.stringify({ error: 'Not found' }));
 });
 
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => console.log(`BOQ service running on port ${PORT}`));
+server.listen(PORT, () => {
+console.log(`BOQ service running on port ${PORT}`);
+setInterval(() => { console.log('keep-alive ping'); }, 840000);
+});
 
