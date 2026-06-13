@@ -1,1 +1,1 @@
-import sys,json,pdfplumber;pdf=pdfplumber.open(sys.argv[1]);pages=[p.extract_text() or '' for p in pdf.pages];tables=[t for p in pdf.pages for t in (p.extract_tables() or [])];pdf.close();print(json.dumps({'mode':'both','pages':pages,'tables':tables}))
+import sys,json,pdfplumber;pdf=pdfplumber.open(sys.argv[1]);n=len(pdf.pages);out={'mode':'text','pages':[p.extract_text() or '' for p in pdf.pages]} if n>30 else {'mode':'tables','tables':[t for p in pdf.pages for t in (p.extract_tables() or [])]};pdf.close();print(json.dumps(out))
