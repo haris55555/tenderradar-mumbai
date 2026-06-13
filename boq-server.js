@@ -6,7 +6,6 @@ import os from 'os';
 
 const GEMINI_KEY = process.env.GEMINI_KEY || '';
 
-// ============ AI ESTIMATED RATE — UNIVERSAL CLASSIFIER ============
 function classifyAndEstimate(description, unit, pdfRate) {
 const d = (description || '').toLowerCase();
 const u = (unit || '').toLowerCase().replace(/\./g, '');
@@ -15,7 +14,6 @@ if ((d.includes('reinforcement') || d.includes('steel bar') || d.includes('fe500
 (u === 'mt' || u.includes('mt'))) {
 return Math.round(63500 + 2800);
 }
-
 if ((d.includes('concrete') || d.includes(' cc ') || d.includes('r.c.c') || d.includes('rcc') || d.includes('p/l') || d.includes('rmc')) &&
 (u === 'cum' || u.includes('cum'))) {
 if (d.includes('m-40') || d.includes('m40') || d.includes('m-45') || d.includes('m45')) return Math.round(pdfRate * 0.93);
@@ -23,62 +21,50 @@ if (d.includes('m-25') || d.includes('m25') || d.includes('m-30') || d.includes(
 if (d.includes('m-15') || d.includes('m15') || d.includes('m-10') || d.includes('m10') || d.includes('lean concrete') || d.includes('pcc')) return Math.round(pdfRate * 0.88);
 return Math.round(pdfRate * 0.90);
 }
-
 if (d.includes('excavat') && (u === 'cum' || u.includes('cum'))) {
 if (d.includes('chisel') || d.includes('breaker') || d.includes('hard rock') || d.includes('pneumatic')) return Math.round(pdfRate * 0.78);
 return Math.round(pdfRate * 0.65);
 }
-
 if ((d.includes('earth work') || d.includes('p/l earth') || d.includes('embankment') || d.includes('filling') || d.includes('top layer of earth') || d.includes('stabilised soil')) &&
 (u === 'cum' || u.includes('cum') || u === 'sqm')) {
 return Math.round(pdfRate * 0.70);
 }
-
 if ((d.includes('brick') || d.includes('masonry') || d.includes('rubble')) && (u === 'cum' || u.includes('cum'))) {
 return Math.round(pdfRate * 0.88);
 }
-
 if ((d.includes('centering') || d.includes('shuttering') || d.includes('formwork') || d.includes('form work')) &&
 (u === 'sqm' || u.includes('sqm'))) {
 return Math.round(pdfRate * 0.85);
 }
-
 if (d.includes('sub base') || d.includes('subbase') || d.includes('wet mix macadam') || d.includes('wmm') ||
 d.includes('gsb') || d.includes('granular') || d.includes('crushed stone') || d.includes('rubble soling') ||
 d.includes('metal gradation')) {
 return Math.round(pdfRate * 0.80);
 }
-
 if (d.includes('bitumen') || d.includes('bituminous') || d.includes('dbm') || d.includes('premix') ||
 d.includes('tack coat') || d.includes('prime coat') || d.includes('mastic') || d.includes('asphalt')) {
 return Math.round(pdfRate * 0.87);
 }
-
 if (d.includes('pipe') && (u === 'rmt' || u === 'm' || u.includes('mtr') || u === 'rm')) {
 if (d.includes('hdpe') || d.includes('di pipe') || d.includes('m.s') || d.includes('ms pipe')) return Math.round(pdfRate * 0.85);
 return Math.round(pdfRate * 0.78);
 }
-
 if ((d.includes('manhole') || d.includes('cover') || d.includes('frame') || d.includes('chamber') || d.includes('grating')) &&
 (u === 'no' || u === 'nos' || u === 'each')) {
 if (d.includes('c.i') || d.includes('ci ') || d.includes('cast iron') || d.includes('m.s')) return Math.round(pdfRate * 0.82);
 return Math.round(pdfRate * 0.75);
 }
-
 if ((d.includes('kerb') || d.includes('water dished') || d.includes('water table') || d.includes('tree guard')) &&
 (u === 'rmt' || u.includes('rmt') || u === 'rm')) {
 return Math.round(pdfRate * 0.78);
 }
-
 if ((d.includes('railing') || d.includes('bollard') || d.includes('grill') || d.includes('fabricat') ||
 d.includes('sign') || d.includes('board')) && d.includes('m.s')) {
 return Math.round(pdfRate * 0.75);
 }
-
 if (d.includes('road marking') || d.includes('thermoplastic') || d.includes('retro reflective') || d.includes('road stud')) {
 return Math.round(pdfRate * 0.80);
 }
-
 if (d.includes('cable') || d.includes('conduit') || d.includes('panel') || d.includes('earthing') ||
 d.includes('electrical') || d.includes('xlpe') || d.includes('mcb') || d.includes('elcb') ||
 d.includes('switchfuse') || d.includes('distribution board') || d.includes('wiring') ||
@@ -86,31 +72,25 @@ d.includes('tubelight') || d.includes('fixture') || d.includes('fan') || d.inclu
 d.includes('tpn') || d.includes('led')) {
 return Math.round(pdfRate * 0.85);
 }
-
 if (d.includes('plaster') || d.includes('flooring') || d.includes('tactile') || d.includes('tile') ||
 d.includes('paint') || d.includes('stencil')) {
 return Math.round(pdfRate * 0.82);
 }
-
 if (d.includes('demolition') || d.includes('cutting') || d.includes('removing') || d.includes('dismantl') ||
 d.includes('extra')) {
 return Math.round(pdfRate * 0.70);
 }
-
 if (d.includes('soak pit') || d.includes('dowel') || d.includes('joint') || d.includes('thermocole') ||
 d.includes('admixture') || d.includes('waterproof')) {
 return Math.round(pdfRate * 0.80);
 }
-
 if (d.includes('survey') || d.includes('testing') || d.includes('transplant') || d.includes('cutting down of tree') ||
 d.includes('publicity') || d.includes('cbo') || d.includes('procuring')) {
 return Math.round(pdfRate * 0.75);
 }
-
 if (d.includes('shoring') || d.includes('strutting')) {
 return Math.round(pdfRate * 0.75);
 }
-
 return Math.round(pdfRate * 0.85);
 }
 
@@ -163,10 +143,10 @@ let template = [];
 if (t.includes('road') || t.includes('infrastructure') || t.includes('footpath')) {
 template = [
 { item: 'Earthwork Excavation in all types of soil including disposal', unit: 'Cum', ratePct: 0.05, rate: 380 },
-{ item: 'Granular Sub Base (GSB) 200mm compacted thickness', unit: 'Sqm', ratePct: 0.14, rate: 450 },
-{ item: 'Wet Mix Macadam (WMM) 150mm compacted thickness', unit: 'Sqm', ratePct: 0.19, rate: 620 },
-{ item: 'Dense Bituminous Macadam (DBM) 50mm thick', unit: 'Sqm', ratePct: 0.30, rate: 780 },
-{ item: 'Bituminous Concrete (BC) 25mm wearing course', unit: 'Sqm', ratePct: 0.22, rate: 520 },
+{ item: 'Granular Sub Base GSB 200mm compacted thickness', unit: 'Sqm', ratePct: 0.14, rate: 450 },
+{ item: 'Wet Mix Macadam WMM 150mm compacted thickness', unit: 'Sqm', ratePct: 0.19, rate: 620 },
+{ item: 'Dense Bituminous Macadam DBM 50mm thick', unit: 'Sqm', ratePct: 0.30, rate: 780 },
+{ item: 'Bituminous Concrete BC 25mm wearing course', unit: 'Sqm', ratePct: 0.22, rate: 520 },
 { item: 'Precast RCC Kerb Stone 230x300mm with foundation', unit: 'Rm', ratePct: 0.10, rate: 950 },
 ];
 } else if (t.includes('sewer') || t.includes('sewerage') || t.includes('drain')) {
@@ -214,10 +194,7 @@ return { item: item.item, unit: item.unit, quantity, rate: item.rate, amount, ai
 }
 
 function extractRupeeAmount(text) {
-const patterns = [
-/₹\s*([\d,]+(?:\.\d+)?)/,
-/Rs\.?\s*([\d,]+(?:\.\d+)?)/i,
-];
+const patterns = [/Rs\.?\s*([\d,]+(?:\.\d+)?)/i];
 for (const pattern of patterns) {
 const match = text.match(pattern);
 if (match) {
@@ -274,16 +251,9 @@ const v = val.toLowerCase().trim().replace(/\./g, '');
 return KNOWN_UNITS.includes(v) || KNOWN_UNITS.includes(val.toLowerCase().trim());
 }
 
-function isNumber(val) {
-if (!val) return false;
-const cleaned = val.toString().replace(/,/g, '').replace(/₹/g, '').trim();
-const n = parseFloat(cleaned);
-return !isNaN(n) && cleaned.length > 0;
-}
-
 function parseNumber(val) {
 if (!val) return 0;
-return parseFloat(val.toString().replace(/,/g, '').replace(/₹/g, '').trim()) || 0;
+return parseFloat(val.toString().replace(/,/g, '').replace(/Rs/gi, '').trim()) || 0;
 }
 
 function isDescriptionText(val) {
@@ -307,7 +277,15 @@ const amount = amountCol >= 0 && amountCol < row.length ? parseNumber(row[amount
 if (qty > 0 || rate > 0 || amount > 0) return false;
 
 const val = nonEmptyVals[0];
-return isDescriptionText(val) && val.length < 25;
+const trimmed = val.trim();
+
+// Only treat as category header if short AND no sentence structure (no commas, periods, lowercase words)
+const looksLikeCategoryHeader = trimmed.length < 25 &&
+!trimmed.includes(',') &&
+!trimmed.includes('.') &&
+!/[a-z]{4,}/.test(trimmed); // no lowercase words of 4+ chars = not a sentence fragment
+
+return looksLikeCategoryHeader;
 }
 
 function detectHeader(rows) {
@@ -329,6 +307,24 @@ if ((v.includes('qty') || v.includes('quantity')) && qtyCol === -1) qtyCol = ci;
 if ((v === 'rate' || v === 'rate (rs)' || v.startsWith('rate')) && rateCol === -1) rateCol = ci;
 if ((v.includes('amount') || v === 'amt') && amountCol === -1) amountCol = ci;
 }
+
+// If qty not found, try scanning adjacent cells for split "Total Quantity" header
+if (qtyCol === -1) {
+for (let ci = 0; ci < rowLower.length - 1; ci++) {
+const combined = (rowLower[ci] + ' ' + rowLower[ci + 1]).trim();
+if (combined.includes('qty') || combined.includes('quantity')) {
+qtyCol = ci + 1; // take the second cell as qty column
+break;
+}
+}
+}
+
+// If qty still not found, try finding it by position between rate and amount
+if (qtyCol === -1 && rateCol !== -1 && amountCol !== -1 && amountCol > rateCol + 1) {
+qtyCol = rateCol + 1;
+}
+
+console.log(`Header at row ${i}: desc=${descCol} unit=${unitCol} qty=${qtyCol} rate=${rateCol} amount=${amountCol}`);
 return { headerRowIdx: i, descCol, unitCol, qtyCol, rateCol, amountCol };
 }
 }
@@ -338,13 +334,11 @@ return null;
 function isMeasurementSheet(rows, header) {
 const { rateCol, amountCol } = header;
 if (rateCol === -1 && amountCol === -1) return true;
-
 const headerRow = rows[header.headerRowIdx].map(v => (v || '').toLowerCase());
 const hasDimensions = headerRow.some(v => v.includes('length')) &&
 headerRow.some(v => v.includes('width')) &&
 headerRow.some(v => v.includes('height'));
 if (hasDimensions) return true;
-
 return false;
 }
 
@@ -450,11 +444,18 @@ needsRate: false
 if (!isSubItem) pendingDescription = '';
 
 } else if (desc && isDescriptionText(desc)) {
+// Description continuation row - append to pending
 if (isMainItem || (!isSubItem && !pendingDescription)) {
 pendingDescription = desc;
 parentDescription = desc;
-} else if (pendingDescription && !isSubItem) {
+} else {
+// Append continuation text to pending description
+if (pendingDescription) {
 pendingDescription += ' ' + desc;
+} else {
+pendingDescription = desc;
+parentDescription = desc;
+}
 }
 } else if (!desc && !hasNumericData) {
 const anyDesc = row.find((v, idx) => idx !== 0 && isDescriptionText(v || '') && (v || '').length > 10);
@@ -469,7 +470,6 @@ console.log(` -> Found ${boqItems.length} items in this table`);
 return boqItems;
 }
 
-// ============ FALLBACK PARSER for interleaved BOQ+Measurement Sheet PDFs ============
 function looksLikeItemCode(val) {
 if (!val) return false;
 const v = val.trim().replace(/\s+/g, '');
@@ -540,7 +540,7 @@ continue;
 if (nonEmpty[0] && nonEmpty[0].toLowerCase() === 'say' && nonEmpty.length >= 2) {
 const lastVal = nonEmpty[nonEmpty.length - 1];
 const secondLastVal = nonEmpty[nonEmpty.length - 2];
-if (isUnit(lastVal) && isNumber(secondLastVal)) {
+if (isUnit(lastVal) && parseNumber(secondLastVal) > 0) {
 current.quantity = parseNumber(secondLastVal);
 current.unit = lastVal.toUpperCase().replace(/\./g, '');
 items.push(current);
@@ -579,7 +579,6 @@ console.log(`Fallback parser found ${validItems.length} items needing rate input
 return validItems;
 }
 
-// ============ PDFPLUMBER EXTRACTION via Python subprocess ============
 function extractTablesWithPdfplumber(pdfPath) {
 return new Promise((resolve, reject) => {
 const py = spawn('python3', [path.join(process.cwd(), 'extract.py'), pdfPath]);
@@ -629,7 +628,6 @@ rl.some(v => v.includes('qty') || v.includes('quantity') || v.includes('rate') |
 
 if (hasBoqHeader) {
 console.log(`Processing table ${t} (${rows.length} rows) as potential BOQ table`);
-console.log('Table ${t} rows 0-3:' ,JSON.stringify(rows.slice(0,4)));  
 const items = parseTable(rows);
 if (items.length > 0) {
 allBoqItems = allBoqItems.concat(items);
@@ -746,7 +744,6 @@ if (typeMatch) tenderType = typeMatch[1];
 if (titleMatch) tenderTitle = titleMatch[1];
 console.log('Type:', tenderType, '| Title:', tenderTitle.substring(0, 50));
 
-// Write PDF to temp file for pdfplumber
 tempPdfPath = path.join(os.tmpdir(), `boq_${Date.now()}.pdf`);
 fs.writeFileSync(tempPdfPath, pdfBuffer);
 
@@ -779,10 +776,10 @@ const bidReason = await getBidReason(tenderType, deptEstimate, profitMargin);
 
 const needsRateCount = boqItems.filter(it => it.needsRate).length;
 const message = pdfRead
-? `✅ Real BOQ extracted from uploaded PDF — ${boqItems.length} items found${needsRateCount > 0 ? ` (${needsRateCount} need rate input)` : ''}`
+? `Real BOQ extracted from uploaded PDF - ${boqItems.length} items found${needsRateCount > 0 ? ` (${needsRateCount} need rate input)` : ''}`
 : parsed.tenderValue > 100000
-? `📄 Real tender value ₹${(parsed.tenderValue / 10000000).toFixed(2)} Cr extracted — BOQ estimated using 2026 Mumbai rates`
-: '📊 BOQ estimated using 2026 Mumbai market rates';
+? `Real tender value Rs ${(parsed.tenderValue / 10000000).toFixed(2)} Cr extracted - BOQ estimated using 2026 Mumbai rates`
+: 'BOQ estimated using 2026 Mumbai market rates';
 
 res.writeHead(200, { 'Content-Type': 'application/json' });
 res.end(JSON.stringify({
