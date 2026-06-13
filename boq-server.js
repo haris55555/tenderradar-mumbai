@@ -307,7 +307,7 @@ const amount = amountCol >= 0 && amountCol < row.length ? parseNumber(row[amount
 if (qty > 0 || rate > 0 || amount > 0) return false;
 
 const val = nonEmptyVals[0];
-return isDescriptionText(val) && val.length < 40;
+return isDescriptionText(val) && val.length < 25;
 }
 
 function detectHeader(rows) {
