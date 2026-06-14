@@ -357,7 +357,8 @@ const srNo = parseInt(srNoMatch[1]);
 const rest = srNoMatch[2].trim();
 if (srNo >= 1 && srNo <= 150 && rest.length > 5) {
 saveCurrentItem();
-currentItem = { srNo, desc: rest, numLines: [] };
+currentItem = { srNo, desc: rest, numLines: [{ line: rest, numbers: extractNumbersFromLine(rest) }] };
+
 continue;
 }
 }
