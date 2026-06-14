@@ -217,9 +217,19 @@ const rowStr = row.join(' ').toLowerCase().trim();
 return SUMMARY_KEYWORDS.some(keyword => rowStr.includes(keyword));
 }
 
+function isMeasurementSheetTable(rows) {
+for (let i = 0; i < Math.min(rows.length, 5); i++) {
+if (!Array.isArray(rows[i])) continue;
+const rl = rows[i].map(v => (v || '').toLowerCase());
+if (rl.some(v => v.includes('length')) && rl.some(v => v.includes('width')) && rl.some(v => v.includes('height'))) return true;
+}
+return false;
+}
+
 function detectHeader(rows) {
 for (let i = 0; i < Math.min(rows.length, 15); i++) {
 const row = rows[i];
+if (!Array.isArray(row)) continue;
 const rowLower = row.map(v => (v || '').toLowerCase().trim());
 const hasDesc = rowLower.some(v => v.includes('description') || v.includes('particulars'));
 const hasQty = rowLower.some(v => v.includes('qty') || v.includes('quantity'));
@@ -243,18 +253,9 @@ return { headerRowIdx: i, descCol, unitCol, qtyCol, rateCol, amountCol };
 return null;
 }
 
-function isMeasurementSheetTable(rows) {
-for (let i = 0; i < Math.min(rows.length, 5); i++) {
-const rl = rows[i].map(v => (v || '').toLowerCase());
-if (rl.some(v => v.includes('length')) && rl.some(v => v.includes('width')) && rl.some(v => v.includes('height'))) return true;
-}
-return false;
-}
-
 function parseTableClean(rows, stateMultiplier) {
 const header = detectHeader(rows);
 if (!header) { console.log(' -> No header found'); return []; }
-
 const { headerRowIdx, descCol, unitCol, qtyCol, rateCol, amountCol } = header;
 if (descCol === -1 || (rateCol === -1 && amountCol === -1)) { console.log(' -> Skipped: missing columns'); return []; }
 
@@ -264,9 +265,8 @@ let parentDescription = '';
 const m = stateMultiplier || 1.0;
 
 for (let i = headerRowIdx + 1; i < rows.length; i++) {
-  if (i < headerRowIdx +50) console.log('Row ${i}: [${(rows[i] || []).join('|')}]');
 const row = rows[i];
-if (!row || row.length === 0) continue;
+if (!row || !Array.isArray(row) || row.length === 0) continue;
 if (isSummaryRow(row)) { console.log(` -> Summary row at ${i}, stopping`); break; }
 if (isNoteRow(row)) continue;
 if (isHeaderRepeatRow(row)) continue;
@@ -311,43 +311,44 @@ else { pendingDescription = anyDesc; parentDescription = anyDesc; }
 }
 }
 
-console.log(` -> Rows processed: ${rows.length}, items found: ${boqItems.length}, pending at end: "${pendingDescription.substring(0,50)}"`);
 console.log(` -> parseTableClean found ${boqItems.length} items`);
-
 return boqItems;
 }
 
-// ============ TEXT-BASED BOQ PARSER (for large complex PDFs) ============
 function parseBoqFromText(pages, stateMultiplier) {
 const items = [];
 const allText = pages.join('\n');
 const lines = allText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 const m = stateMultiplier || 1.0;
-console.log(`Text parser: ${pages.length} pages, ${lines.length} lines total`);
+console.log(`Text parser: ${pages.length} pages, ${lines.length} lines`);
 
 const STOP_KEYWORDS = ['estimated cost', 'total amount', 'grand total', 'gst', 'contingency', 'supervision', 'total project'];
-const MEASUREMENT_ROOM_KEYWORDS = ['drk office', 'security room', 'pump room', 'rest room', 'prayer hall', 'wood storage', 'washing area', 'fire escape', 'lift lobby'];
+const SKIP_STARTS = ['drk office', 'security room', 'pump room', 'rest room', 'prayer hall', 'wood storage', 'washing area', 'fire escape', 'lift lobby'];
 
 let currentItem = null;
+
+const saveCurrentItem = () => {
+if (currentItem && currentItem.desc.length > 10) {
+const parsed = tryParseItemNumbers(currentItem.desc, currentItem.numLines);
+if (parsed && parsed.rate > 0) {
+items.push({
+item: cleanDesc(currentItem.desc), unit: parsed.unit,
+quantity: parsed.qty, rate: parsed.rate, amount: parsed.amount,
+aiRate: classifyAndEstimate(currentItem.desc, parsed.unit, parsed.rate, m),
+needsRate: false
+});
+}
+}
+currentItem = null;
+};
 
 for (let i = 0; i < lines.length; i++) {
 const line = lines[i];
 const lineLower = line.toLowerCase();
-
-if (STOP_KEYWORDS.some(k => lineLower.includes(k))) {
-if (currentItem && currentItem.desc.length > 10) {
-const parsed = tryParseItemNumbers(currentItem.desc, currentItem.numLines);
-if (parsed && parsed.rate > 0) {
-items.push({ item: cleanDesc(currentItem.desc), unit: parsed.unit, quantity: parsed.qty, rate: parsed.rate, amount: parsed.amount, aiRate: classifyAndEstimate(currentItem.desc, parsed.unit, parsed.rate, m), needsRate: false });
-}
-currentItem = null;
-}
-continue;
-}
-
+if (STOP_KEYWORDS.some(k => lineLower.includes(k))) { saveCurrentItem(); continue; }
 if (lineLower.includes('length') && lineLower.includes('width') && lineLower.includes('height')) continue;
-if (MEASUREMENT_ROOM_KEYWORDS.some(k => lineLower.startsWith(k))) continue;
-if (lineLower.startsWith('say ') || lineLower === 'say' || lineLower.includes('add 10%') || lineLower.includes('add 5%')) continue;
+if (SKIP_STARTS.some(k => lineLower.startsWith(k))) continue;
+if (lineLower.startsWith('say ') || lineLower === 'say') continue;
 if (line.match(/^[\d\s.,]+$/) && line.trim().split(/\s+/).length <= 5) continue;
 
 const srNoMatch = line.match(/^(\d{1,3})\s+(.+)/);
@@ -355,12 +356,7 @@ if (srNoMatch) {
 const srNo = parseInt(srNoMatch[1]);
 const rest = srNoMatch[2].trim();
 if (srNo >= 1 && srNo <= 150 && rest.length > 5) {
-if (currentItem && currentItem.desc.length > 10) {
-const parsed = tryParseItemNumbers(currentItem.desc, currentItem.numLines);
-if (parsed && parsed.rate > 0) {
-items.push({ item: cleanDesc(currentItem.desc), unit: parsed.unit, quantity: parsed.qty, rate: parsed.rate, amount: parsed.amount, aiRate: classifyAndEstimate(currentItem.desc, parsed.unit, parsed.rate, m), needsRate: false });
-}
-}
+saveCurrentItem();
 currentItem = { srNo, desc: rest, numLines: [] };
 continue;
 }
@@ -372,13 +368,7 @@ if (numbers.length >= 2) currentItem.numLines.push({ line, numbers });
 else if (isDescriptionText(line) && line.length > 5) currentItem.desc += ' ' + line;
 }
 }
-
-if (currentItem && currentItem.desc.length > 10) {
-const parsed = tryParseItemNumbers(currentItem.desc, currentItem.numLines);
-if (parsed && parsed.rate > 0) {
-items.push({ item: cleanDesc(currentItem.desc), unit: parsed.unit, quantity: parsed.qty, rate: parsed.rate, amount: parsed.amount, aiRate: classifyAndEstimate(currentItem.desc, parsed.unit, parsed.rate, m), needsRate: false });
-}
-}
+saveCurrentItem();
 
 console.log(`Text parser found ${items.length} items`);
 return items;
@@ -401,16 +391,17 @@ let bestRate = 0, bestQty = 0, bestAmount = 0;
 for (const nl of numLines) {
 const nums = nl.numbers.filter(n => n > 0 && n < 100000000);
 if (nums.length >= 3) {
-for (let a = 0; a < nums.length - 2; a++) {
-for (let b = a + 1; b < nums.length - 1; b++) {
-for (let c = b + 1; c < nums.length; c++) {
-if (Math.abs(nums[a] * nums[b] - nums[c]) / (nums[c] + 1) < 0.05) { bestQty = nums[a]; bestRate = nums[b]; bestAmount = nums[c]; break; }
+let found = false;
+for (let a = 0; a < nums.length - 2 && !found; a++) {
+for (let b = a + 1; b < nums.length - 1 && !found; b++) {
+for (let c = b + 1; c < nums.length && !found; c++) {
+if (Math.abs(nums[a] * nums[b] - nums[c]) / (nums[c] + 1) < 0.05) {
+bestQty = nums[a]; bestRate = nums[b]; bestAmount = nums[c]; found = true;
 }
-if (bestRate > 0) break;
 }
-if (bestRate > 0) break;
 }
-if (bestRate === 0) { const last3 = nums.slice(-3); bestQty = last3[0]; bestRate = last3[1]; bestAmount = last3[2]; }
+}
+if (!found) { const last3 = nums.slice(-3); bestQty = last3[0]; bestRate = last3[1]; bestAmount = last3[2]; }
 } else if (nums.length === 2) {
 bestRate = nums[0]; bestAmount = nums[1];
 bestQty = bestRate > 0 ? Math.round((bestAmount / bestRate) * 100) / 100 : 0;
@@ -418,8 +409,7 @@ bestQty = bestRate > 0 ? Math.round((bestAmount / bestRate) * 100) / 100 : 0;
 if (bestRate > 0 && bestAmount > 0) break;
 }
 if (bestQty > 0 && bestRate > 0 && bestAmount > 0) {
-const computed = bestQty * bestRate;
-if (Math.abs(computed - bestAmount) / bestAmount > 0.15) bestQty = Math.round((bestAmount / bestRate) * 100) / 100;
+if (Math.abs(bestQty * bestRate - bestAmount) / bestAmount > 0.15) bestQty = Math.round((bestAmount / bestRate) * 100) / 100;
 }
 return { unit, qty: bestQty, rate: bestRate, amount: bestAmount };
 }
@@ -446,40 +436,26 @@ py.on('error', (err) => { reject(new Error('Failed to start Python: ' + err.mess
 
 function processExtracted(extracted, stateMultiplier) {
 const m = stateMultiplier || 1.0;
-
-// ── TEXT MODE (large complex PDFs > 600KB) ──
-if (extracted && extracted.mode === 'text' && extracted.pages) {
-console.log(`Text mode: ${extracted.pages.length} pages`);
-const textItems = parseBoqFromText(extracted.pages, m);
+let tableItems = [];
+let textItems = [];
 let tenderValue = 0;
-for (const page of extracted.pages) {
-const match = page.match(/(?:Total Amount|Estimated Cost)[^\d]*([\d,]+(?:\.\d+)?)/i);
-if (match) { const val = parseFloat(match[1].replace(/,/g, '')); if (val > tenderValue) tenderValue = val; }
-}
-const estimatedCost = textItems.reduce((sum, item) => sum + (item.amount || 0), 0);
-if (textItems.length > 5) return { extractionSuccess: true, boqItems: textItems, tenderValue: estimatedCost > 0 ? estimatedCost : tenderValue };
-return { extractionSuccess: false, boqItems: [], tenderValue };
-}
 
-// ── TABLE MODE (small clean PDFs <= 600KB) ──
+// ── TABLE PARSER ──
 const tables = extracted && extracted.tables ? extracted.tables : (Array.isArray(extracted) ? extracted : []);
-console.log(`Table mode: ${tables.length} tables`);
-
-let allBoqItems = [];
-let tenderValue = 0;
-
-// Step 1: Find all tables with BOQ headers
+if (tables.length > 0) {
 const headerTableIndices = [];
 for (let t = 0; t < tables.length; t++) {
 const rows = tables[t];
 if (!rows || rows.length === 0) continue;
 const hasBoqHeader = rows.some(row => {
+if (!Array.isArray(row)) return false;
 const rl = row.map(v => (v || '').toLowerCase());
 return rl.some(v => v.includes('description') || v.includes('particulars')) &&
 rl.some(v => v.includes('qty') || v.includes('quantity') || v.includes('rate') || v.includes('amount'));
 });
 if (hasBoqHeader) headerTableIndices.push(t);
 for (const row of rows) {
+if (!Array.isArray(row)) continue;
 for (const val of row) {
 const amount = extractRupeeAmount(val || '');
 if (amount > tenderValue) tenderValue = amount;
@@ -487,38 +463,48 @@ if (amount > tenderValue) tenderValue = amount;
 }
 }
 
-console.log(`Found ${headerTableIndices.length} BOQ header tables at indices: ${headerTableIndices.join(',')}`);
+console.log(`Found ${headerTableIndices.length} BOQ header tables`);
 
-// Step 2: For each header table, combine with ALL continuation tables until next header
-// This handles multi-page BOQ tables where only first page has the header row
 for (let hi = 0; hi < headerTableIndices.length; hi++) {
 const startIdx = headerTableIndices[hi];
 const endIdx = hi + 1 < headerTableIndices.length ? headerTableIndices[hi + 1] : tables.length;
-
-// Start with the header table rows
 let combinedRows = [...tables[startIdx]];
-
-// Add all continuation tables until next header (skip measurement sheets)
 for (let t = startIdx + 1; t < endIdx; t++) {
 if (!tables[t] || tables[t].length === 0) continue;
-if (isMeasurementSheetTable(tables[t])) {
-console.log(` Skipping measurement sheet at table ${t}`);
-continue;
-}
+if (!Array.isArray(tables[t][0])) continue;
+if (isMeasurementSheetTable(tables[t])) { console.log(`Skipping measurement sheet at table ${t}`); continue; }
 combinedRows = combinedRows.concat(tables[t]);
 }
-
-console.log(`BOQ section ${hi + 1}: tables ${startIdx}-${endIdx - 1} combined into ${combinedRows.length} rows`);
+console.log(`BOQ section ${hi + 1}: ${combinedRows.length} combined rows`);
 const items = parseTableClean(combinedRows, m);
-if (items.length > 0) {
-allBoqItems = allBoqItems.concat(items);
+tableItems = tableItems.concat(items);
 console.log(` -> Got ${items.length} items from BOQ section ${hi + 1}`);
 }
+console.log(`Table parser total: ${tableItems.length} items`);
 }
 
-console.log(`Total items: ${allBoqItems.length}`);
-const estimatedCost = allBoqItems.reduce((sum, item) => sum + (item.amount || 0), 0);
-if (allBoqItems.length > 0) return { extractionSuccess: true, boqItems: allBoqItems, tenderValue: estimatedCost > 0 ? estimatedCost : tenderValue };
+// ── TEXT PARSER ──
+if (extracted && extracted.pages && extracted.pages.length > 0) {
+for (const page of extracted.pages) {
+const match = page.match(/(?:Total Amount|Estimated Cost)[^\d]*([\d,]+(?:\.\d+)?)/i);
+if (match) { const val = parseFloat(match[1].replace(/,/g, '')); if (val > tenderValue) tenderValue = val; }
+}
+textItems = parseBoqFromText(extracted.pages, m);
+console.log(`Text parser total: ${textItems.length} items`);
+}
+
+// ── PICK BEST ──
+let boqItems = [];
+if (tableItems.length >= textItems.length && tableItems.length > 0) {
+console.log(`Winner: table parser (${tableItems.length} vs ${textItems.length})`);
+boqItems = tableItems;
+} else if (textItems.length > 0) {
+console.log(`Winner: text parser (${textItems.length} vs ${tableItems.length})`);
+boqItems = textItems;
+}
+
+const estimatedCost = boqItems.reduce((sum, item) => sum + (item.amount || 0), 0);
+if (boqItems.length > 0) return { extractionSuccess: true, boqItems, tenderValue: estimatedCost > 0 ? estimatedCost : tenderValue };
 return { extractionSuccess: false, boqItems: [], tenderValue };
 }
 
