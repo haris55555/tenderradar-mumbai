@@ -177,6 +177,7 @@ return 0;
 
 const KNOWN_UNITS = ['cum', 'sqm', 'rm', 'nos', 'mt', 'kg', 'ltr', 'ls', 'set', 'rmt', 'sqft', 'cft', 'mtr', 'unit', 'job', 'lot', 'month', 'day', 'hr', 'ton', 'quintal', 'bag', 'pair', 'cbo', 'each', 'no', 'num', 'per', 'point', 'trip', 'visit', 'lump', 'seat', 'sq.m', 'rs/kg', 'm', 'mm', 'shift', 'mtr.', 'nos.', 'set.', 'sqm.', 'rmt.', 'each.'];
 const SUMMARY_KEYWORDS = ['estimated cost', 'contractors rebate', "contractor's rebate", 'gst 18', 'contract sum', 'contingency', 'contract cost', 'water charges', 'sewerage charges', 'supervision charges', 'total project cost', 'project cost', 'cost after rebate', 'physical contingency', 'cost contingency', 'grand total', 'net amount', 'taxable amount', 'total amount in rs'];
+const UNIT_PATTERNS = ['Sqm', 'Cum', 'Rmt', 'Nos', 'MT', 'Kg', 'Ltr', 'Mtr', 'Each', 'Set', 'Ls', 'Rm', 'Sqft', 'Cft', 'Job', 'Lot', 'Bag', 'Ton'];
 
 function isUnit(val) {
 if (!val) return false;
@@ -246,7 +247,7 @@ if ((v === 'rate' || v === 'rate (rs)' || v.startsWith('rate')) && rateCol === -
 if ((v.includes('amount') || v === 'amt') && amountCol === -1) amountCol = ci;
 }
 if (qtyCol === -1 && rateCol !== -1 && amountCol !== -1 && amountCol > rateCol + 1) qtyCol = rateCol + 1;
-console.log(`Header detected at row ${i}: desc=${descCol} unit=${unitCol} qty=${qtyCol} rate=${rateCol} amount=${amountCol}`);
+console.log(`Header detected: desc=${descCol} unit=${unitCol} qty=${qtyCol} rate=${rateCol} amount=${amountCol}`);
 return { headerRowIdx: i, descCol, unitCol, qtyCol, rateCol, amountCol };
 }
 }
@@ -311,85 +312,24 @@ else { pendingDescription = anyDesc; parentDescription = anyDesc; }
 }
 }
 
-console.log(` -> parseTableClean found ${boqItems.length} items`);
+console.log(` -> Table parser found ${boqItems.length} items`);
 return boqItems;
 }
 
-function parseBoqFromText(pages, stateMultiplier) {
-const items = [];
-const allText = pages.join('\n');
-const lines = allText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-const m = stateMultiplier || 1.0;
-console.log(`Text parser: ${pages.length} pages, ${lines.length} lines`);
-
-const STOP_KEYWORDS = ['estimated cost', 'total amount', 'grand total', 'gst', 'contingency', 'supervision', 'total project'];
-const SKIP_STARTS = ['drk office', 'security room', 'pump room', 'rest room', 'prayer hall', 'wood storage', 'washing area', 'fire escape', 'lift lobby'];
-
-let currentItem = null;
-
-const saveCurrentItem = () => {
-if (currentItem && currentItem.desc.length > 10) {
-const parsed = tryParseItemNumbers(currentItem.desc, currentItem.numLines);
-if (parsed && parsed.rate > 0) {
-items.push({
-item: cleanDesc(currentItem.desc), unit: parsed.unit,
-quantity: parsed.qty, rate: parsed.rate, amount: parsed.amount,
-aiRate: classifyAndEstimate(currentItem.desc, parsed.unit, parsed.rate, m),
-needsRate: false
-});
-}
-}
-currentItem = null;
-};
-
-for (let i = 0; i < lines.length; i++) {
-const line = lines[i];
-const lineLower = line.toLowerCase();
-if (STOP_KEYWORDS.some(k => lineLower.includes(k))) { saveCurrentItem(); continue; }
-if (lineLower.includes('length') && lineLower.includes('width') && lineLower.includes('height')) continue;
-if (SKIP_STARTS.some(k => lineLower.startsWith(k))) continue;
-if (lineLower.startsWith('say ') || lineLower === 'say') continue;
-if (line.match(/^[\d\s.,]+$/) && line.trim().split(/\s+/).length <= 5) continue;
-
-const srNoMatch = line.match(/^(\d{1,3})\s+(.+)/);
-if (srNoMatch) {
-const srNo = parseInt(srNoMatch[1]);
-const rest = srNoMatch[2].trim();
-if (srNo >= 1 && srNo <= 150 && rest.length > 5) {
-saveCurrentItem();
-currentItem = { srNo, desc: rest, numLines: [{ line: rest, numbers: extractNumbersFromLine(rest) }] };
-
-continue;
-}
-}
-
-if (currentItem) {
-const numbers = extractNumbersFromLine(line);
-if (numbers.length >= 2) currentItem.numLines.push({ line, numbers });
-else if (isDescriptionText(line) && line.length > 5) currentItem.desc += ' ' + line;
-}
-}
-saveCurrentItem();
-
-console.log(`Text parser found ${items.length} items`);
-return items;
-}
-
 function extractNumbersFromLine(line) {
-const matches = line.match(/[\d,]+\.?\d*/g) || [];
+const matches = (line || '').match(/[\d,]+\.?\d*/g) || [];
 return matches.map(m => parseFloat(m.replace(/,/g, ''))).filter(n => !isNaN(n) && n > 0);
 }
 
 function tryParseItemNumbers(desc, numLines) {
 // Find unit from description first
 let unit = 'NOS';
-const unitPatterns = ['Sqm', 'Cum', 'Rmt', 'Nos', 'MT', 'Kg', 'Ltr', 'Mtr', 'Each', 'Set', 'Ls', 'Rm', 'Sqft', 'Cft', 'Job', 'Lot', 'Bag', 'Ton'];
-
-for (const u of unitPatterns) {
+for (const u of UNIT_PATTERNS) {
 if (new RegExp(`\\b${u}\\b`, 'i').test(desc)) { unit = u.toUpperCase(); break; }
 }
+// Override with unit from numeric lines
 for (const nl of numLines) {
-for (const u of unitPatterns) {
+for (const u of UNIT_PATTERNS) {
 if (new RegExp(`\\b${u}\\b`, 'i').test(nl.line)) { unit = u.toUpperCase(); break; }
 }
 if (unit !== 'NOS') break;
@@ -402,7 +342,7 @@ const line = nl.line;
 
 // Find unit position in this line
 let unitEndIdx = -1;
-for (const u of unitPatterns) {
+for (const u of UNIT_PATTERNS) {
 const match = line.match(new RegExp(`\\b${u}\\b`, 'i'));
 if (match) { unitEndIdx = match.index + match[0].length; break; }
 }
@@ -414,14 +354,14 @@ const afterUnit = line.substring(unitEndIdx);
 const matches = afterUnit.match(/[\d,]+\.?\d*/g) || [];
 nums = matches.map(s => parseFloat(s.replace(/,/g, ''))).filter(n => !isNaN(n) && n > 0 && n < 100000000);
 } else {
-// No unit in line — use all numbers >= 1
+// No unit in this line — use numbers >= 1 only
 nums = nl.numbers.filter(n => n >= 1 && n < 100000000);
 }
 
 if (nums.length === 0) continue;
 
 if (nums.length >= 3) {
-// Try to find qty * rate = amount
+// Try qty * rate = amount validation
 let found = false;
 for (let qi = 0; qi < nums.length - 1 && !found; qi++) {
 for (let ri = qi + 1; ri < nums.length && !found; ri++) {
@@ -434,17 +374,15 @@ bestQty = nums[qi]; bestRate = nums[ri]; bestAmount = nums[ai]; found = true;
 }
 }
 if (!found) {
-// No clean match — last number is total qty (zero-rate BOQ pattern)
+// Zero-rate BOQ — last number after unit is total qty
 bestQty = nums[nums.length - 1];
 bestRate = 0; bestAmount = 0;
 }
 } else if (nums.length === 2) {
-// Two numbers after unit
-// If second is much larger than first, likely qty + amount
 if (nums[1] > nums[0] * 3) {
+// Second much larger — likely qty + amount
 bestQty = nums[0]; bestAmount = nums[1]; bestRate = 0;
 } else {
-// Could be qty + rate — take first as qty
 bestQty = nums[0]; bestRate = nums[1]; bestAmount = 0;
 }
 } else {
@@ -461,9 +399,118 @@ if (bestAmount === 0 && bestQty > 0 && bestRate > 0) bestAmount = Math.round(bes
 return { unit, qty: bestQty, rate: bestRate, amount: bestAmount };
 }
 
-
 function cleanDesc(desc) {
-return desc.replace(/^[A-Z0-9]+-[A-Z0-9]+-[A-Z0-9]+-?[A-Z0-9]*/g, '').replace(/\s+/g, ' ').trim().substring(0, 300);
+return desc
+.replace(/^[A-Z0-9]{2,}-[A-Z0-9]+-?[A-Z0-9-]*/g, '')
+.replace(/\s+/g, ' ').trim().substring(0, 300);
+}
+
+function parseBoqFromText(pages, stateMultiplier) {
+const items = [];
+const allText = pages.join('\n');
+const lines = allText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+const m = stateMultiplier || 1.0;
+console.log(`Text parser: ${pages.length} pages, ${lines.length} lines`);
+
+const STOP_KEYWORDS = ['estimated cost', 'grand total', 'contingency', 'supervision charges', 'total project cost'];
+const SKIP_STARTS = ['drk office', 'security room', 'pump room', 'rest room', 'prayer hall', 'wood storage', 'washing area', 'fire escape', 'lift lobby'];
+
+let currentItem = null;
+
+const saveCurrentItem = () => {
+if (!currentItem || currentItem.desc.length < 5) { currentItem = null; return; }
+const parsed = tryParseItemNumbers(currentItem.desc, currentItem.numLines);
+if (parsed && parsed.qty > 0) {
+if (parsed.rate === 0 && parsed.amount > 0 && parsed.qty > 0) {
+parsed.rate = Math.round(parsed.amount / parsed.qty);
+}
+const aiRate = classifyAndEstimate(currentItem.desc, parsed.unit, parsed.rate, m);
+items.push({
+item: cleanDesc(currentItem.desc),
+unit: parsed.unit,
+quantity: Math.round(parsed.qty * 100) / 100,
+rate: Math.round(parsed.rate * 100) / 100,
+amount: Math.round(parsed.amount * 100) / 100,
+aiRate,
+needsRate: false
+});
+}
+currentItem = null;
+};
+
+for (let i = 0; i < lines.length; i++) {
+const line = lines[i];
+const lineLower = line.toLowerCase();
+
+if (STOP_KEYWORDS.some(k => lineLower.includes(k))) { saveCurrentItem(); continue; }
+if (lineLower.includes('length') && lineLower.includes('width') && lineLower.includes('height')) continue;
+if (SKIP_STARTS.some(k => lineLower.startsWith(k))) continue;
+if (lineLower.startsWith('say ') || lineLower === 'say') continue;
+if (line.match(/^[\d\s.,]+$/) && line.trim().split(/\s+/).length <= 5) continue;
+
+// Sr.No detection — must have letters in rest (not just numbers)
+const srNoMatch = line.match(/^(\d{1,3}(?:\.\d{1,2})?)\s+(.+)/);
+if (srNoMatch) {
+const srNo = parseFloat(srNoMatch[1]);
+const rest = srNoMatch[2].trim();
+if (srNo >= 1 && srNo <= 500 && rest.length > 5 && /[a-zA-Z]{3,}/.test(rest)) {
+saveCurrentItem();
+
+// KEY FIX: Split description from numbers at the unit boundary
+let cleanDescription = rest;
+let numbersLine = rest;
+for (const u of UNIT_PATTERNS) {
+const unitMatch = rest.match(new RegExp(`\\b${u}\\b`, 'i'));
+if (unitMatch) {
+// Description is everything BEFORE the unit
+cleanDescription = rest.substring(0, unitMatch.index).trim();
+// Numbers line is from the unit onwards
+numbersLine = rest.substring(unitMatch.index);
+break;
+}
+}
+
+currentItem = {
+srNo,
+desc: cleanDescription || rest,
+numLines: [{ line: numbersLine, numbers: extractNumbersFromLine(numbersLine) }]
+};
+continue;
+}
+}
+
+if (currentItem) {
+const numbers = extractNumbersFromLine(line);
+if (numbers.length >= 2) {
+currentItem.numLines.push({ line, numbers });
+} else if (isDescriptionText(line) && line.length > 5 && !/^\d/.test(line)) {
+// Skip page headers/footers
+const lowerLine = line.toLowerCase();
+if (!lowerLine.includes('sr.no') && !lowerLine.includes('description') &&
+!lowerLine.includes('amount') && !lowerLine.includes('page') &&
+!lowerLine.includes('total')) {
+currentItem.desc += ' ' + line;
+}
+}
+}
+}
+saveCurrentItem();
+
+console.log(`Text parser found ${items.length} items`);
+return items;
+}
+
+function validateItems(items) {
+if (items.length === 0) return 0;
+return items.filter(it => {
+if (!it.quantity || it.quantity <= 0) return false;
+if (it.quantity > 9999999) return false;
+if (it.quantity < 0.5 && it.rate === 0) return false;
+if (it.rate > 0 && it.amount > 0) {
+return Math.abs(it.quantity * it.rate - it.amount) / (it.amount + 1) < 0.30;
+}
+return it.quantity >= 1;
+}).length;
 }
 
 function extractTablesWithPdfplumber(pdfPath) {
@@ -488,7 +535,6 @@ let tableItems = [];
 let textItems = [];
 let tenderValue = 0;
 
-// ── TABLE PARSER ──
 const tables = extracted && extracted.tables ? extracted.tables : (Array.isArray(extracted) ? extracted : []);
 if (tables.length > 0) {
 const headerTableIndices = [];
@@ -520,7 +566,7 @@ let combinedRows = [...tables[startIdx]];
 for (let t = startIdx + 1; t < endIdx; t++) {
 if (!tables[t] || tables[t].length === 0) continue;
 if (!Array.isArray(tables[t][0])) continue;
-if (isMeasurementSheetTable(tables[t])) { console.log(`Skipping measurement sheet at table ${t}`); continue; }
+if (isMeasurementSheetTable(tables[t])) continue;
 combinedRows = combinedRows.concat(tables[t]);
 }
 console.log(`BOQ section ${hi + 1}: ${combinedRows.length} combined rows`);
@@ -531,7 +577,6 @@ console.log(` -> Got ${items.length} items from BOQ section ${hi + 1}`);
 console.log(`Table parser total: ${tableItems.length} items`);
 }
 
-// ── TEXT PARSER ──
 if (extracted && extracted.pages && extracted.pages.length > 0) {
 for (const page of extracted.pages) {
 const match = page.match(/(?:Total Amount|Estimated Cost)[^\d]*([\d,]+(?:\.\d+)?)/i);
@@ -541,14 +586,19 @@ textItems = parseBoqFromText(extracted.pages, m);
 console.log(`Text parser total: ${textItems.length} items`);
 }
 
-// ── PICK BEST ──
+const tableValid = validateItems(tableItems);
+const textValid = validateItems(textItems);
+console.log(`Validation — Table: ${tableValid}/${tableItems.length} | Text: ${textValid}/${textItems.length}`);
+
 let boqItems = [];
-if (tableItems.length >= textItems.length && tableItems.length > 0) {
-console.log(`Winner: table parser (${tableItems.length} vs ${textItems.length})`);
-boqItems = tableItems;
-} else if (textItems.length > 0) {
-console.log(`Winner: text parser (${textItems.length} vs ${tableItems.length})`);
+if (tableValid === 0 && textValid === 0) {
+boqItems = tableItems.length >= textItems.length ? tableItems : textItems;
+} else if (textValid > tableValid) {
+console.log(`Winner: text parser`);
 boqItems = textItems;
+} else {
+console.log(`Winner: table parser`);
+boqItems = tableItems;
 }
 
 const estimatedCost = boqItems.reduce((sum, item) => sum + (item.amount || 0), 0);
@@ -697,3 +747,4 @@ server.listen(PORT, () => {
 console.log(`BOQ service running on port ${PORT}`);
 setInterval(() => { console.log('keep-alive ping'); }, 840000);
 });
+
