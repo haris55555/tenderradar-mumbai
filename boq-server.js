@@ -177,7 +177,6 @@ return 0;
 
 const KNOWN_UNITS = ['cum', 'sqm', 'rm', 'nos', 'mt', 'kg', 'ltr', 'ls', 'set', 'rmt', 'sqft', 'cft', 'mtr', 'unit', 'job', 'lot', 'month', 'day', 'hr', 'ton', 'quintal', 'bag', 'pair', 'cbo', 'each', 'no', 'num', 'per', 'point', 'trip', 'visit', 'lump', 'seat', 'sq.m', 'rs/kg', 'm', 'mm', 'shift', 'mtr.', 'nos.', 'set.', 'sqm.', 'rmt.', 'each.'];
 const SUMMARY_KEYWORDS = ['estimated cost', 'contractors rebate', "contractor's rebate", 'gst 18', 'contract sum', 'contingency', 'contract cost', 'water charges', 'sewerage charges', 'supervision charges', 'total project cost', 'project cost', 'cost after rebate', 'physical contingency', 'cost contingency', 'grand total', 'net amount', 'taxable amount', 'total amount in rs'];
-const UNIT_PATTERNS = ['Sqm', 'Cum', 'Rmt', 'Nos', 'MT', 'Kg', 'Ltr', 'Mtr', 'Each', 'Set', 'Ls', 'Rm', 'Sqft', 'Cft', 'Job', 'Lot', 'Bag', 'Ton'];
 
 function isUnit(val) {
 if (!val) return false;
@@ -233,31 +232,21 @@ const row = rows[i];
 if (!Array.isArray(row)) continue;
 const rowLower = row.map(v => (v || '').toLowerCase().trim());
 const hasDesc = rowLower.some(v => v.includes('description') || v.includes('particulars'));
-const hasRate = rowLower.some(v => v === 'rate' || v.startsWith('rate') || v.includes('rate (rs)'));
-const hasAmount = rowLower.some(v => v.includes('amount') || v === 'amt');
 const hasQty = rowLower.some(v => v.includes('qty') || v.includes('quantity'));
-if (hasDesc && (hasRate || hasAmount || hasQty)) {
+const hasRate = rowLower.some(v => v === 'rate' || v.startsWith('rate'));
+const hasAmount = rowLower.some(v => v.includes('amount') || v === 'amt');
+if (hasDesc && (hasQty || hasRate || hasAmount)) {
 let descCol = -1, unitCol = -1, qtyCol = -1, rateCol = -1, amountCol = -1;
 for (let ci = 0; ci < rowLower.length; ci++) {
 const v = rowLower[ci];
 if ((v.includes('description') || v.includes('particulars')) && descCol === -1) descCol = ci;
 if ((isUnit(v) || v === 'unit' || v === 'per') && unitCol === -1) unitCol = ci;
-// Rate detected strictly — must be exactly 'rate' or 'rate (rs)' not just contains 'rate'
-if ((v === 'rate' || v === 'rate (rs)' || v === 'rate(rs)' || v === 'basic rate') && rateCol === -1) rateCol = ci;
-// Amount detected
+if ((v.includes('qty') || v.includes('quantity')) && qtyCol === -1) qtyCol = ci;
+if ((v === 'rate' || v === 'rate (rs)' || v.startsWith('rate')) && rateCol === -1) rateCol = ci;
 if ((v.includes('amount') || v === 'amt') && amountCol === -1) amountCol = ci;
-// Qty detected — 'total qty', 'quantity', 'qty' but NOT 'rate'
-if ((v === 'qty' || v === 'total qty' || v === 'total quantity' || v === 'quantity' || v.includes('qty') || v.includes('quantity')) && !v.includes('rate') && qtyCol === -1) qtyCol = ci;
 }
-// If qty not found, try to infer position between rate and amount
-if (qtyCol === -1 && rateCol !== -1 && amountCol !== -1 && amountCol > rateCol + 1) {
-qtyCol = amountCol - 1;
-}
-// If rate not found but qty and amount exist, rate is between desc and qty
-if (rateCol === -1 && qtyCol !== -1 && descCol !== -1 && qtyCol > descCol + 1) {
-rateCol = qtyCol - 1;
-}
-console.log(`Header detected: desc=${descCol} unit=${unitCol} qty=${qtyCol} rate=${rateCol} amount=${amountCol}`);
+if (qtyCol === -1 && rateCol !== -1 && amountCol !== -1 && amountCol > rateCol + 1) qtyCol = rateCol + 1;
+console.log(`Header detected at row ${i}: desc=${descCol} unit=${unitCol} qty=${qtyCol} rate=${rateCol} amount=${amountCol}`);
 return { headerRowIdx: i, descCol, unitCol, qtyCol, rateCol, amountCol };
 }
 }
@@ -322,97 +311,8 @@ else { pendingDescription = anyDesc; parentDescription = anyDesc; }
 }
 }
 
-console.log(` -> Table parser found ${boqItems.length} items`);
+console.log(` -> parseTableClean found ${boqItems.length} items`);
 return boqItems;
-}
-
-function extractNumbersFromLine(line) {
-const matches = (line || '').match(/[\d,]+\.?\d*/g) || [];
-return matches.map(m => parseFloat(m.replace(/,/g, ''))).filter(n => !isNaN(n) && n > 0);
-}
-
-function findUnitPositionInLine(line) {
-for (const u of UNIT_PATTERNS) {
-const match = line.match(new RegExp(`\\b${u}\\b`, 'i'));
-if (match) return { unit: u.toUpperCase(), endIdx: match.index + match[0].length };
-}
-return null;
-}
-
-function tryParseItemNumbers(desc, numLines) {
-// Find unit from description
-let unit = 'NOS';
-const unitInDesc = findUnitPositionInLine(desc);
-if (unitInDesc) unit = unitInDesc.unit;
-
-// Override with unit found in numeric lines
-for (const nl of numLines) {
-const unitInLine = findUnitPositionInLine(nl.line);
-if (unitInLine) { unit = unitInLine.unit; break; }
-}
-
-let bestQty = 0, bestRate = 0, bestAmount = 0;
-
-for (const nl of numLines) {
-const line = nl.line;
-const unitPos = findUnitPositionInLine(line);
-
-let nums;
-if (unitPos) {
-// Take numbers strictly AFTER the unit
-const afterUnit = line.substring(unitPos.endIdx);
-const matches = afterUnit.match(/[\d,]+\.?\d*/g) || [];
-nums = matches.map(s => parseFloat(s.replace(/,/g, ''))).filter(n => !isNaN(n) && n > 0 && n < 100000000);
-} else {
-// No unit in this line — use all numbers but skip very small ones (likely dimensions)
-nums = nl.numbers.filter(n => n >= 1 && n < 100000000);
-}
-
-if (nums.length === 0) continue;
-
-if (nums.length >= 3) {
-// Try qty * rate = amount validation
-let found = false;
-for (let qi = 0; qi < nums.length - 1 && !found; qi++) {
-for (let ri = qi + 1; ri < nums.length && !found; ri++) {
-const product = nums[qi] * nums[ri];
-for (let ai = ri + 1; ai < nums.length && !found; ai++) {
-if (Math.abs(product - nums[ai]) / (nums[ai] + 1) < 0.20) {
-bestQty = nums[qi]; bestRate = nums[ri]; bestAmount = nums[ai]; found = true;
-}
-}
-}
-}
-if (!found) {
-// Zero-rate BOQ or no clean match — last number after unit is total qty
-bestQty = nums[nums.length - 1];
-bestRate = 0; bestAmount = 0;
-}
-} else if (nums.length === 2) {
-// Two numbers: if second >> first, likely qty + amount; else qty + rate
-if (nums[1] > nums[0] * 5) {
-bestQty = nums[0]; bestAmount = nums[1]; bestRate = 0;
-} else {
-bestQty = nums[0]; bestRate = nums[1]; bestAmount = 0;
-}
-} else {
-bestQty = nums[0];
-}
-
-if (bestQty > 0) break;
-}
-
-// Derive missing values
-if (bestRate === 0 && bestQty > 0 && bestAmount > 0) bestRate = Math.round(bestAmount / bestQty);
-if (bestAmount === 0 && bestQty > 0 && bestRate > 0) bestAmount = Math.round(bestQty * bestRate);
-
-return { unit, qty: bestQty, rate: bestRate, amount: bestAmount };
-}
-
-function cleanDesc(desc) {
-return desc
-.replace(/^[A-Z0-9]{2,}-[A-Z0-9]+-?[A-Z0-9-]*/g, '') // remove item codes like R3-CSPL16-c
-.replace(/\s+/g, ' ').trim().substring(0, 300);
 }
 
 function parseBoqFromText(pages, stateMultiplier) {
@@ -422,28 +322,22 @@ const lines = allText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 const m = stateMultiplier || 1.0;
 console.log(`Text parser: ${pages.length} pages, ${lines.length} lines`);
 
-const STOP_KEYWORDS = ['estimated cost', 'grand total', 'contingency', 'supervision charges', 'total project cost'];
+const STOP_KEYWORDS = ['estimated cost', 'total amount', 'grand total', 'gst', 'contingency', 'supervision', 'total project'];
 const SKIP_STARTS = ['drk office', 'security room', 'pump room', 'rest room', 'prayer hall', 'wood storage', 'washing area', 'fire escape', 'lift lobby'];
 
 let currentItem = null;
 
 const saveCurrentItem = () => {
-if (!currentItem || currentItem.desc.length < 5) { currentItem = null; return; }
+if (currentItem && currentItem.desc.length > 10) {
 const parsed = tryParseItemNumbers(currentItem.desc, currentItem.numLines);
-if (parsed && parsed.qty > 0) {
-if (parsed.rate === 0 && parsed.amount > 0 && parsed.qty > 0) {
-parsed.rate = Math.round(parsed.amount / parsed.qty);
-}
-const aiRate = classifyAndEstimate(currentItem.desc, parsed.unit, parsed.rate, m);
+if (parsed && parsed.rate > 0) {
 items.push({
-item: cleanDesc(currentItem.desc),
-unit: parsed.unit,
-quantity: Math.round(parsed.qty * 100) / 100,
-rate: Math.round(parsed.rate * 100) / 100,
-amount: Math.round(parsed.amount * 100) / 100,
-aiRate,
+item: cleanDesc(currentItem.desc), unit: parsed.unit,
+quantity: parsed.qty, rate: parsed.rate, amount: parsed.amount,
+aiRate: classifyAndEstimate(currentItem.desc, parsed.unit, parsed.rate, m),
 needsRate: false
 });
+}
 }
 currentItem = null;
 };
@@ -451,43 +345,27 @@ currentItem = null;
 for (let i = 0; i < lines.length; i++) {
 const line = lines[i];
 const lineLower = line.toLowerCase();
-
 if (STOP_KEYWORDS.some(k => lineLower.includes(k))) { saveCurrentItem(); continue; }
 if (lineLower.includes('length') && lineLower.includes('width') && lineLower.includes('height')) continue;
 if (SKIP_STARTS.some(k => lineLower.startsWith(k))) continue;
 if (lineLower.startsWith('say ') || lineLower === 'say') continue;
 if (line.match(/^[\d\s.,]+$/) && line.trim().split(/\s+/).length <= 5) continue;
 
-// Sr.No detection — must start with integer 1-500, optionally followed by .subitem
-// Rest must contain actual description text (letters), not just numbers
-const srNoMatch = line.match(/^(\d{1,3}(?:\.\d{1,2})?)\s+(.+)/);
+const srNoMatch = line.match(/^(\d{1,3})\s+(.+)/);
 if (srNoMatch) {
-const srNo = parseFloat(srNoMatch[1]);
+const srNo = parseInt(srNoMatch[1]);
 const rest = srNoMatch[2].trim();
-// Only treat as new item if:
-// 1. Sr.No is in valid range
-// 2. Rest contains actual letters (not just numbers)
-// 3. Rest is long enough to be a description
-if (srNo >= 1 && srNo <= 500 && rest.length > 5 && /[a-zA-Z]{3,}/.test(rest)) {
+if (srNo >= 1 && srNo <= 150 && rest.length > 5) {
 saveCurrentItem();
-currentItem = {
-srNo,
-desc: rest,
-// Include this line's numbers for single-line items
-numLines: [{ line: rest, numbers: extractNumbersFromLine(rest) }]
-};
+currentItem = { srNo, desc: rest, numLines: [] };
 continue;
 }
 }
 
 if (currentItem) {
 const numbers = extractNumbersFromLine(line);
-if (numbers.length >= 2) {
-currentItem.numLines.push({ line, numbers });
-} else if (isDescriptionText(line) && line.length > 5 && !/^\d/.test(line)) {
-// Only append if line starts with text, not numbers
-currentItem.desc += ' ' + line;
-}
+if (numbers.length >= 2) currentItem.numLines.push({ line, numbers });
+else if (isDescriptionText(line) && line.length > 5) currentItem.desc += ' ' + line;
 }
 }
 saveCurrentItem();
@@ -496,20 +374,48 @@ console.log(`Text parser found ${items.length} items`);
 return items;
 }
 
-function validateItems(items) {
-if (items.length === 0) return 0;
-return items.filter(it => {
-if (!it.quantity || it.quantity <= 0) return false;
-if (it.quantity > 9999999) return false;
-// Reject obviously wrong fractional quantities from garbage extraction
-if (it.quantity < 0.5 && it.rate === 0) return false;
-if (it.rate > 0 && it.amount > 0) {
-// Has rate and amount — validate mathematically
-return Math.abs(it.quantity * it.rate - it.amount) / (it.amount + 1) < 0.30;
+function extractNumbersFromLine(line) {
+const matches = line.match(/[\d,]+\.?\d*/g) || [];
+return matches.map(m => parseFloat(m.replace(/,/g, ''))).filter(n => !isNaN(n) && n > 0);
 }
-// Zero-rate BOQ — qty alone is valid if reasonable
-return it.quantity >= 1;
-}).length;
+
+function tryParseItemNumbers(desc, numLines) {
+let unit = 'Nos';
+const unitMatch = desc.match(/\b(Sqm|Cum|Rmt|Nos|NOS|MT|Kg|Ltr|Mtr|Each|Set|Ls|Rm|No)\b/i);
+if (unitMatch) unit = unitMatch[1].toUpperCase();
+for (const nl of numLines) {
+const um = nl.line.match(/\b(Sqm|Cum|Rmt|Nos|NOS|MT|Kg|Ltr|Mtr|Each|Set|Ls|Rm|No)\b/i);
+if (um) { unit = um[1].toUpperCase(); break; }
+}
+let bestRate = 0, bestQty = 0, bestAmount = 0;
+for (const nl of numLines) {
+const nums = nl.numbers.filter(n => n > 0 && n < 100000000);
+if (nums.length >= 3) {
+let found = false;
+for (let a = 0; a < nums.length - 2 && !found; a++) {
+for (let b = a + 1; b < nums.length - 1 && !found; b++) {
+for (let c = b + 1; c < nums.length && !found; c++) {
+if (Math.abs(nums[a] * nums[b] - nums[c]) / (nums[c] + 1) < 0.05) {
+bestQty = nums[a]; bestRate = nums[b]; bestAmount = nums[c]; found = true;
+}
+}
+}
+}
+if (!found) { const last3 = nums.slice(-3); bestQty = last3[0]; bestRate = last3[1]; bestAmount = last3[2]; }
+} else if (nums.length === 2) {
+bestRate = nums[0]; bestAmount = nums[1];
+bestQty = bestRate > 0 ? Math.round((bestAmount / bestRate) * 100) / 100 : 0;
+}
+if (bestRate > 0 && bestAmount > 0) break;
+}
+if (bestQty > 0 && bestRate > 0 && bestAmount > 0) {
+if (Math.abs(bestQty * bestRate - bestAmount) / bestAmount > 0.15) bestQty = Math.round((bestAmount / bestRate) * 100) / 100;
+}
+return { unit, qty: bestQty, rate: bestRate, amount: bestAmount };
+}
+
+function cleanDesc(desc) {
+return desc.replace(/^[A-Z0-9]+-[A-Z0-9]+-[A-Z0-9]+-?[A-Z0-9]*/g, '').replace(/\s+/g, ' ').trim().substring(0, 300);
 }
 
 function extractTablesWithPdfplumber(pdfPath) {
@@ -566,7 +472,7 @@ let combinedRows = [...tables[startIdx]];
 for (let t = startIdx + 1; t < endIdx; t++) {
 if (!tables[t] || tables[t].length === 0) continue;
 if (!Array.isArray(tables[t][0])) continue;
-if (isMeasurementSheetTable(tables[t])) continue;
+if (isMeasurementSheetTable(tables[t])) { console.log(`Skipping measurement sheet at table ${t}`); continue; }
 combinedRows = combinedRows.concat(tables[t]);
 }
 console.log(`BOQ section ${hi + 1}: ${combinedRows.length} combined rows`);
@@ -587,20 +493,14 @@ textItems = parseBoqFromText(extracted.pages, m);
 console.log(`Text parser total: ${textItems.length} items`);
 }
 
-// ── SMART WINNER SELECTION ──
-const tableValid = validateItems(tableItems);
-const textValid = validateItems(textItems);
-console.log(`Validation — Table: ${tableValid}/${tableItems.length} | Text: ${textValid}/${textItems.length}`);
-
+// ── PICK BEST ──
 let boqItems = [];
-if (tableValid === 0 && textValid === 0) {
-boqItems = tableItems.length >= textItems.length ? tableItems : textItems;
-} else if (textValid > tableValid) {
-console.log(`Winner: text parser`);
-boqItems = textItems;
-} else {
-console.log(`Winner: table parser`);
+if (tableItems.length >= textItems.length && tableItems.length > 0) {
+console.log(`Winner: table parser (${tableItems.length} vs ${textItems.length})`);
 boqItems = tableItems;
+} else if (textItems.length > 0) {
+console.log(`Winner: text parser (${textItems.length} vs ${tableItems.length})`);
+boqItems = textItems;
 }
 
 const estimatedCost = boqItems.reduce((sum, item) => sum + (item.amount || 0), 0);
@@ -749,4 +649,3 @@ server.listen(PORT, () => {
 console.log(`BOQ service running on port ${PORT}`);
 setInterval(() => { console.log('keep-alive ping'); }, 840000);
 });
-
