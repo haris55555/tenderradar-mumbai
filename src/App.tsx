@@ -36,8 +36,11 @@ keyMaterials: string[];
 majorEquipment: string[];
 executionDays: number;
 riskFactors: string[];
+selectedState: string;
 };
 }
+
+const INDIAN_STATES = ['Andhra Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Delhi', 'Goa', 'Gujarat', 'Haryana', 'Jharkhand', 'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Odisha', 'Punjab', 'Rajasthan', 'Tamil Nadu', 'Telangana', 'Uttar Pradesh', 'West Bengal'];
 
 function fmt(n: number): string {
 if (n >= 10000000) return "Rs " + (n / 10000000).toFixed(2) + " Cr";
@@ -46,23 +49,15 @@ if (n >= 1000) return "Rs " + (n / 1000).toFixed(0) + "K";
 return "Rs " + Math.round(n).toLocaleString("en-IN");
 }
 
-function fmtFull(n: number): string {
-return Math.round(n).toLocaleString("en-IN");
-}
-
-function fmtNum(n: number): string {
-return n.toLocaleString("en-IN");
-}
+function fmtFull(n: number): string { return Math.round(n).toLocaleString("en-IN"); }
+function fmtNum(n: number): string { return n.toLocaleString("en-IN"); }
 
 function getCostSplit(description: string, unit: string): [number, number, number] {
 const d = (description || "").toLowerCase();
 const u = (unit || "").toLowerCase().replace(/\./g, "");
 if ((d.includes("reinforcement") || d.includes("steel bar") || d.includes("fe500") || d.includes("tmt")) && u.includes("mt")) return [85, 10, 5];
 if ((d.includes("concrete") || d.includes("rcc") || d.includes("r.c.c") || d.includes("p/l") || d.includes("rmc")) && u.includes("cum")) return [70, 15, 15];
-if (d.includes("excavat")) {
-if (d.includes("chisel") || d.includes("breaker") || d.includes("hard rock") || d.includes("pneumatic")) return [10, 40, 50];
-return [5, 35, 60];
-}
+if (d.includes("excavat")) { if (d.includes("chisel") || d.includes("breaker") || d.includes("hard rock") || d.includes("pneumatic")) return [10, 40, 50]; return [5, 35, 60]; }
 if (d.includes("earth work") || d.includes("embankment") || d.includes("filling") || d.includes("stabilised soil")) return [10, 40, 50];
 if (d.includes("brick") || d.includes("masonry") || d.includes("rubble")) return [60, 35, 5];
 if (d.includes("centering") || d.includes("shuttering") || d.includes("formwork") || d.includes("form work")) return [50, 40, 10];
@@ -95,9 +90,10 @@ const s9: React.CSSProperties = { border: "1px solid #999", padding: "7px 10px",
 const s10: React.CSSProperties = { border: "1px solid #999", padding: "7px 10px", fontWeight: "bold", background: "#dae8fc" };
 const s11: React.CSSProperties = { border: "1px solid #999", padding: "7px 10px", textAlign: "right", fontFamily: "monospace", fontWeight: "bold", background: "#dae8fc" };
 
-function ItemAnnexureD(props: { item: BOQItem; itemNumber: number; onClose: () => void }) {
+function ItemRateAnalysis(props: { item: BOQItem; itemNumber: number; state: string; onClose: () => void }) {
 const item = props.item;
 const itemNumber = props.itemNumber;
+const state = props.state;
 const onClose = props.onClose;
 const activeRate = item.editedRate && item.editedRate > 0 ? item.editedRate : item.aiRate > 0 ? item.aiRate : item.rate;
 const itemCost = item.quantity * activeRate;
@@ -130,197 +126,96 @@ return (
 </div>
 </div>
 
-<div style={{ textAlign: "center", fontSize: "13px", marginBottom: "2px" }}>Government of Maharashtra</div>
-<div style={{ textAlign: "center", fontWeight: "bold", fontSize: "15px", marginBottom: "2px" }}>Annexure - D</div>
-<div style={{ textAlign: "center", fontWeight: "bold", fontSize: "14px", textDecoration: "underline", marginBottom: "20px" }}>Rate Analysis</div>
+<div style={{ textAlign: "center", fontWeight: "bold", fontSize: "16px", marginBottom: "4px" }}>Rate Analysis</div>
+<div style={{ textAlign: "center", fontSize: "13px", color: "#555", marginBottom: "20px" }}>Item {itemNumber} — {state} Market Rates</div>
 
 <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "20px", fontSize: "12px" }}>
 <tbody>
-<tr>
-<td style={s0}>Sr No</td>
-<td style={s1}>{itemNumber}</td>
-<td style={s0}>Item Code</td>
-<td style={s1}>BOQ Item {itemNumber}</td>
-</tr>
-<tr>
-<td style={s0}>Description of Item</td>
-<td style={{ ...s1, fontSize: "11px" }} colSpan={3}>{item.item}</td>
-</tr>
-<tr>
-<td style={s0}>Unit</td>
-<td style={s1}>{item.unit}</td>
-<td style={s0}>Quantity</td>
-<td style={s1}>{fmtNum(item.quantity)}</td>
-</tr>
-<tr>
-<td style={s0}>PDF Rate (SOR)</td>
-<td style={s1}>Rs {fmtFull(item.rate)}</td>
-<td style={s0}>AI Estimated Rate</td>
-<td style={s1}>Rs {fmtFull(item.aiRate)}</td>
-</tr>
-<tr>
-<td style={s0}>Rate Used for Analysis</td>
-<td style={{ ...s1, fontWeight: "bold", color: "#1a5276" }} colSpan={3}>Rs {fmtFull(activeRate)} per {item.unit}</td>
-</tr>
-<tr>
-<td style={s0}>Total Item Cost (Basic Amount)</td>
-<td style={{ ...s1, fontWeight: "bold" }} colSpan={3}>Rs {fmtFull(A)}</td>
-</tr>
+<tr><td style={s0}>Sr No</td><td style={s1}>{itemNumber}</td><td style={s0}>State</td><td style={s1}>{state}</td></tr>
+<tr><td style={s0}>Description of Item</td><td style={{ ...s1, fontSize: "11px" }} colSpan={3}>{item.item}</td></tr>
+<tr><td style={s0}>Unit</td><td style={s1}>{item.unit}</td><td style={s0}>Quantity</td><td style={s1}>{fmtNum(item.quantity)}</td></tr>
+<tr><td style={s0}>PDF Rate (SOR)</td><td style={s1}>Rs {fmtFull(item.rate)}</td><td style={s0}>AI Estimated Rate</td><td style={s1}>Rs {fmtFull(item.aiRate)}</td></tr>
+<tr><td style={s0}>Rate Used for Analysis</td><td style={{ ...s1, fontWeight: "bold", color: "#1a5276" }} colSpan={3}>Rs {fmtFull(activeRate)} per {item.unit}</td></tr>
+<tr><td style={s0}>Total Item Cost</td><td style={{ ...s1, fontWeight: "bold" }} colSpan={3}>Rs {fmtFull(A)}</td></tr>
 </tbody>
 </table>
 
 <div style={{ fontWeight: "bold", fontSize: "13px", marginBottom: "8px", borderBottom: "1px solid #ccc", paddingBottom: "4px" }}>Details of Cost for Unit of {item.unit}</div>
 <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "20px", fontSize: "12px" }}>
 <thead>
-<tr>
-<th style={{ ...s2, width: "8%" }}>Sr</th>
-<th style={s2}>Description of Cost Parameters</th>
-<th style={{ ...s3, width: "18%" }}>Amount Rs</th>
-<th style={{ ...s3, width: "18%" }}>Per Unit Rs</th>
-</tr>
+<tr><th style={{ ...s2, width: "8%" }}>Sr</th><th style={s2}>Description of Cost Parameters</th><th style={{ ...s3, width: "18%" }}>Amount Rs</th><th style={{ ...s3, width: "18%" }}>Per Unit Rs</th></tr>
 </thead>
 <tbody>
-<tr>
-<td style={s4}>1</td>
-<td style={s4}>Material Cost ({split[0]}%)</td>
-<td style={s5}>{fmtFull(mat)}</td>
-<td style={s5}>{fmtFull(mat / qty)}</td>
-</tr>
-<tr>
-<td style={s4}>2</td>
-<td style={s4}>Labour Cost ({split[1]}%)</td>
-<td style={s5}>{fmtFull(lab)}</td>
-<td style={s5}>{fmtFull(lab / qty)}</td>
-</tr>
-<tr>
-<td style={s4}>3</td>
-<td style={s4}>Material and Equipment Hire Charges ({split[2]}%)</td>
-<td style={s5}>{fmtFull(hir)}</td>
-<td style={s5}>{fmtFull(hir / qty)}</td>
-</tr>
-<tr>
-<td style={s6}>A</td>
-<td style={s6}>Total Material Labour and Hire Charges Basic Amount</td>
-<td style={s7}>{fmtFull(A)}</td>
-<td style={s7}>{fmtFull(A / qty)}</td>
-</tr>
-<tr>
-<td style={s4}>B</td>
-<td style={s4}>Maintenance and Other Charges 2 percent</td>
-<td style={s5}>{fmtFull(B)}</td>
-<td style={s5}>{fmtFull(B / qty)}</td>
-</tr>
-<tr>
-<td style={s6}>C</td>
-<td style={s6}>Total of A plus B</td>
-<td style={s7}>{fmtFull(C)}</td>
-<td style={s7}>{fmtFull(C / qty)}</td>
-</tr>
-<tr>
-<td style={s4}>D</td>
-<td style={s4}>5 percent Overhead and 10 percent Profit on Basic Amount</td>
-<td style={s5}>{fmtFull(D)}</td>
-<td style={s5}>{fmtFull(D / qty)}</td>
-</tr>
-<tr>
-<td style={s6}>E</td>
-<td style={s6}>Total with Overhead and Profit</td>
-<td style={s7}>{fmtFull(E)}</td>
-<td style={s7}>{fmtFull(E / qty)}</td>
-</tr>
-<tr>
-<td style={s8}>F</td>
-<td style={s8}>Per Unit Cost Say Rs</td>
-<td style={s9} colSpan={2}>{fmtFull(perUnit)} per {item.unit}</td>
-</tr>
+<tr><td style={s4}>1</td><td style={s4}>Material Cost ({split[0]}%)</td><td style={s5}>{fmtFull(mat)}</td><td style={s5}>{fmtFull(mat / qty)}</td></tr>
+<tr><td style={s4}>2</td><td style={s4}>Labour Cost ({split[1]}%)</td><td style={s5}>{fmtFull(lab)}</td><td style={s5}>{fmtFull(lab / qty)}</td></tr>
+<tr><td style={s4}>3</td><td style={s4}>Material and Equipment Hire Charges ({split[2]}%)</td><td style={s5}>{fmtFull(hir)}</td><td style={s5}>{fmtFull(hir / qty)}</td></tr>
+<tr><td style={s6}>A</td><td style={s6}>Total Material Labour and Hire Charges Basic Amount</td><td style={s7}>{fmtFull(A)}</td><td style={s7}>{fmtFull(A / qty)}</td></tr>
+<tr><td style={s4}>B</td><td style={s4}>Maintenance and Other Charges 2 percent</td><td style={s5}>{fmtFull(B)}</td><td style={s5}>{fmtFull(B / qty)}</td></tr>
+<tr><td style={s6}>C</td><td style={s6}>Total of A plus B</td><td style={s7}>{fmtFull(C)}</td><td style={s7}>{fmtFull(C / qty)}</td></tr>
+<tr><td style={s4}>D</td><td style={s4}>5 percent Overhead and 10 percent Profit on Basic Amount</td><td style={s5}>{fmtFull(D)}</td><td style={s5}>{fmtFull(D / qty)}</td></tr>
+<tr><td style={s6}>E</td><td style={s6}>Total with Overhead and Profit</td><td style={s7}>{fmtFull(E)}</td><td style={s7}>{fmtFull(E / qty)}</td></tr>
+<tr><td style={s8}>F</td><td style={s8}>Per Unit Cost Say Rs</td><td style={s9} colSpan={2}>{fmtFull(perUnit)} per {item.unit}</td></tr>
 </tbody>
 </table>
 
 <div style={{ fontWeight: "bold", fontSize: "13px", marginBottom: "8px", borderBottom: "1px solid #ccc", paddingBottom: "4px" }}>GST and Final Cost Summary</div>
 <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "28px", fontSize: "12px" }}>
 <thead>
-<tr>
-<th style={{ ...s2, width: "8%" }}>Sr</th>
-<th style={s2}>Description</th>
-<th style={{ ...s3, width: "20%" }}>Total Amount Rs</th>
-<th style={{ ...s3, width: "20%" }}>Per Unit Rs</th>
-</tr>
+<tr><th style={{ ...s2, width: "8%" }}>Sr</th><th style={s2}>Description</th><th style={{ ...s3, width: "20%" }}>Total Amount Rs</th><th style={{ ...s3, width: "20%" }}>Per Unit Rs</th></tr>
 </thead>
 <tbody>
-<tr>
-<td style={s4}>1</td>
-<td style={s4}>Total Basic Amount</td>
-<td style={s5}>{fmtFull(A)}</td>
-<td style={s5}>{fmtFull(A / qty)}</td>
-</tr>
-<tr>
-<td style={s4}>2</td>
-<td style={s4}>Material GST at 18 percent</td>
-<td style={s5}>{fmtFull(matGST)}</td>
-<td style={s5}>{fmtFull(matGST / qty)}</td>
-</tr>
-<tr>
-<td style={s4}>3</td>
-<td style={s4}>Labour GST at 18 percent</td>
-<td style={s5}>{fmtFull(labGST)}</td>
-<td style={s5}>{fmtFull(labGST / qty)}</td>
-</tr>
-<tr>
-<td style={s4}>4</td>
-<td style={s4}>Hire Charges GST at 18 percent</td>
-<td style={s5}>{fmtFull(hirGST)}</td>
-<td style={s5}>{fmtFull(hirGST / qty)}</td>
-</tr>
-<tr>
-<td style={s6}>5</td>
-<td style={s6}>Total GST Amount</td>
-<td style={s7}>{fmtFull(totGST)}</td>
-<td style={s7}>{fmtFull(totGST / qty)}</td>
-</tr>
-<tr>
-<td style={s4}>6</td>
-<td style={s4}>Overhead and Contractors Profit at 15 percent</td>
-<td style={s5}>{fmtFull(ovhProfit)}</td>
-<td style={s5}>{fmtFull(ovhProfit / qty)}</td>
-</tr>
-<tr>
-<td style={s10}>7</td>
-<td style={s10}>Total Per Unit Amount including GST</td>
-<td style={s11} colSpan={2}>{fmtFull(totalPerUnit)} per {item.unit}</td>
-</tr>
+<tr><td style={s4}>1</td><td style={s4}>Total Basic Amount</td><td style={s5}>{fmtFull(A)}</td><td style={s5}>{fmtFull(A / qty)}</td></tr>
+<tr><td style={s4}>2</td><td style={s4}>Material GST at 18 percent</td><td style={s5}>{fmtFull(matGST)}</td><td style={s5}>{fmtFull(matGST / qty)}</td></tr>
+<tr><td style={s4}>3</td><td style={s4}>Labour GST at 18 percent</td><td style={s5}>{fmtFull(labGST)}</td><td style={s5}>{fmtFull(labGST / qty)}</td></tr>
+<tr><td style={s4}>4</td><td style={s4}>Hire Charges GST at 18 percent</td><td style={s5}>{fmtFull(hirGST)}</td><td style={s5}>{fmtFull(hirGST / qty)}</td></tr>
+<tr><td style={s6}>5</td><td style={s6}>Total GST Amount</td><td style={s7}>{fmtFull(totGST)}</td><td style={s7}>{fmtFull(totGST / qty)}</td></tr>
+<tr><td style={s4}>6</td><td style={s4}>Overhead and Contractors Profit at 15 percent</td><td style={s5}>{fmtFull(ovhProfit)}</td><td style={s5}>{fmtFull(ovhProfit / qty)}</td></tr>
+<tr><td style={s10}>7</td><td style={s10}>Total Per Unit Amount including GST</td><td style={s11} colSpan={2}>{fmtFull(totalPerUnit)} per {item.unit}</td></tr>
 </tbody>
 </table>
 
 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginTop: "30px" }}>
-<div style={{ textAlign: "center", fontSize: "12px" }}>
-<div style={{ borderTop: "1px solid #333", paddingTop: "8px", marginTop: "40px" }}>Signature and Seal of the Tenderer</div>
-</div>
-<div style={{ textAlign: "center", fontSize: "12px" }}>
-<div style={{ borderTop: "1px solid #333", paddingTop: "8px", marginTop: "40px" }}>Checked and Verified by Engineer In Charge</div>
-</div>
+<div style={{ textAlign: "center", fontSize: "12px" }}><div style={{ borderTop: "1px solid #333", paddingTop: "8px", marginTop: "40px" }}>Signature and Seal of the Tenderer</div></div>
+<div style={{ textAlign: "center", fontSize: "12px" }}><div style={{ borderTop: "1px solid #333", paddingTop: "8px", marginTop: "40px" }}>Checked and Verified by Engineer In Charge</div></div>
 </div>
 </div>
 </div>
 );
 }
 
-function UploadZone(props: { onUpload: (file: File) => void }) {
+function UploadZone(props: { onUpload: (file: File) => void; selectedState: string; onStateChange: (state: string) => void }) {
 const [dragging, setDragging] = useState(false);
 const inputRef = useRef<HTMLInputElement>(null);
 const handleDrop = useCallback((e: React.DragEvent) => {
-e.preventDefault();
-setDragging(false);
+e.preventDefault(); setDragging(false);
 const file = e.dataTransfer.files?.[0];
 if (file && file.type === "application/pdf") props.onUpload(file);
 }, [props.onUpload]);
+
 return (
-<div onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={handleDrop} onClick={() => inputRef.current?.click()} style={{ border: `2px dashed ${dragging ? "#F5A623" : "#2A3F54"}`, borderRadius: "16px", padding: "60px 40px", textAlign: "center", cursor: "pointer", background: dragging ? "rgba(245,166,35,0.05)" : "rgba(26,42,58,0.5)", transition: "all 0.2s" }}>
+<div>
+<div style={{ marginBottom: "20px" }}>
+<div style={{ color: "#E8EDF2", fontSize: "13px", fontWeight: "700", marginBottom: "8px" }}>Select State / UT</div>
+<select
+value={props.selectedState}
+onChange={(e) => props.onStateChange(e.target.value)}
+style={{ width: "100%", padding: "12px 16px", background: "#1A2A3A", border: "1px solid #2A3F54", borderRadius: "10px", color: "#E8EDF2", fontSize: "14px", fontWeight: "600", outline: "none", cursor: "pointer" }}
+>
+{INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+</select>
+<div style={{ color: "#3A5068", fontSize: "11px", marginTop: "6px" }}>AI execution rates will be calibrated for {props.selectedState} market conditions</div>
+</div>
+<div
+onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={handleDrop} onClick={() => inputRef.current?.click()}
+style={{ border: `2px dashed ${dragging ? "#F5A623" : "#2A3F54"}`, borderRadius: "16px", padding: "50px 40px", textAlign: "center", cursor: "pointer", background: dragging ? "rgba(245,166,35,0.05)" : "rgba(26,42,58,0.5)", transition: "all 0.2s" }}
+>
 <input ref={inputRef} type="file" accept=".pdf" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) props.onUpload(f); e.target.value = ""; }} />
-<div style={{ fontSize: "56px", marginBottom: "20px" }}>📋</div>
-<div style={{ color: "#E8EDF2", fontSize: "22px", fontWeight: "700", marginBottom: "8px" }}>Upload your BOQ PDF</div>
-<div style={{ color: "#6B7F8E", fontSize: "15px", marginBottom: "24px", lineHeight: "1.6" }}>Download the tender document from any government portal and upload it here to get your exact profit calculation</div>
+<div style={{ fontSize: "48px", marginBottom: "16px" }}>📋</div>
+<div style={{ color: "#E8EDF2", fontSize: "20px", fontWeight: "700", marginBottom: "8px" }}>Upload your BOQ PDF</div>
+<div style={{ color: "#6B7F8E", fontSize: "14px", marginBottom: "20px", lineHeight: "1.6" }}>Upload the BOQ PDF from any tender portal — public or private, any department, any state</div>
 <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: "#F5A623", color: "#0F1923", padding: "12px 28px", borderRadius: "10px", fontSize: "15px", fontWeight: "700" }}>Select PDF File</div>
-<div style={{ color: "#3A5068", fontSize: "12px", marginTop: "16px" }}>or drag and drop your PDF here</div>
+<div style={{ color: "#3A5068", fontSize: "12px", marginTop: "12px" }}>or drag and drop your PDF here</div>
+</div>
 </div>
 );
 }
@@ -331,9 +226,7 @@ return (
 <div style={{ padding: "24px 0" }}>
 {steps.map((s, i) => (
 <div key={i} style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px", opacity: i <= props.step ? 1 : 0.3, transition: "opacity 0.5s" }}>
-<div style={{ width: "24px", height: "24px", borderRadius: "50%", flexShrink: 0, background: i < props.step ? "#00C896" : i === props.step ? "#F5A623" : "#1A2A3A", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: "700", color: "#0F1923" }}>
-{i < props.step ? "V" : i + 1}
-</div>
+<div style={{ width: "24px", height: "24px", borderRadius: "50%", flexShrink: 0, background: i < props.step ? "#00C896" : i === props.step ? "#F5A623" : "#1A2A3A", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: "700", color: "#0F1923" }}>{i < props.step ? "V" : i + 1}</div>
 <span style={{ fontSize: "14px", color: i < props.step ? "#00C896" : i === props.step ? "#F5A623" : "#3A5068", fontWeight: i === props.step ? "600" : "400" }}>{s}</span>
 </div>
 ))}
@@ -370,12 +263,7 @@ return (
 <td style={{ padding: "12px 14px", color: "#E8EDF2", fontWeight: "600", whiteSpace: "nowrap" }}>{fmtNum(item.quantity)}</td>
 <td style={{ padding: "12px 14px", color: "#6B7F8E", whiteSpace: "nowrap" }}>{item.rate > 0 ? `Rs ${fmtNum(item.rate)}` : "-"}</td>
 <td style={{ padding: "12px 14px", whiteSpace: "nowrap" }}>
-{aiRate > 0 ? (
-<div>
-<div style={{ color: "#00C896", fontWeight: "700" }}>Rs {fmtNum(aiRate)}</div>
-{savingsPct !== 0 && <div style={{ color: savingsPct > 0 ? "#00C896" : "#FF4D4D", fontSize: "10px", marginTop: "1px" }}>{savingsPct > 0 ? "down" : "up"} {Math.abs(savingsPct)}% vs PDF</div>}
-</div>
-) : <span style={{ color: "#3A5068" }}>-</span>}
+{aiRate > 0 ? (<div><div style={{ color: "#00C896", fontWeight: "700" }}>Rs {fmtNum(aiRate)}</div>{savingsPct !== 0 && <div style={{ color: savingsPct > 0 ? "#00C896" : "#FF4D4D", fontSize: "10px", marginTop: "1px" }}>{savingsPct > 0 ? "down" : "up"} {Math.abs(savingsPct)}% vs PDF</div>}</div>) : <span style={{ color: "#3A5068" }}>-</span>}
 </td>
 <td style={{ padding: "10px 14px", whiteSpace: "nowrap" }}>
 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
@@ -383,9 +271,7 @@ return (
 <input type="number" placeholder={item.needsRate ? "Enter rate" : ""} value={editedRate || ""} onFocus={(e) => e.target.select()} onChange={(e) => { const val = e.target.value; props.onRateChange(idx, val === "" ? 0 : parseFloat(val) || 0); }} style={{ width: "100px", padding: "6px 10px", background: changed ? "rgba(245,166,35,0.1)" : "#0F1923", border: `1px solid ${item.needsRate && editedRate === 0 ? "#F5A623" : changed ? "#F5A623" : "#2A3F54"}`, borderRadius: "6px", color: changed ? "#F5A623" : "#E8EDF2", fontSize: "13px", fontWeight: "600", outline: "none" }} />
 </div>
 </td>
-<td style={{ padding: "12px 14px", fontWeight: "700", whiteSpace: "nowrap", color: item.quantity === 0 ? "#3A5068" : "#E8EDF2" }}>
-{item.quantity === 0 ? "-" : fmt(yourAmount)}
-</td>
+<td style={{ padding: "12px 14px", fontWeight: "700", whiteSpace: "nowrap", color: item.quantity === 0 ? "#3A5068" : "#E8EDF2" }}>{item.quantity === 0 ? "-" : fmt(yourAmount)}</td>
 <td style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>
 <button onClick={() => props.onViewAnalysis(idx)} style={{ background: "rgba(26,83,158,0.15)", border: "1px solid rgba(26,83,158,0.3)", color: "#5b9bd5", padding: "5px 10px", borderRadius: "6px", cursor: "pointer", fontSize: "11px", fontWeight: "700" }}>Rate Analysis</button>
 </td>
@@ -428,10 +314,7 @@ return (
 <div style={{ color: "#3A5068", fontSize: "11px", marginBottom: "12px", lineHeight: "1.4" }}>{props.sublabel}</div>
 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
 <input type="number" min="0" max="50" step="0.5" value={raw} onFocus={(e) => e.target.select()} onChange={(e) => { setRaw(e.target.value); const n = parseFloat(e.target.value); if (!isNaN(n) && n >= 0) props.onChange(n); }} onBlur={(e) => { const n = parseFloat(e.target.value); if (isNaN(n) || n < 0) { setRaw("0"); props.onChange(0); } else setRaw(String(n)); }} style={{ width: "70px", padding: "8px 10px", background: "#1A2A3A", border: `1px solid ${props.color}40`, borderRadius: "6px", color: props.color, fontSize: "16px", fontWeight: "800", outline: "none" }} />
-<div>
-<div style={{ color: props.color, fontSize: "16px", fontWeight: "800" }}>%</div>
-<div style={{ color: "#3A5068", fontSize: "10px" }}>{props.basis}</div>
-</div>
+<div><div style={{ color: props.color, fontSize: "16px", fontWeight: "800" }}>%</div><div style={{ color: "#3A5068", fontSize: "10px" }}>{props.basis}</div></div>
 </div>
 </div>
 );
@@ -458,6 +341,7 @@ const [result, setResult] = useState<UploadResult | null>(null);
 const [items, setItems] = useState<BOQItem[]>([]);
 const [errorMsg, setErrorMsg] = useState("");
 const [selectedItemIdx, setSelectedItemIdx] = useState<number | null>(null);
+const [selectedState, setSelectedState] = useState("Maharashtra");
 const stepTimer = useRef<any>(null);
 
 const [facilitation, setFacilitation] = useState(3);
@@ -470,9 +354,7 @@ const [projectMonths, setProjectMonths] = useState(6);
 const [raCycleDays, setRaCycleDays] = useState(60);
 
 const handleUpload = async (file: File) => {
-setUploadState("loading");
-setLoadingStep(0);
-setErrorMsg("");
+setUploadState("loading"); setLoadingStep(0); setErrorMsg("");
 let step = 0;
 const advanceStep = () => { step = Math.min(step + 1, 4); setLoadingStep(step); if (step < 4) stepTimer.current = setTimeout(advanceStep, 12000); };
 stepTimer.current = setTimeout(advanceStep, 8000);
@@ -481,6 +363,7 @@ const formData = new FormData();
 formData.append("pdf", file);
 formData.append("tenderType", "Civil");
 formData.append("tenderTitle", file.name.replace(".pdf", ""));
+formData.append("state", selectedState);
 const response = await fetch("https://boq-service-pov7.onrender.com/api/boq-upload", { method: "POST", body: formData });
 clearTimeout(stepTimer.current);
 if (!response.ok) { const err = await response.json(); throw new Error(err.error || "Upload failed"); }
@@ -491,11 +374,7 @@ setItems(data.boq.boqItems.map(item => ({ ...item, editedRate: item.needsRate ? 
 if (data.boq.executionDays) setProjectMonths(Math.ceil(data.boq.executionDays / 30));
 setUploadState("done");
 } else { throw new Error("Analysis failed"); }
-} catch (err: any) {
-clearTimeout(stepTimer.current);
-setErrorMsg(err.message || "Something went wrong");
-setUploadState("error");
-}
+} catch (err: any) { clearTimeout(stepTimer.current); setErrorMsg(err.message || "Something went wrong"); setUploadState("error"); }
 };
 
 const handleRateChange = (idx: number, rate: number) => { setItems(prev => prev.map((item, i) => i === idx ? { ...item, editedRate: rate } : item)); };
@@ -522,6 +401,7 @@ const bidReason = profitMargin >= 10 ? `Strong ${profitMargin}% margin - good ca
 const aiExecutionCost = items.reduce((sum, item) => sum + (item.quantity * (item.aiRate ?? item.rate ?? 0)), 0);
 const pdfBasedCost = items.reduce((sum, item) => sum + (item.quantity * (item.rate ?? 0)), 0);
 const needsRateCount = items.filter(it => it.needsRate && (it.editedRate ?? 0) === 0).length;
+const activeState = result?.boq.selectedState || selectedState;
 
 return (
 <div style={{ minHeight: "100vh", background: "#0F1923", fontFamily: "'Inter', 'DM Sans', sans-serif", color: "#E8EDF2" }}>
@@ -530,12 +410,15 @@ return (
 <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
 <div style={{ width: "40px", height: "40px", background: "linear-gradient(135deg, #F5A623, #FF8C00)", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px" }}>📐</div>
 <div>
-<div style={{ fontSize: "20px", fontWeight: "800", letterSpacing: "-0.5px" }}>TenderRadar <span style={{ color: "#F5A623" }}>Mumbai</span></div>
-<div style={{ fontSize: "12px", color: "#3A5068", fontWeight: "500" }}>BOQ Profit Calculator - Any Government Tender</div>
+<div style={{ fontSize: "20px", fontWeight: "800", letterSpacing: "-0.5px" }}>Tender<span style={{ color: "#F5A623" }}>Radar</span></div>
+<div style={{ fontSize: "12px", color: "#3A5068", fontWeight: "500" }}>BOQ Profit Calculator - Any Tender, Pan India</div>
 </div>
 </div>
 {uploadState === "done" && (
+<div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+<div style={{ background: "rgba(245,166,35,0.1)", border: "1px solid rgba(245,166,35,0.2)", borderRadius: "8px", padding: "6px 12px", color: "#F5A623", fontSize: "12px", fontWeight: "700" }}>{activeState}</div>
 <button onClick={handleReset} style={{ background: "transparent", border: "1px solid #2A3F54", color: "#6B7F8E", padding: "8px 18px", borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontWeight: "600" }}>Upload New PDF</button>
+</div>
 )}
 </div>
 
@@ -543,14 +426,14 @@ return (
 
 {uploadState === "idle" && (
 <div style={{ maxWidth: "700px", margin: "0 auto" }}>
-<div style={{ textAlign: "center", marginBottom: "48px" }}>
+<div style={{ textAlign: "center", marginBottom: "40px" }}>
 <div style={{ display: "inline-block", background: "rgba(245,166,35,0.1)", border: "1px solid rgba(245,166,35,0.2)", borderRadius: "20px", padding: "6px 16px", color: "#F5A623", fontSize: "12px", fontWeight: "700", letterSpacing: "1px", marginBottom: "20px" }}>BEFORE YOU BID - KNOW YOUR PROFIT</div>
 <h1 style={{ fontSize: "40px", fontWeight: "900", lineHeight: "1.15", letterSpacing: "-1px", marginBottom: "16px" }}>Will this tender<br /><span style={{ color: "#F5A623" }}>make you money?</span></h1>
-<p style={{ color: "#6B7F8E", fontSize: "16px", lineHeight: "1.7" }}>Upload the BOQ PDF from any government tender portal. We estimate real execution rates. You confirm or adjust. See your true profit.</p>
+<p style={{ color: "#6B7F8E", fontSize: "16px", lineHeight: "1.7" }}>Upload any BOQ PDF from any tender portal across India. We estimate real execution rates. You confirm or adjust. See your true profit.</p>
 </div>
-<UploadZone onUpload={handleUpload} />
-<div style={{ marginTop: "40px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
-{[{ icon: "📋", title: "Upload BOQ", desc: "Any government tender PDF - BMC, PWD, MMRDA, CPWD" }, { icon: "🤖", title: "AI Estimates Rates", desc: "Real execution cost per item, not just SOR rate" }, { icon: "💰", title: "See Real Profit", desc: "Including facilitation, overhead and working capital" }].map((s, i) => (
+<UploadZone onUpload={handleUpload} selectedState={selectedState} onStateChange={setSelectedState} />
+<div style={{ marginTop: "32px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
+{[{ icon: "📋", title: "Upload BOQ", desc: "Any tender PDF - government or private, any state" }, { icon: "🤖", title: "AI Estimates Rates", desc: "Real execution cost calibrated for your state" }, { icon: "💰", title: "See Real Profit", desc: "Including facilitation, overhead and working capital" }].map((s, i) => (
 <div key={i} style={{ background: "#1A2A3A", borderRadius: "12px", padding: "20px", border: "1px solid #2A3F54", textAlign: "center" }}>
 <div style={{ fontSize: "28px", marginBottom: "10px" }}>{s.icon}</div>
 <div style={{ color: "#E8EDF2", fontSize: "14px", fontWeight: "700", marginBottom: "4px" }}>{s.title}</div>
@@ -590,7 +473,6 @@ return (
 
 {uploadState === "done" && result && (
 <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: "24px", alignItems: "start" }}>
-
 <div>
 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px", flexWrap: "wrap", gap: "8px" }}>
 <div>
@@ -606,10 +488,10 @@ return (
 )}
 
 <div style={{ display: "flex", gap: "16px", marginBottom: "12px", flexWrap: "wrap" }}>
-<div style={{ fontSize: "12px", color: "#6B7F8E" }}><span style={{ color: "#6B7F8E", fontWeight: "700" }}>PDF Rate</span> = Government SOR rate</div>
-<div style={{ fontSize: "12px", color: "#6B7F8E" }}><span style={{ color: "#00C896", fontWeight: "700" }}>AI Estimate</span> = Real execution cost</div>
+<div style={{ fontSize: "12px", color: "#6B7F8E" }}><span style={{ color: "#6B7F8E", fontWeight: "700" }}>PDF Rate</span> = Tender SOR rate</div>
+<div style={{ fontSize: "12px", color: "#6B7F8E" }}><span style={{ color: "#00C896", fontWeight: "700" }}>AI Estimate</span> = Real execution cost ({activeState})</div>
 <div style={{ fontSize: "12px", color: "#6B7F8E" }}><span style={{ color: "#F5A623", fontWeight: "700" }}>Your Rate</span> = Edit if you know better</div>
-<div style={{ fontSize: "12px", color: "#5b9bd5" }}><span style={{ color: "#5b9bd5", fontWeight: "700" }}>Rate Analysis</span> = Annexure-D per item</div>
+<div style={{ fontSize: "12px", color: "#5b9bd5" }}><span style={{ color: "#5b9bd5", fontWeight: "700" }}>Rate Analysis</span> = Detailed breakdown per item</div>
 </div>
 
 <div style={{ background: "#1A2A3A", borderRadius: "12px", border: "1px solid #2A3F54", overflow: "hidden", marginBottom: "12px" }}>
@@ -634,7 +516,7 @@ return (
 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
 <div>
 <div style={{ color: "#E8EDF2", fontSize: "13px", fontWeight: "700" }}>Your Bid Percentage</div>
-<div style={{ color: "#3A5068", fontSize: "11px", marginTop: "2px" }}>Percent of dept estimate you plan to quote</div>
+<div style={{ color: "#3A5068", fontSize: "11px", marginTop: "2px" }}>Percent of tender estimate you plan to quote</div>
 </div>
 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
 <input type="number" min="70" max="100" step="0.5" value={bidPercentRaw} onFocus={(e) => e.target.select()} onChange={(e) => { setBidPercentRaw(e.target.value); const n = parseFloat(e.target.value); if (!isNaN(n) && n >= 70 && n <= 100) setBidPercent(n); }} onBlur={(e) => { const n = parseFloat(e.target.value); if (isNaN(n) || n < 70) { setBidPercentRaw("70"); setBidPercent(70); } else if (n > 100) { setBidPercentRaw("100"); setBidPercent(100); } else setBidPercentRaw(String(n)); }} style={{ width: "75px", padding: "8px 10px", background: "#1A2A3A", border: "1px solid #00C89640", borderRadius: "6px", color: "#00C896", fontSize: "16px", fontWeight: "800", outline: "none" }} />
@@ -667,7 +549,7 @@ return (
 </div>
 <div style={{ marginTop: "14px", background: "rgba(0,200,150,0.05)", borderRadius: "8px", padding: "12px", border: "1px solid rgba(0,200,150,0.1)" }}>
 <div style={{ color: "#00C896", fontSize: "12px", fontWeight: "700", marginBottom: "4px" }}>For Bank Loan Application</div>
-<div style={{ color: "#6B7F8E", fontSize: "12px", lineHeight: "1.6" }}>Request <strong style={{ color: "#E8EDF2" }}>{fmt(recommendedWorkingCapital)}</strong> as working capital loan. Repayable from RA bills every {raCycleDays} days. Total project value: <strong style={{ color: "#E8EDF2" }}>{fmt(expectedWinningBid)}</strong>.</div>
+<div style={{ color: "#6B7F8E", fontSize: "12px", lineHeight: "1.6" }}>Request <strong style={{ color: "#E8EDF2" }}>{fmt(recommendedWorkingCapital)}</strong> as working capital loan. Repayable from RA bills every {raCycleDays} days. Total tender value: <strong style={{ color: "#E8EDF2" }}>{fmt(expectedWinningBid)}</strong>.</div>
 </div>
 </div>
 </div>
@@ -700,7 +582,7 @@ return (
 <div style={{ background: "#1A2A3A", borderRadius: "12px", border: "1px solid #2A3F54", padding: "20px", marginBottom: "16px" }}>
 <div style={{ color: "#6B7F8E", fontSize: "11px", fontWeight: "700", letterSpacing: "1px", marginBottom: "16px" }}>FINANCIAL SUMMARY</div>
 {[
-{ label: "Dept Estimate", value: fmt(deptEstimate), color: "#E8EDF2", sub: "Sum of BOQ at PDF SOR rates" },
+{ label: "Tender Estimate", value: fmt(deptEstimate), color: "#E8EDF2", sub: "Sum of BOQ at tender SOR rates" },
 { label: "Your Winning Bid", value: fmt(expectedWinningBid), color: "#00C896", sub: `${bidPercent}% of estimate` },
 { label: "Execution Cost", value: fmt(executionCost), color: "#E8EDF2", sub: "At your edited rates" },
 { label: "Facilitation Cost", value: fmt(facilitationCost), color: "#FF4D4D", sub: `${facilitation}% of bid` },
@@ -709,10 +591,7 @@ return (
 { label: realProfit >= 0 ? "Net Profit" : "Net Loss", value: fmt(Math.abs(realProfit)), color: realProfit >= 0 ? "#00C896" : "#FF4D4D", sub: realProfit >= 0 ? "You keep this" : "You lose this", bold: true },
 ].map((row) => (
 <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #0F1923" }}>
-<div>
-<div style={{ color: "#6B7F8E", fontSize: "12px" }}>{row.label}</div>
-<div style={{ color: "#3A5068", fontSize: "10px" }}>{row.sub}</div>
-</div>
+<div><div style={{ color: "#6B7F8E", fontSize: "12px" }}>{row.label}</div><div style={{ color: "#3A5068", fontSize: "10px" }}>{row.sub}</div></div>
 <div style={{ color: row.color, fontSize: row.bold ? "15px" : "14px", fontWeight: row.bold ? "800" : "600", fontFamily: "monospace" }}>{row.value}</div>
 </div>
 ))}
@@ -724,7 +603,7 @@ return (
 <div style={{ background: "#0F1923", borderRadius: "8px", padding: "12px", border: "1px solid rgba(255,77,77,0.2)" }}><div style={{ color: "#6B7F8E", fontSize: "10px", fontWeight: "700", marginBottom: "4px" }}>MINIMUM</div><div style={{ color: "#FF4D4D", fontSize: "16px", fontWeight: "800" }}>{fmt(minWorkingCapital)}</div><div style={{ color: "#3A5068", fontSize: "10px", marginTop: "2px" }}>Must have upfront</div></div>
 <div style={{ background: "#0F1923", borderRadius: "8px", padding: "12px", border: "1px solid rgba(245,166,35,0.2)" }}><div style={{ color: "#6B7F8E", fontSize: "10px", fontWeight: "700", marginBottom: "4px" }}>RECOMMENDED</div><div style={{ color: "#F5A623", fontSize: "16px", fontWeight: "800" }}>{fmt(recommendedWorkingCapital)}</div><div style={{ color: "#3A5068", fontSize: "10px", marginTop: "2px" }}>Safe with delays</div></div>
 <div style={{ background: "#0F1923", borderRadius: "8px", padding: "12px", border: "1px solid #2A3F54" }}><div style={{ color: "#6B7F8E", fontSize: "10px", fontWeight: "700", marginBottom: "4px" }}>MONTHLY SPEND</div><div style={{ color: "#E8EDF2", fontSize: "16px", fontWeight: "800" }}>{fmt(monthlySpend)}</div><div style={{ color: "#3A5068", fontSize: "10px", marginTop: "2px" }}>Per month</div></div>
-<div style={{ background: "#0F1923", borderRadius: "8px", padding: "12px", border: "1px solid #2A3F54" }}><div style={{ color: "#6B7F8E", fontSize: "10px", fontWeight: "700", marginBottom: "4px" }}>RA CYCLE</div><div style={{ color: "#6B7F8E", fontSize: "16px", fontWeight: "800" }}>{raCycleDays} days</div><div style={{ color: "#3A5068", fontSize: "10px", marginTop: "2px" }}>Govt pays every</div></div>
+<div style={{ background: "#0F1923", borderRadius: "8px", padding: "12px", border: "1px solid #2A3F54" }}><div style={{ color: "#6B7F8E", fontSize: "10px", fontWeight: "700", marginBottom: "4px" }}>RA CYCLE</div><div style={{ color: "#6B7F8E", fontSize: "16px", fontWeight: "800" }}>{raCycleDays} days</div><div style={{ color: "#3A5068", fontSize: "10px", marginTop: "2px" }}>Payment every</div></div>
 </div>
 </div>
 
@@ -748,7 +627,7 @@ return (
 </div>
 
 {selectedItemIdx !== null && items[selectedItemIdx] && (
-<ItemAnnexureD item={items[selectedItemIdx]} itemNumber={selectedItemIdx + 1} onClose={() => setSelectedItemIdx(null)} />
+<ItemRateAnalysis item={items[selectedItemIdx]} itemNumber={selectedItemIdx + 1} state={activeState} onClose={() => setSelectedItemIdx(null)} />
 )}
 
 <style>{`
@@ -756,6 +635,7 @@ return (
 * { box-sizing: border-box; margin: 0; padding: 0; }
 input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
 input[type=number] { -moz-appearance: textfield; }
+select option { background: #1A2A3A; color: #E8EDF2; }
 @media print {
 body * { visibility: hidden; }
 .annexure-print, .annexure-print * { visibility: visible; }
@@ -766,3 +646,4 @@ body * { visibility: hidden; }
 </div>
 );
 }
+
