@@ -383,38 +383,60 @@ return matches.map(m => parseFloat(m.replace(/,/g, ''))).filter(n => !isNaN(n) &
 
 function tryParseItemNumbers(desc, numLines) {
 let unit = 'Nos';
-const unitMatch = desc.match(/\b(Sqm|Cum|Rmt|Nos|NOS|MT|Kg|Ltr|Mtr|Each|Set|Ls|Rm|No)\b/i);
-if (unitMatch) unit = unitMatch[1].toUpperCase();
-for (const nl of numLines) {
-const um = nl.line.match(/\b(Sqm|Cum|Rmt|Nos|NOS|MT|Kg|Ltr|Mtr|Each|Set|Ls|Rm|No)\b/i);
-if (um) { unit = um[1].toUpperCase(); break; }
+const unitPatterns = ['Sqm', 'Cum', 'Rmt', 'Nos', 'NOS', 'MT', 'Kg', 'Ltr', 'Mtr', 'Each', 'Set', 'Ls', 'Rm', 'No', 'Sqft', 'Cft'];
+
+for (const u of unitPatterns) {
+if (new RegExp(`\\b${u}\\b`, 'i').test(desc)) { unit = u.toUpperCase(); break; }
 }
-let bestRate = 0, bestQty = 0, bestAmount = 0;
+
 for (const nl of numLines) {
-const nums = nl.numbers.filter(n => n > 0 && n < 100000000);
+for (const u of unitPatterns) {
+if (new RegExp(`\\b${u}\\b`, 'i').test(nl.line)) { unit = u.toUpperCase(); break; }
+}
+if (unit !== 'Nos') break;
+}
+
+let bestQty = 0, bestRate = 0, bestAmount = 0;
+
+for (const nl of numLines) {
+const line = nl.line;
+let unitIdx = -1;
+for (const u of unitPatterns) {
+const match = line.match(new RegExp(`\\b${u}\\b`, 'i'));
+if (match) { unitIdx = match.index; break; }
+}
+
+let nums;
+if (unitIdx >= 0) {
+const afterUnit = line.substring(unitIdx + 3);
+const matches = afterUnit.match(/[\d,]+\.?\d*/g) || [];
+nums = matches.map(m => parseFloat(m.replace(/,/g, ''))).filter(n => !isNaN(n) && n > 0);
+} else {
+nums = nl.numbers.filter(n => n > 0 && n < 100000000);
+}
+
 if (nums.length >= 3) {
-let found = false;
-for (let a = 0; a < nums.length - 2 && !found; a++) {
-for (let b = a + 1; b < nums.length - 1 && !found; b++) {
-for (let c = b + 1; c < nums.length && !found; c++) {
-if (Math.abs(nums[a] * nums[b] - nums[c]) / (nums[c] + 1) < 0.05) {
-bestQty = nums[a]; bestRate = nums[b]; bestAmount = nums[c]; found = true;
+bestQty = nums[0];
+bestRate = nums[1];
+bestAmount = nums[2];
+if (bestQty > 0 && bestRate > 0 && Math.abs(bestQty * bestRate - bestAmount) / (bestAmount + 1) > 0.20) {
+if (bestRate > 0 && bestAmount > 0) bestQty = Math.round((bestAmount / bestRate) * 100) / 100;
 }
-}
-}
-}
-if (!found) { const last3 = nums.slice(-3); bestQty = last3[0]; bestRate = last3[1]; bestAmount = last3[2]; }
 } else if (nums.length === 2) {
-bestRate = nums[0]; bestAmount = nums[1];
-bestQty = bestRate > 0 ? Math.round((bestAmount / bestRate) * 100) / 100 : 0;
+bestQty = nums[0];
+bestAmount = nums[1];
+bestRate = 0;
+} else if (nums.length === 1) {
+bestQty = nums[0];
 }
-if (bestRate > 0 && bestAmount > 0) break;
+
+if (bestQty > 0) break;
 }
-if (bestQty > 0 && bestRate > 0 && bestAmount > 0) {
-if (Math.abs(bestQty * bestRate - bestAmount) / bestAmount > 0.15) bestQty = Math.round((bestAmount / bestRate) * 100) / 100;
-}
+
 return { unit, qty: bestQty, rate: bestRate, amount: bestAmount };
 }
+
+
 
 function cleanDesc(desc) {
 return desc.replace(/^[A-Z0-9]+-[A-Z0-9]+-[A-Z0-9]+-?[A-Z0-9]*/g, '').replace(/\s+/g, ' ').trim().substring(0, 300);
