@@ -381,39 +381,86 @@ return matches.map(m => parseFloat(m.replace(/,/g, ''))).filter(n => !isNaN(n) &
 }
 
 function tryParseItemNumbers(desc, numLines) {
-let unit = 'Nos';
-const unitMatch = desc.match(/\b(Sqm|Cum|Rmt|Nos|NOS|MT|Kg|Ltr|Mtr|Each|Set|Ls|Rm|No)\b/i);
-if (unitMatch) unit = unitMatch[1].toUpperCase();
-for (const nl of numLines) {
-const um = nl.line.match(/\b(Sqm|Cum|Rmt|Nos|NOS|MT|Kg|Ltr|Mtr|Each|Set|Ls|Rm|No)\b/i);
-if (um) { unit = um[1].toUpperCase(); break; }
+// Find unit from description first
+let unit = 'NOS';
+const unitPatterns = ['Sqm', 'Cum', 'Rmt', 'Nos', 'MT', 'Kg', 'Ltr', 'Mtr', 'Each', 'Set', 'Ls', 'Rm', 'Sqft', 'Cft', 'Job', 'Lot', 'Bag', 'Ton'];
+
+for (const u of unitPatterns) {
+if (new RegExp(`\\b${u}\\b`, 'i').test(desc)) { unit = u.toUpperCase(); break; }
 }
-let bestRate = 0, bestQty = 0, bestAmount = 0;
 for (const nl of numLines) {
-const nums = nl.numbers.filter(n => n > 0 && n < 100000000);
+for (const u of unitPatterns) {
+if (new RegExp(`\\b${u}\\b`, 'i').test(nl.line)) { unit = u.toUpperCase(); break; }
+}
+if (unit !== 'NOS') break;
+}
+
+let bestQty = 0, bestRate = 0, bestAmount = 0;
+
+for (const nl of numLines) {
+const line = nl.line;
+
+// Find unit position in this line
+let unitEndIdx = -1;
+for (const u of unitPatterns) {
+const match = line.match(new RegExp(`\\b${u}\\b`, 'i'));
+if (match) { unitEndIdx = match.index + match[0].length; break; }
+}
+
+let nums;
+if (unitEndIdx >= 0) {
+// Take numbers strictly AFTER the unit
+const afterUnit = line.substring(unitEndIdx);
+const matches = afterUnit.match(/[\d,]+\.?\d*/g) || [];
+nums = matches.map(s => parseFloat(s.replace(/,/g, ''))).filter(n => !isNaN(n) && n > 0 && n < 100000000);
+} else {
+// No unit in line — use all numbers >= 1
+nums = nl.numbers.filter(n => n >= 1 && n < 100000000);
+}
+
+if (nums.length === 0) continue;
+
 if (nums.length >= 3) {
+// Try to find qty * rate = amount
 let found = false;
-for (let a = 0; a < nums.length - 2 && !found; a++) {
-for (let b = a + 1; b < nums.length - 1 && !found; b++) {
-for (let c = b + 1; c < nums.length && !found; c++) {
-if (Math.abs(nums[a] * nums[b] - nums[c]) / (nums[c] + 1) < 0.05) {
-bestQty = nums[a]; bestRate = nums[b]; bestAmount = nums[c]; found = true;
+for (let qi = 0; qi < nums.length - 1 && !found; qi++) {
+for (let ri = qi + 1; ri < nums.length && !found; ri++) {
+const product = nums[qi] * nums[ri];
+for (let ai = ri + 1; ai < nums.length && !found; ai++) {
+if (Math.abs(product - nums[ai]) / (nums[ai] + 1) < 0.20) {
+bestQty = nums[qi]; bestRate = nums[ri]; bestAmount = nums[ai]; found = true;
 }
 }
 }
 }
-if (!found) { const last3 = nums.slice(-3); bestQty = last3[0]; bestRate = last3[1]; bestAmount = last3[2]; }
+if (!found) {
+// No clean match — last number is total qty (zero-rate BOQ pattern)
+bestQty = nums[nums.length - 1];
+bestRate = 0; bestAmount = 0;
+}
 } else if (nums.length === 2) {
-bestRate = nums[0]; bestAmount = nums[1];
-bestQty = bestRate > 0 ? Math.round((bestAmount / bestRate) * 100) / 100 : 0;
+// Two numbers after unit
+// If second is much larger than first, likely qty + amount
+if (nums[1] > nums[0] * 3) {
+bestQty = nums[0]; bestAmount = nums[1]; bestRate = 0;
+} else {
+// Could be qty + rate — take first as qty
+bestQty = nums[0]; bestRate = nums[1]; bestAmount = 0;
 }
-if (bestRate > 0 && bestAmount > 0) break;
+} else {
+bestQty = nums[0];
 }
-if (bestQty > 0 && bestRate > 0 && bestAmount > 0) {
-if (Math.abs(bestQty * bestRate - bestAmount) / bestAmount > 0.15) bestQty = Math.round((bestAmount / bestRate) * 100) / 100;
+
+if (bestQty > 0) break;
 }
+
+// Derive missing values
+if (bestRate === 0 && bestQty > 0 && bestAmount > 0) bestRate = Math.round(bestAmount / bestQty);
+if (bestAmount === 0 && bestQty > 0 && bestRate > 0) bestAmount = Math.round(bestQty * bestRate);
+
 return { unit, qty: bestQty, rate: bestRate, amount: bestAmount };
 }
+
 
 function cleanDesc(desc) {
 return desc.replace(/^[A-Z0-9]+-[A-Z0-9]+-[A-Z0-9]+-?[A-Z0-9]*/g, '').replace(/\s+/g, ' ').trim().substring(0, 300);
