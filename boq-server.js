@@ -264,7 +264,7 @@ let parentDescription = '';
 const m = stateMultiplier || 1.0;
 
 for (let i = headerRowIdx + 1; i < rows.length; i++) {
-  if (i < headerRowIdx +50) console.log('Row ${i}: [${rows[i].join('|')}]'):
+  if (i < headerRowIdx +50) console.log('Row ${i}: [${(rows[i] || []).join('|')}]');
 const row = rows[i];
 if (!row || row.length === 0) continue;
 if (isSummaryRow(row)) { console.log(` -> Summary row at ${i}, stopping`); break; }
