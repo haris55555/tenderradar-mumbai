@@ -485,18 +485,20 @@ return items;
 }
 
 function validateItems(items) {
-// Count items with valid qty and reasonable data
-return items.filter(it => {
+if (items.length === 0) return 0;
+const validCount = items.filter(it => {
 if (!it.quantity || it.quantity <= 0) return false;
-if (it.quantity < 0.01 || it.quantity > 9999999) return false;
-// If has rate and amount, check consistency
+if (it.quantity < 0.5) return false; // reject fractional garbage quantities
+if (it.quantity > 9999999) return false;
 if (it.rate > 0 && it.amount > 0) {
 return Math.abs(it.quantity * it.rate - it.amount) / (it.amount + 1) < 0.30;
 }
-// Zero-rate BOQ — qty alone is valid
-return it.quantity > 0;
+return it.quantity >= 1; // zero-rate BOQ needs qty >= 1
 }).length;
+return validCount;
 }
+
+
 
 function extractTablesWithPdfplumber(pdfPath) {
 return new Promise((resolve, reject) => {
