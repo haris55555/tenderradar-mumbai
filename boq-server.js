@@ -310,7 +310,9 @@ else { pendingDescription = anyDesc; parentDescription = anyDesc; }
 }
 }
 
+console.log(` -> Rows processed: ${rows.length}, items found: ${boqItems.length}, pending at end: "${pendingDescription.substring(0,50)}"`);
 console.log(` -> parseTableClean found ${boqItems.length} items`);
+
 return boqItems;
 }
 
