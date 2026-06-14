@@ -177,6 +177,7 @@ return 0;
 
 const KNOWN_UNITS = ['cum', 'sqm', 'rm', 'nos', 'mt', 'kg', 'ltr', 'ls', 'set', 'rmt', 'sqft', 'cft', 'mtr', 'unit', 'job', 'lot', 'month', 'day', 'hr', 'ton', 'quintal', 'bag', 'pair', 'cbo', 'each', 'no', 'num', 'per', 'point', 'trip', 'visit', 'lump', 'seat', 'sq.m', 'rs/kg', 'm', 'mm', 'shift', 'mtr.', 'nos.', 'set.', 'sqm.', 'rmt.', 'each.'];
 const SUMMARY_KEYWORDS = ['estimated cost', 'contractors rebate', "contractor's rebate", 'gst 18', 'contract sum', 'contingency', 'contract cost', 'water charges', 'sewerage charges', 'supervision charges', 'total project cost', 'project cost', 'cost after rebate', 'physical contingency', 'cost contingency', 'grand total', 'net amount', 'taxable amount', 'total amount in rs'];
+const UNIT_PATTERNS = ['Sqm', 'Cum', 'Rmt', 'Nos', 'NOS', 'MT', 'Kg', 'Ltr', 'Mtr', 'Each', 'Set', 'Ls', 'Rm', 'No', 'Sqft', 'Cft', 'Rmt', 'Job', 'Lot', 'Bag', 'Ton'];
 
 function isUnit(val) {
 if (!val) return false;
@@ -246,7 +247,7 @@ if ((v === 'rate' || v === 'rate (rs)' || v.startsWith('rate')) && rateCol === -
 if ((v.includes('amount') || v === 'amt') && amountCol === -1) amountCol = ci;
 }
 if (qtyCol === -1 && rateCol !== -1 && amountCol !== -1 && amountCol > rateCol + 1) qtyCol = rateCol + 1;
-console.log(`Header detected at row ${i}: desc=${descCol} unit=${unitCol} qty=${qtyCol} rate=${rateCol} amount=${amountCol}`);
+console.log(`Header detected: desc=${descCol} unit=${unitCol} qty=${qtyCol} rate=${rateCol} amount=${amountCol}`);
 return { headerRowIdx: i, descCol, unitCol, qtyCol, rateCol, amountCol };
 }
 }
@@ -255,9 +256,9 @@ return null;
 
 function parseTableClean(rows, stateMultiplier) {
 const header = detectHeader(rows);
-if (!header) { console.log(' -> No header found'); return []; }
+if (!header) return [];
 const { headerRowIdx, descCol, unitCol, qtyCol, rateCol, amountCol } = header;
-if (descCol === -1 || (rateCol === -1 && amountCol === -1)) { console.log(' -> Skipped: missing columns'); return []; }
+if (descCol === -1 || (rateCol === -1 && amountCol === -1)) return [];
 
 const boqItems = [];
 let pendingDescription = '';
@@ -267,7 +268,7 @@ const m = stateMultiplier || 1.0;
 for (let i = headerRowIdx + 1; i < rows.length; i++) {
 const row = rows[i];
 if (!row || !Array.isArray(row) || row.length === 0) continue;
-if (isSummaryRow(row)) { console.log(` -> Summary row at ${i}, stopping`); break; }
+if (isSummaryRow(row)) break;
 if (isNoteRow(row)) continue;
 if (isHeaderRepeatRow(row)) continue;
 
@@ -311,8 +312,100 @@ else { pendingDescription = anyDesc; parentDescription = anyDesc; }
 }
 }
 
-console.log(` -> parseTableClean found ${boqItems.length} items`);
+console.log(` -> Table parser found ${boqItems.length} items`);
 return boqItems;
+}
+
+function extractNumbersFromLine(line) {
+const matches = (line || '').match(/[\d,]+\.?\d*/g) || [];
+return matches.map(m => parseFloat(m.replace(/,/g, ''))).filter(n => !isNaN(n) && n > 0);
+}
+
+function findUnitInText(text) {
+for (const u of UNIT_PATTERNS) {
+if (new RegExp(`\\b${u}\\b`, 'i').test(text)) return u.toUpperCase();
+}
+return null;
+}
+
+function tryParseItemNumbers(desc, numLines) {
+// Find unit from description first, then from numeric lines
+let unit = findUnitInText(desc) || 'NOS';
+for (const nl of numLines) {
+const u = findUnitInText(nl.line);
+if (u) { unit = u; break; }
+}
+
+let bestQty = 0, bestRate = 0, bestAmount = 0;
+
+for (const nl of numLines) {
+const line = nl.line;
+
+// Find unit position in this line
+let unitEndIdx = -1;
+for (const u of UNIT_PATTERNS) {
+const match = line.match(new RegExp(`\\b${u}\\b`, 'i'));
+if (match) { unitEndIdx = match.index + match[0].length; break; }
+}
+
+// Get numbers - prefer numbers AFTER unit if unit found in line
+let nums;
+if (unitEndIdx >= 0) {
+const afterUnit = line.substring(unitEndIdx);
+const matches = afterUnit.match(/[\d,]+\.?\d*/g) || [];
+nums = matches.map(m => parseFloat(m.replace(/,/g, ''))).filter(n => !isNaN(n) && n > 0);
+} else {
+nums = nl.numbers.filter(n => n > 0 && n < 100000000);
+}
+
+if (nums.length === 0) continue;
+
+if (nums.length >= 3) {
+// Try: first=qty, second=rate, third=amount (standard BOQ with rates)
+const q = nums[0], r = nums[1], a = nums[nums.length - 1];
+if (r > 0 && a > 0 && Math.abs(q * r - a) / (a + 1) < 0.25) {
+bestQty = q; bestRate = r; bestAmount = a; break;
+}
+// Try other qty/rate combinations
+let found = false;
+for (let qi = 0; qi < nums.length - 1 && !found; qi++) {
+for (let ri = qi + 1; ri < nums.length && !found; ri++) {
+const product = nums[qi] * nums[ri];
+for (let ai = ri + 1; ai < nums.length && !found; ai++) {
+if (Math.abs(product - nums[ai]) / (nums[ai] + 1) < 0.25) {
+bestQty = nums[qi]; bestRate = nums[ri]; bestAmount = nums[ai]; found = true;
+}
+}
+}
+}
+if (found) break;
+// Zero-rate BOQ: last number is total qty, no rate
+bestQty = nums[nums.length - 1];
+bestRate = 0; bestAmount = 0; break;
+} else if (nums.length === 2) {
+// Could be qty+amount or qty+rate — take larger as amount
+if (nums[1] > nums[0] * 2) { bestQty = nums[0]; bestAmount = nums[1]; bestRate = 0; }
+else { bestQty = nums[nums.length - 1]; bestRate = 0; bestAmount = 0; }
+break;
+} else if (nums.length === 1) {
+bestQty = nums[0]; break;
+}
+}
+
+// If we only got qty from same-line and no numLines had unit, use desc line numbers
+if (bestQty === 0 && numLines.length > 0) {
+const allNums = numLines.flatMap(nl => nl.numbers).filter(n => n > 0 && n < 100000000);
+if (allNums.length > 0) bestQty = allNums[allNums.length - 1];
+}
+
+return { unit, qty: bestQty, rate: bestRate, amount: bestAmount };
+}
+
+function cleanDesc(desc) {
+return desc
+.replace(/^[\d.]+\s+/, '') // remove leading sr no
+.replace(/^[A-Z0-9]+-[A-Z0-9]+-?[A-Z0-9]*\s*/g, '') // remove item codes
+.replace(/\s+/g, ' ').trim().substring(0, 300);
 }
 
 function parseBoqFromText(pages, stateMultiplier) {
@@ -322,22 +415,29 @@ const lines = allText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 const m = stateMultiplier || 1.0;
 console.log(`Text parser: ${pages.length} pages, ${lines.length} lines`);
 
-const STOP_KEYWORDS = ['estimated cost', 'total amount', 'grand total', 'gst', 'contingency', 'supervision', 'total project'];
+const STOP_KEYWORDS = ['estimated cost', 'total amount', 'grand total', 'contingency', 'supervision charges', 'total project cost'];
 const SKIP_STARTS = ['drk office', 'security room', 'pump room', 'rest room', 'prayer hall', 'wood storage', 'washing area', 'fire escape', 'lift lobby'];
 
 let currentItem = null;
 
 const saveCurrentItem = () => {
-if (currentItem && currentItem.desc.length > 10) {
+if (!currentItem || currentItem.desc.length < 5) { currentItem = null; return; }
 const parsed = tryParseItemNumbers(currentItem.desc, currentItem.numLines);
-if (parsed && parsed.rate > 0) {
+if (parsed && parsed.qty > 0) {
+// Derive rate from amount/qty if rate missing
+if (parsed.rate === 0 && parsed.amount > 0 && parsed.qty > 0) {
+parsed.rate = Math.round(parsed.amount / parsed.qty);
+}
+const aiRate = classifyAndEstimate(currentItem.desc, parsed.unit, parsed.rate, m);
 items.push({
-item: cleanDesc(currentItem.desc), unit: parsed.unit,
-quantity: parsed.qty, rate: parsed.rate, amount: parsed.amount,
-aiRate: classifyAndEstimate(currentItem.desc, parsed.unit, parsed.rate, m),
+item: cleanDesc(currentItem.desc),
+unit: parsed.unit,
+quantity: Math.round(parsed.qty * 100) / 100,
+rate: Math.round(parsed.rate * 100) / 100,
+amount: Math.round(parsed.amount * 100) / 100,
+aiRate,
 needsRate: false
 });
-}
 }
 currentItem = null;
 };
@@ -345,28 +445,37 @@ currentItem = null;
 for (let i = 0; i < lines.length; i++) {
 const line = lines[i];
 const lineLower = line.toLowerCase();
+
 if (STOP_KEYWORDS.some(k => lineLower.includes(k))) { saveCurrentItem(); continue; }
 if (lineLower.includes('length') && lineLower.includes('width') && lineLower.includes('height')) continue;
 if (SKIP_STARTS.some(k => lineLower.startsWith(k))) continue;
 if (lineLower.startsWith('say ') || lineLower === 'say') continue;
 if (line.match(/^[\d\s.,]+$/) && line.trim().split(/\s+/).length <= 5) continue;
 
-const srNoMatch = line.match(/^(\d{1,3})\s+(.+)/);
+// Match Sr.No including sub-items like 1.1, 1.2, 2.1 etc
+const srNoMatch = line.match(/^(\d{1,3}(?:\.\d{1,2})?)\s+(.+)/);
 if (srNoMatch) {
-const srNo = parseInt(srNoMatch[1]);
+const srNo = parseFloat(srNoMatch[1]);
 const rest = srNoMatch[2].trim();
-if (srNo >= 1 && srNo <= 150 && rest.length > 5) {
+if (srNo >= 1 && srNo <= 500 && rest.length > 3) {
 saveCurrentItem();
-currentItem = { srNo, desc: rest, numLines: [{ line: rest, numbers: extractNumbersFromLine(rest) }] };
-
+// Always put the item's own line into numLines for number extraction
+currentItem = {
+srNo,
+desc: rest,
+numLines: [{ line: rest, numbers: extractNumbersFromLine(rest) }]
+};
 continue;
 }
 }
 
 if (currentItem) {
 const numbers = extractNumbersFromLine(line);
-if (numbers.length >= 2) currentItem.numLines.push({ line, numbers });
-else if (isDescriptionText(line) && line.length > 5) currentItem.desc += ' ' + line;
+if (numbers.length >= 2) {
+currentItem.numLines.push({ line, numbers });
+} else if (isDescriptionText(line) && line.length > 5 && !line.match(/^\d/)) {
+currentItem.desc += ' ' + line;
+}
 }
 }
 saveCurrentItem();
@@ -375,70 +484,18 @@ console.log(`Text parser found ${items.length} items`);
 return items;
 }
 
-function extractNumbersFromLine(line) {
-const matches = line.match(/[\d,]+\.?\d*/g) || [];
-return matches.map(m => parseFloat(m.replace(/,/g, ''))).filter(n => !isNaN(n) && n > 0);
+function validateItems(items) {
+// Count items with valid qty and reasonable data
+return items.filter(it => {
+if (!it.quantity || it.quantity <= 0) return false;
+if (it.quantity < 0.01 || it.quantity > 9999999) return false;
+// If has rate and amount, check consistency
+if (it.rate > 0 && it.amount > 0) {
+return Math.abs(it.quantity * it.rate - it.amount) / (it.amount + 1) < 0.30;
 }
-
-function tryParseItemNumbers(desc, numLines) {
-let unit = 'Nos';
-const unitPatterns = ['Sqm', 'Cum', 'Rmt', 'Nos', 'NOS', 'MT', 'Kg', 'Ltr', 'Mtr', 'Each', 'Set', 'Ls', 'Rm', 'No', 'Sqft', 'Cft'];
-
-for (const u of unitPatterns) {
-if (new RegExp(`\\b${u}\\b`, 'i').test(desc)) { unit = u.toUpperCase(); break; }
-}
-
-for (const nl of numLines) {
-for (const u of unitPatterns) {
-if (new RegExp(`\\b${u}\\b`, 'i').test(nl.line)) { unit = u.toUpperCase(); break; }
-}
-if (unit !== 'Nos') break;
-}
-
-let bestQty = 0, bestRate = 0, bestAmount = 0;
-
-for (const nl of numLines) {
-const line = nl.line;
-let unitIdx = -1;
-for (const u of unitPatterns) {
-const match = line.match(new RegExp(`\\b${u}\\b`, 'i'));
-if (match) { unitIdx = match.index; break; }
-}
-
-let nums;
-if (unitIdx >= 0) {
-const afterUnit = line.substring(unitIdx + 3);
-const matches = afterUnit.match(/[\d,]+\.?\d*/g) || [];
-nums = matches.map(m => parseFloat(m.replace(/,/g, ''))).filter(n => !isNaN(n) && n > 0);
-} else {
-nums = nl.numbers.filter(n => n > 0 && n < 100000000);
-}
-
-if (nums.length >= 3) {
-bestQty = nums[0];
-bestRate = nums[1];
-bestAmount = nums[2];
-if (bestQty > 0 && bestRate > 0 && Math.abs(bestQty * bestRate - bestAmount) / (bestAmount + 1) > 0.20) {
-if (bestRate > 0 && bestAmount > 0) bestQty = Math.round((bestAmount / bestRate) * 100) / 100;
-}
-} else if (nums.length === 2) {
-bestQty = nums[0];
-bestAmount = nums[1];
-bestRate = 0;
-} else if (nums.length === 1) {
-bestQty = nums[0];
-}
-
-if (bestQty > 0) break;
-}
-
-return { unit, qty: bestQty, rate: bestRate, amount: bestAmount };
-}
-
-
-
-function cleanDesc(desc) {
-return desc.replace(/^[A-Z0-9]+-[A-Z0-9]+-[A-Z0-9]+-?[A-Z0-9]*/g, '').replace(/\s+/g, ' ').trim().substring(0, 300);
+// Zero-rate BOQ — qty alone is valid
+return it.quantity > 0;
+}).length;
 }
 
 function extractTablesWithPdfplumber(pdfPath) {
@@ -495,13 +552,12 @@ let combinedRows = [...tables[startIdx]];
 for (let t = startIdx + 1; t < endIdx; t++) {
 if (!tables[t] || tables[t].length === 0) continue;
 if (!Array.isArray(tables[t][0])) continue;
-if (isMeasurementSheetTable(tables[t])) { console.log(`Skipping measurement sheet at table ${t}`); continue; }
+if (isMeasurementSheetTable(tables[t])) continue;
 combinedRows = combinedRows.concat(tables[t]);
 }
 console.log(`BOQ section ${hi + 1}: ${combinedRows.length} combined rows`);
 const items = parseTableClean(combinedRows, m);
 tableItems = tableItems.concat(items);
-console.log(` -> Got ${items.length} items from BOQ section ${hi + 1}`);
 }
 console.log(`Table parser total: ${tableItems.length} items`);
 }
@@ -516,27 +572,24 @@ textItems = parseBoqFromText(extracted.pages, m);
 console.log(`Text parser total: ${textItems.length} items`);
 }
 
-// ── PICK BEST ──
+// ── SMART WINNER SELECTION based on data quality ──
+const tableValid = validateItems(tableItems);
+const textValid = validateItems(textItems);
+console.log(`Validation — Table: ${tableValid}/${tableItems.length} valid | Text: ${textValid}/${textItems.length} valid`);
+
 let boqItems = [];
-// Calculate average quantity to detect garbage table extraction
-const tableAvgQty = tableItems.length > 0 ? tableItems.reduce((s, i) => s + i.quantity, 0) / tableItems.length : 0;
-const textAvgQty = textItems.length > 0 ? textItems.reduce((s, i) => s + i.quantity, 0) / textItems.length : 0;
-
-// Prefer text parser if table avg qty looks suspicious (under 10) or text finds more items
-if (tableItems.length > 0 && textItems.length > 0) {
-if (tableAvgQty < 10 || textItems.length > tableItems.length * 1.2) {
-console.log(`Winner: text parser (table avg qty ${tableAvgQty.toFixed(1)} suspicious or text has more items)`);
+if (tableValid === 0 && textValid === 0) {
+// Neither parser produced valid data — take whichever has more items
+boqItems = tableItems.length >= textItems.length ? tableItems : textItems;
+} else if (textValid > tableValid) {
+console.log(`Winner: text parser (${textValid} valid vs ${tableValid})`);
 boqItems = textItems;
+} else if (tableValid >= textValid && tableValid > 0) {
+console.log(`Winner: table parser (${tableValid} valid vs ${textValid})`);
+boqItems = tableItems;
 } else {
-console.log(`Winner: table parser (${tableItems.length} vs ${textItems.length})`);
-boqItems = tableItems;
+boqItems = textItems.length > 0 ? textItems : tableItems;
 }
-} else if (tableItems.length > 0) {
-boqItems = tableItems;
-} else if (textItems.length > 0) {
-boqItems = textItems;
-}
-
 
 const estimatedCost = boqItems.reduce((sum, item) => sum + (item.amount || 0), 0);
 if (boqItems.length > 0) return { extractionSuccess: true, boqItems, tenderValue: estimatedCost > 0 ? estimatedCost : tenderValue };
