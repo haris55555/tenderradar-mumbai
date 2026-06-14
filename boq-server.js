@@ -444,7 +444,7 @@ return { extractionSuccess: false, boqItems: [], tenderValue };
 }
 
 // Fallback: treat as array of tables (old format)
-const tables = Array.isArray(extracted) ? extracted : [];
+const tables = Array.isArray(extracted) ? extracted : (extracted.tables || []);
 console.log(`Table mode: ${tables.length} tables`);
 
 let allBoqItems = [];
