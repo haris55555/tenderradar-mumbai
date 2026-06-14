@@ -518,13 +518,25 @@ console.log(`Text parser total: ${textItems.length} items`);
 
 // ── PICK BEST ──
 let boqItems = [];
-if (tableItems.length >= textItems.length && tableItems.length > 0) {
+// Calculate average quantity to detect garbage table extraction
+const tableAvgQty = tableItems.length > 0 ? tableItems.reduce((s, i) => s + i.quantity, 0) / tableItems.length : 0;
+const textAvgQty = textItems.length > 0 ? textItems.reduce((s, i) => s + i.quantity, 0) / textItems.length : 0;
+
+// Prefer text parser if table avg qty looks suspicious (under 10) or text finds more items
+if (tableItems.length > 0 && textItems.length > 0) {
+if (tableAvgQty < 10 || textItems.length > tableItems.length * 1.2) {
+console.log(`Winner: text parser (table avg qty ${tableAvgQty.toFixed(1)} suspicious or text has more items)`);
+boqItems = textItems;
+} else {
 console.log(`Winner: table parser (${tableItems.length} vs ${textItems.length})`);
 boqItems = tableItems;
+}
+} else if (tableItems.length > 0) {
+boqItems = tableItems;
 } else if (textItems.length > 0) {
-console.log(`Winner: text parser (${textItems.length} vs ${tableItems.length})`);
 boqItems = textItems;
 }
+
 
 const estimatedCost = boqItems.reduce((sum, item) => sum + (item.amount || 0), 0);
 if (boqItems.length > 0) return { extractionSuccess: true, boqItems, tenderValue: estimatedCost > 0 ? estimatedCost : tenderValue };
