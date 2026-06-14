@@ -39,43 +39,235 @@ const d = (description || '').toLowerCase();
 const u = (unit || '').toLowerCase().replace(/\./g, '');
 const m = stateMultiplier || 1.0;
 
-if ((d.includes('reinforcement') || d.includes('steel bar') || d.includes('fe500') || d.includes('tmt')) && (u === 'mt' || u.includes('mt'))) {
-return Math.round((63500 + 2800) * m);
+// Base rates for zero-rate BOQ estimation (Maharashtra 2026 market rates)
+const BASE_RATES = {
+excavation_manual: 390,
+excavation_mechanical: 1100,
+pcc_m10: 6200,
+rcc_m20: 8700,
+rcc_m25: 9500,
+rcc_m30: 10200,
+rcc_m35: 11000,
+rcc_m40: 12000,
+steel: 67000,
+brickwork: 6000,
+blockwork: 5200,
+formwork: 300,
+plastering_12mm: 400,
+plastering_20mm: 480,
+flooring_tiles: 750,
+flooring_vitrified: 950,
+flooring_granite: 1800,
+flooring_marble: 2200,
+waterproofing: 200,
+painting_interior: 135,
+painting_exterior: 160,
+doors_flush: 9500,
+doors_panel: 14000,
+windows_upvc: 950,
+windows_aluminium: 1100,
+false_ceiling: 380,
+dado_tiles: 680,
+stone_masonry: 7200,
+earth_filling: 280,
+sand_filling: 320,
+demolition: 180,
+waterproofing_terrace: 220,
+waterproofing_basement: 280,
+gsb: 450,
+wmm: 620,
+dbm: 780,
+bc: 520,
+kerb: 950,
+pipe_upvc_110: 380,
+pipe_upvc_160: 580,
+pipe_swg: 420,
+manhole_brick: 52000,
+cable_wiring: 480,
+conduit: 120,
+switchboard: 1800,
+earthing: 8500,
+railing_ms: 2200,
+gate_ms: 4500,
+grill_ms: 1800,
+signage: 3500,
+};
+
+// Helper to return base rate when pdfRate is 0
+function baseRate(key) {
+return Math.round((BASE_RATES[key] || 500) * m * 0.85);
 }
-if ((d.includes('concrete') || d.includes(' cc ') || d.includes('r.c.c') || d.includes('rcc') || d.includes('p/l') || d.includes('rmc')) && (u === 'cum' || u.includes('cum'))) {
-if (d.includes('m-40') || d.includes('m40') || d.includes('m-45') || d.includes('m45')) return Math.round(pdfRate * 0.93 * m);
-if (d.includes('m-25') || d.includes('m25') || d.includes('m-30') || d.includes('m30')) return Math.round(pdfRate * 0.90 * m);
-if (d.includes('m-15') || d.includes('m15') || d.includes('m-10') || d.includes('m10') || d.includes('lean concrete') || d.includes('pcc')) return Math.round(pdfRate * 0.88 * m);
-return Math.round(pdfRate * 0.90 * m);
+
+// Steel
+if ((d.includes('reinforcement') || d.includes('steel bar') || d.includes('fe500') || d.includes('tmt') || d.includes('steel re')) && (u === 'mt' || u.includes('mt') || u === 'kg')) {
+const rate = u === 'kg' ? BASE_RATES.steel / 1000 : BASE_RATES.steel;
+return pdfRate > 0 ? Math.round(pdfRate * 0.98 * m) : Math.round(rate * m * 0.85);
 }
+
+// Concrete
+if ((d.includes('concrete') || d.includes(' cc ') || d.includes('r.c.c') || d.includes('rcc') || d.includes('p/l') || d.includes('rmc') || d.includes('reinforced cement')) && (u === 'cum' || u.includes('cum'))) {
+if (d.includes('m-40') || d.includes('m40') || d.includes('m-45') || d.includes('m45')) return pdfRate > 0 ? Math.round(pdfRate * 0.93 * m) : Math.round(BASE_RATES.rcc_m40 * m * 0.85);
+if (d.includes('m-35') || d.includes('m35')) return pdfRate > 0 ? Math.round(pdfRate * 0.92 * m) : Math.round(BASE_RATES.rcc_m35 * m * 0.85);
+if (d.includes('m-30') || d.includes('m30')) return pdfRate > 0 ? Math.round(pdfRate * 0.91 * m) : Math.round(BASE_RATES.rcc_m30 * m * 0.85);
+if (d.includes('m-25') || d.includes('m25')) return pdfRate > 0 ? Math.round(pdfRate * 0.90 * m) : Math.round(BASE_RATES.rcc_m25 * m * 0.85);
+if (d.includes('m-20') || d.includes('m20')) return pdfRate > 0 ? Math.round(pdfRate * 0.90 * m) : Math.round(BASE_RATES.rcc_m20 * m * 0.85);
+if (d.includes('m-15') || d.includes('m15') || d.includes('m-10') || d.includes('m10') || d.includes('lean') || d.includes('pcc')) return pdfRate > 0 ? Math.round(pdfRate * 0.88 * m) : Math.round(BASE_RATES.pcc_m10 * m * 0.85);
+return pdfRate > 0 ? Math.round(pdfRate * 0.90 * m) : Math.round(BASE_RATES.rcc_m25 * m * 0.85);
+}
+
+// Excavation
 if (d.includes('excavat') && (u === 'cum' || u.includes('cum'))) {
-if (d.includes('chisel') || d.includes('breaker') || d.includes('hard rock') || d.includes('pneumatic')) return Math.round(pdfRate * 0.78 * m);
-return Math.round(pdfRate * 0.65 * m);
+if (d.includes('chisel') || d.includes('breaker') || d.includes('hard rock') || d.includes('pneumatic') || d.includes('mechanical') || d.includes('jcb')) return pdfRate > 0 ? Math.round(pdfRate * 0.78 * m) : baseRate('excavation_mechanical');
+return pdfRate > 0 ? Math.round(pdfRate * 0.65 * m) : baseRate('excavation_manual');
 }
-if ((d.includes('earth work') || d.includes('p/l earth') || d.includes('embankment') || d.includes('filling') || d.includes('top layer of earth') || d.includes('stabilised soil')) && (u === 'cum' || u.includes('cum') || u === 'sqm')) return Math.round(pdfRate * 0.70 * m);
-if ((d.includes('brick') || d.includes('masonry') || d.includes('rubble')) && (u === 'cum' || u.includes('cum'))) return Math.round(pdfRate * 0.88 * m);
-if ((d.includes('centering') || d.includes('shuttering') || d.includes('formwork') || d.includes('form work')) && (u === 'sqm' || u.includes('sqm'))) return Math.round(pdfRate * 0.85 * m);
-if (d.includes('sub base') || d.includes('subbase') || d.includes('wet mix macadam') || d.includes('wmm') || d.includes('gsb') || d.includes('granular') || d.includes('crushed stone') || d.includes('rubble soling') || d.includes('metal gradation')) return Math.round(pdfRate * 0.80 * m);
-if (d.includes('bitumen') || d.includes('bituminous') || d.includes('dbm') || d.includes('premix') || d.includes('tack coat') || d.includes('prime coat') || d.includes('mastic') || d.includes('asphalt')) return Math.round(pdfRate * 0.87 * m);
-if (d.includes('pipe') && (u === 'rmt' || u === 'm' || u.includes('mtr') || u === 'rm')) {
-if (d.includes('hdpe') || d.includes('di pipe') || d.includes('m.s') || d.includes('ms pipe')) return Math.round(pdfRate * 0.85 * m);
-return Math.round(pdfRate * 0.78 * m);
+
+// Earth/filling
+if (d.includes('earth work') || d.includes('p/l earth') || d.includes('embankment') || d.includes('filling') || d.includes('backfill') || d.includes('top layer of earth') || d.includes('stabilised soil')) {
+if (d.includes('sand')) return pdfRate > 0 ? Math.round(pdfRate * 0.72 * m) : baseRate('sand_filling');
+return pdfRate > 0 ? Math.round(pdfRate * 0.70 * m) : baseRate('earth_filling');
 }
-if ((d.includes('manhole') || d.includes('cover') || d.includes('frame') || d.includes('chamber') || d.includes('grating')) && (u === 'no' || u === 'nos' || u === 'each')) {
-if (d.includes('c.i') || d.includes('ci ') || d.includes('cast iron') || d.includes('m.s')) return Math.round(pdfRate * 0.82 * m);
-return Math.round(pdfRate * 0.75 * m);
+
+// Brickwork / blockwork / masonry
+if (d.includes('brick') || d.includes('masonry') || d.includes('block work') || d.includes('blockwork') || d.includes('aac') || d.includes('flyash')) {
+if (d.includes('aac') || d.includes('flyash') || d.includes('block')) return pdfRate > 0 ? Math.round(pdfRate * 0.88 * m) : baseRate('blockwork');
+if (d.includes('stone') || d.includes('rubble')) return pdfRate > 0 ? Math.round(pdfRate * 0.88 * m) : baseRate('stone_masonry');
+return pdfRate > 0 ? Math.round(pdfRate * 0.88 * m) : baseRate('brickwork');
 }
-if ((d.includes('kerb') || d.includes('water dished') || d.includes('water table') || d.includes('tree guard')) && (u === 'rmt' || u.includes('rmt') || u === 'rm')) return Math.round(pdfRate * 0.78 * m);
-if ((d.includes('railing') || d.includes('bollard') || d.includes('grill') || d.includes('fabricat') || d.includes('sign') || d.includes('board')) && d.includes('m.s')) return Math.round(pdfRate * 0.75 * m);
-if (d.includes('road marking') || d.includes('thermoplastic') || d.includes('retro reflective') || d.includes('road stud')) return Math.round(pdfRate * 0.80 * m);
-if (d.includes('cable') || d.includes('conduit') || d.includes('panel') || d.includes('earthing') || d.includes('electrical') || d.includes('xlpe') || d.includes('mcb') || d.includes('elcb') || d.includes('switchfuse') || d.includes('distribution board') || d.includes('wiring') || d.includes('tubelight') || d.includes('fixture') || d.includes('fan') || d.includes('bulkhead') || d.includes('tpn') || d.includes('led')) return Math.round(pdfRate * 0.85 * m);
-if (d.includes('plaster') || d.includes('flooring') || d.includes('tactile') || d.includes('tile') || d.includes('paint') || d.includes('stencil')) return Math.round(pdfRate * 0.82 * m);
-if (d.includes('demolition') || d.includes('cutting') || d.includes('removing') || d.includes('dismantl') || d.includes('extra')) return Math.round(pdfRate * 0.70 * m);
-if (d.includes('soak pit') || d.includes('dowel') || d.includes('joint') || d.includes('thermocole') || d.includes('admixture') || d.includes('waterproof')) return Math.round(pdfRate * 0.80 * m);
-if (d.includes('survey') || d.includes('testing') || d.includes('transplant') || d.includes('cutting down of tree') || d.includes('publicity') || d.includes('cbo') || d.includes('procuring')) return Math.round(pdfRate * 0.75 * m);
-if (d.includes('shoring') || d.includes('strutting')) return Math.round(pdfRate * 0.75 * m);
-return Math.round(pdfRate * 0.85 * m);
+
+// Formwork / shuttering
+if (d.includes('centering') || d.includes('shuttering') || d.includes('formwork') || d.includes('form work')) {
+return pdfRate > 0 ? Math.round(pdfRate * 0.85 * m) : baseRate('formwork');
 }
+
+// Road subbase
+if (d.includes('sub base') || d.includes('subbase') || d.includes('wmm') || d.includes('wet mix') || d.includes('gsb') || d.includes('granular') || d.includes('crushed stone') || d.includes('rubble soling') || d.includes('metal gradation')) {
+if (d.includes('wmm') || d.includes('wet mix')) return pdfRate > 0 ? Math.round(pdfRate * 0.80 * m) : baseRate('wmm');
+return pdfRate > 0 ? Math.round(pdfRate * 0.80 * m) : baseRate('gsb');
+}
+
+// Bituminous
+if (d.includes('bitumen') || d.includes('bituminous') || d.includes('dbm') || d.includes('premix') || d.includes('tack coat') || d.includes('prime coat') || d.includes('mastic') || d.includes('asphalt')) {
+if (d.includes('bc') || d.includes('wearing') || d.includes('surface')) return pdfRate > 0 ? Math.round(pdfRate * 0.87 * m) : baseRate('bc');
+return pdfRate > 0 ? Math.round(pdfRate * 0.87 * m) : baseRate('dbm');
+}
+
+// Plastering
+if (d.includes('plaster') || d.includes('rendering') || d.includes('neeru') || d.includes('snowcem')) {
+if (d.includes('20mm') || d.includes('25mm')) return pdfRate > 0 ? Math.round(pdfRate * 0.82 * m) : baseRate('plastering_20mm');
+return pdfRate > 0 ? Math.round(pdfRate * 0.82 * m) : baseRate('plastering_12mm');
+}
+
+// Flooring
+if (d.includes('flooring') || d.includes('floor') || d.includes('tile') || d.includes('tactile') || d.includes('kota') || d.includes('granite') || d.includes('marble') || d.includes('vitrified')) {
+if (d.includes('granite')) return pdfRate > 0 ? Math.round(pdfRate * 0.82 * m) : baseRate('flooring_granite');
+if (d.includes('marble')) return pdfRate > 0 ? Math.round(pdfRate * 0.82 * m) : baseRate('flooring_marble');
+if (d.includes('vitrified')) return pdfRate > 0 ? Math.round(pdfRate * 0.82 * m) : baseRate('flooring_vitrified');
+return pdfRate > 0 ? Math.round(pdfRate * 0.82 * m) : baseRate('flooring_tiles');
+}
+
+// Dado / wall tiles
+if (d.includes('dado') || d.includes('wall tile') || d.includes('ceramic')) {
+return pdfRate > 0 ? Math.round(pdfRate * 0.82 * m) : baseRate('dado_tiles');
+}
+
+// Waterproofing
+if (d.includes('waterproof') || d.includes('water proof') || d.includes('damp proof') || d.includes('admixture')) {
+if (d.includes('basement') || d.includes('raft') || d.includes('retaining')) return pdfRate > 0 ? Math.round(pdfRate * 0.80 * m) : baseRate('waterproofing_basement');
+if (d.includes('terrace') || d.includes('roof') || d.includes('terrace')) return pdfRate > 0 ? Math.round(pdfRate * 0.80 * m) : baseRate('waterproofing_terrace');
+return pdfRate > 0 ? Math.round(pdfRate * 0.80 * m) : baseRate('waterproofing');
+}
+
+// Painting
+if (d.includes('paint') || d.includes('primer') || d.includes('putty') || d.includes('texture') || d.includes('distemper') || d.includes('stencil') || d.includes('whitewash')) {
+if (d.includes('exterior') || d.includes('external') || d.includes('acrylic') || d.includes('weathershield')) return pdfRate > 0 ? Math.round(pdfRate * 0.82 * m) : baseRate('painting_exterior');
+return pdfRate > 0 ? Math.round(pdfRate * 0.82 * m) : baseRate('painting_interior');
+}
+
+// Doors
+if (d.includes('door') || d.includes('shutter') && !d.includes('rolling')) {
+if (d.includes('flush') || d.includes('panel') || d.includes('timber') || d.includes('wooden') || d.includes('teak')) return pdfRate > 0 ? Math.round(pdfRate * 0.80 * m) : baseRate('doors_panel');
+return pdfRate > 0 ? Math.round(pdfRate * 0.80 * m) : baseRate('doors_flush');
+}
+
+// Windows
+if (d.includes('window') || d.includes('ventilator')) {
+if (d.includes('aluminium') || d.includes('aluminum')) return pdfRate > 0 ? Math.round(pdfRate * 0.80 * m) : baseRate('windows_aluminium');
+return pdfRate > 0 ? Math.round(pdfRate * 0.80 * m) : baseRate('windows_upvc');
+}
+
+// False ceiling
+if (d.includes('false ceiling') || d.includes('gypsum') || d.includes('grid ceiling') || d.includes('puf panel')) {
+return pdfRate > 0 ? Math.round(pdfRate * 0.82 * m) : baseRate('false_ceiling');
+}
+
+// Pipes / plumbing / sanitary
+if (d.includes('pipe') && (u === 'rmt' || u === 'm' || u.includes('mtr') || u === 'rm' || u === 'nos')) {
+if (d.includes('hdpe') || d.includes('di pipe') || d.includes('m.s') || d.includes('ms pipe') || d.includes('gi pipe')) return pdfRate > 0 ? Math.round(pdfRate * 0.85 * m) : baseRate('pipe_upvc_160');
+if (d.includes('110') || d.includes('100mm')) return pdfRate > 0 ? Math.round(pdfRate * 0.78 * m) : baseRate('pipe_upvc_110');
+return pdfRate > 0 ? Math.round(pdfRate * 0.78 * m) : baseRate('pipe_swg');
+}
+
+// Sanitary fixtures
+if (d.includes('water closet') || d.includes('wc') || d.includes('toilet') || d.includes('wash basin') || d.includes('sink') || d.includes('urinal') || d.includes('bidet') || d.includes('nahani') || d.includes('trap') || d.includes('faucet') || d.includes('tap') || d.includes('bib cock') || d.includes('shower')) {
+return pdfRate > 0 ? Math.round(pdfRate * 0.82 * m) : Math.round(3500 * m * 0.85);
+}
+
+// Manholes / chambers
+if (d.includes('manhole') || d.includes('cover') || d.includes('frame') || d.includes('chamber') || d.includes('grating') || d.includes('sump')) {
+if (d.includes('c.i') || d.includes('ci ') || d.includes('cast iron') || d.includes('m.s')) return pdfRate > 0 ? Math.round(pdfRate * 0.82 * m) : Math.round(12000 * m * 0.85);
+return pdfRate > 0 ? Math.round(pdfRate * 0.75 * m) : baseRate('manhole_brick');
+}
+
+// Electrical
+if (d.includes('cable') || d.includes('conduit') || d.includes('panel') || d.includes('earthing') || d.includes('electrical') || d.includes('xlpe') || d.includes('mcb') || d.includes('elcb') || d.includes('switchfuse') || d.includes('distribution board') || d.includes('wiring') || d.includes('tubelight') || d.includes('fixture') || d.includes('fan') || d.includes('bulkhead') || d.includes('tpn') || d.includes('led') || d.includes('light') || d.includes('switch') || d.includes('socket') || d.includes('plug point')) {
+if (d.includes('earthing')) return pdfRate > 0 ? Math.round(pdfRate * 0.85 * m) : baseRate('earthing');
+if (d.includes('conduit')) return pdfRate > 0 ? Math.round(pdfRate * 0.85 * m) : baseRate('conduit');
+if (d.includes('switch') || d.includes('socket') || d.includes('plug')) return pdfRate > 0 ? Math.round(pdfRate * 0.85 * m) : baseRate('switchboard');
+return pdfRate > 0 ? Math.round(pdfRate * 0.85 * m) : baseRate('cable_wiring');
+}
+
+// Railings / grills / gates / fencing
+if (d.includes('railing') || d.includes('handrail') || d.includes('balustrade') || d.includes('grill') || d.includes('gate') || d.includes('fencing') || d.includes('bollard') || d.includes('fabricat')) {
+if (d.includes('gate')) return pdfRate > 0 ? Math.round(pdfRate * 0.75 * m) : baseRate('gate_ms');
+if (d.includes('grill')) return pdfRate > 0 ? Math.round(pdfRate * 0.75 * m) : baseRate('grill_ms');
+return pdfRate > 0 ? Math.round(pdfRate * 0.75 * m) : baseRate('railing_ms');
+}
+
+// Signage / boards
+if (d.includes('sign') || d.includes('board') || d.includes('display') || d.includes('name plate') || d.includes('lettering') || d.includes('acrylic')) {
+return pdfRate > 0 ? Math.round(pdfRate * 0.80 * m) : baseRate('signage');
+}
+
+// Kerbs
+if (d.includes('kerb') || d.includes('water dished') || d.includes('water table') || d.includes('tree guard')) {
+return pdfRate > 0 ? Math.round(pdfRate * 0.78 * m) : baseRate('kerb');
+}
+
+// Road markings
+if (d.includes('road marking') || d.includes('thermoplastic') || d.includes('retro reflective') || d.includes('road stud')) {
+return pdfRate > 0 ? Math.round(pdfRate * 0.80 * m) : Math.round(800 * m * 0.85);
+}
+
+// Demolition / dismantling
+if (d.includes('demolition') || d.includes('dismantl') || d.includes('removing') || d.includes('breaking') || d.includes('cutting')) {
+return pdfRate > 0 ? Math.round(pdfRate * 0.70 * m) : baseRate('demolition');
+}
+
+// Shoring / strutting
+if (d.includes('shoring') || d.includes('strutting') || d.includes('underpinning')) {
+return pdfRate > 0 ? Math.round(pdfRate * 0.75 * m) : Math.round(850 * m * 0.85);
+}
+
+// Survey / testing / misc services
+if (d.includes('survey') || d.includes('testing') || d.includes('transplant') || d.includes('cutting down of tree') || d.includes('publicity') || d.includes('procuring') || d.includes('cbo')) {
+return pdfRate > 0 ? Math.round(pdfRate * 0.75 * m) : Math.round(2000 * m * 0.85);
+}
+
+// Default fallback
+return pdfRate > 0 ? Math.round(pdfRate * 0.85 * m) : Math.round(500 * m * 0.85);
+}
+
+
 
 function getDefaultsForType(type) {
 const t = (type || '').toLowerCase();
