@@ -453,7 +453,8 @@ const srNoMatch = line.match(/^(\d{1,3}(?:\.\d{1,2})?)\s+(.+)/);
 if (srNoMatch) {
 const srNo = parseFloat(srNoMatch[1]);
 const rest = srNoMatch[2].trim();
-if (srNo >= 1 && srNo <= 500 && rest.length > 5 && /[a-zA-Z]{3,}/.test(rest)) {
+if (srNo >= 1 && srNo <= 500 && rest.length > 8 && /[a-zA-Z]{4,}/.test(rest) && !/^(st|nd|rd|th|floor|level|nos|no\.|sqm|cum)/i.test(rest)) {
+
 saveCurrentItem();
 
 // KEY FIX: Split description from numbers at the unit boundary
