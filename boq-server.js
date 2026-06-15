@@ -706,6 +706,12 @@ const parsed = processExtracted(extracted, stateMultiplier);
 console.log('Result - success:', parsed.extractionSuccess, 'items:', parsed.boqItems?.length, 'value:', parsed.tenderValue);
 
 let deptEstimate = parsed.tenderValue > 0 ? parsed.tenderValue : 5000000;
+// For zero-rate BOQs where tender value not in PDF, use AI execution cost as estimate
+if (deptEstimate === 5000000 && parsed.boqItems && parsed.boqItems.length > 0) {
+const aiBasedEstimate = parsed.boqItems.reduce((sum, item) => sum + (item.quantity * (item.aiRate || 0)), 0);
+if (aiBasedEstimate > 5000000) deptEstimate = Math.round(aiBasedEstimate / 0.85); // Add ~15% for overhead
+}
+
 let boqItems = [];
 let pdfRead = false;
 let dataSource = 'estimation';
