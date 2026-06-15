@@ -321,66 +321,97 @@ const matches = (line || '').match(/[\d,]+\.?\d*/g) || [];
 return matches.map(m => parseFloat(m.replace(/,/g, ''))).filter(n => !isNaN(n) && n > 0);
 }
 
+function findUnitInLine(line) {
+for (const u of UNIT_PATTERNS) {
+const match = line.match(new RegExp(`\\b${u}\\b`, 'i'));
+if (match) return { unit: u.toUpperCase(), endIdx: match.index + match[0].length };
+}
+return null;
+}
+
+// UNIVERSAL TEXT PARSER RULE:
+// A new BOQ item starts ONLY when a line:
+// 1. Starts with a whole integer Sr.No (1, 2, 3... no decimals for standard BOQs)
+// 2. Contains a known unit (Sqm, Cum, Nos etc.) on the SAME line
+// 3. Has numbers after the unit on the SAME line
+// Everything else is description continuation - never a new item
+function isNewBoqItem(line) {
+// Must start with whole integer only (not 1.1, not 20mm, not 1:3)
+const srNoMatch = line.match(/^(\d{1,3})\s+(.+)/);
+if (!srNoMatch) return null;
+
+const srNo = parseInt(srNoMatch[1]);
+const rest = srNoMatch[2].trim();
+
+// Sr.No must be in valid range
+if (srNo < 1 || srNo > 500) return null;
+
+// Rest must contain actual description text (at least 4 letters together)
+if (!/[a-zA-Z]{4,}/.test(rest)) return null;
+
+// CRITICAL: Must have a unit on this same line
+const unitPos = findUnitInLine(rest);
+if (!unitPos) return null;
+
+// CRITICAL: Must have numbers AFTER the unit on this same line
+const afterUnit = rest.substring(unitPos.endIdx);
+const numsAfterUnit = afterUnit.match(/[\d,]+\.?\d*/g) || [];
+const validNums = numsAfterUnit.map(s => parseFloat(s.replace(/,/g, ''))).filter(n => n > 0 && n < 100000000);
+if (validNums.length < 2) return null; // Need at least qty and rate/amount
+
+// This is a valid new BOQ item
+const cleanDesc = rest.substring(0, rest.indexOf(unitPos.unit.charAt(0) === unitPos.unit.charAt(0).toUpperCase() ? unitPos.unit : unitPos.unit)).trim();
+return {
+srNo,
+desc: rest.substring(0, unitPos.endIdx - unitPos.unit.length).trim() || rest,
+numbersLine: rest.substring(unitPos.endIdx - unitPos.unit.length),
+unit: unitPos.unit,
+nums: validNums
+};
+}
+
 function tryParseItemNumbers(desc, numLines) {
-// Find unit from description first
 let unit = 'NOS';
-for (const u of UNIT_PATTERNS) {
-if (new RegExp(`\\b${u}\\b`, 'i').test(desc)) { unit = u.toUpperCase(); break; }
-}
-// Override with unit from numeric lines
-for (const nl of numLines) {
-for (const u of UNIT_PATTERNS) {
-if (new RegExp(`\\b${u}\\b`, 'i').test(nl.line)) { unit = u.toUpperCase(); break; }
-}
-if (unit !== 'NOS') break;
-}
+// Find unit from description
+const unitInDesc = findUnitInLine(desc);
+if (unitInDesc) unit = unitInDesc.unit;
 
 let bestQty = 0, bestRate = 0, bestAmount = 0;
 
 for (const nl of numLines) {
-const line = nl.line;
-
-// Find unit position in this line
-let unitEndIdx = -1;
-for (const u of UNIT_PATTERNS) {
-const match = line.match(new RegExp(`\\b${u}\\b`, 'i'));
-if (match) { unitEndIdx = match.index + match[0].length; break; }
-}
-
+const unitPos = findUnitInLine(nl.line);
 let nums;
-if (unitEndIdx >= 0) {
-// Take numbers strictly AFTER the unit
-const afterUnit = line.substring(unitEndIdx);
+
+if (unitPos) {
+unit = unitPos.unit; // Update unit from this line
+const afterUnit = nl.line.substring(unitPos.endIdx);
 const matches = afterUnit.match(/[\d,]+\.?\d*/g) || [];
-nums = matches.map(s => parseFloat(s.replace(/,/g, ''))).filter(n => !isNaN(n) && n > 0 && n < 100000000);
+nums = matches.map(s => parseFloat(s.replace(/,/g, ''))).filter(n => n > 0 && n < 100000000);
 } else {
-// No unit in this line — use numbers >= 1 only
 nums = nl.numbers.filter(n => n >= 1 && n < 100000000);
 }
 
 if (nums.length === 0) continue;
 
 if (nums.length >= 3) {
-// Try qty * rate = amount validation
+// Try qty * rate = amount
 let found = false;
 for (let qi = 0; qi < nums.length - 1 && !found; qi++) {
 for (let ri = qi + 1; ri < nums.length && !found; ri++) {
-const product = nums[qi] * nums[ri];
 for (let ai = ri + 1; ai < nums.length && !found; ai++) {
-if (Math.abs(product - nums[ai]) / (nums[ai] + 1) < 0.20) {
+if (Math.abs(nums[qi] * nums[ri] - nums[ai]) / (nums[ai] + 1) < 0.20) {
 bestQty = nums[qi]; bestRate = nums[ri]; bestAmount = nums[ai]; found = true;
 }
 }
 }
 }
 if (!found) {
-// Zero-rate BOQ — last number after unit is total qty
+// Zero-rate BOQ: last number = total qty
 bestQty = nums[nums.length - 1];
 bestRate = 0; bestAmount = 0;
 }
 } else if (nums.length === 2) {
 if (nums[1] > nums[0] * 3) {
-// Second much larger — likely qty + amount
 bestQty = nums[0]; bestAmount = nums[1]; bestRate = 0;
 } else {
 bestQty = nums[0]; bestRate = nums[1]; bestAmount = 0;
@@ -392,7 +423,6 @@ bestQty = nums[0];
 if (bestQty > 0) break;
 }
 
-// Derive missing values
 if (bestRate === 0 && bestQty > 0 && bestAmount > 0) bestRate = Math.round(bestAmount / bestQty);
 if (bestAmount === 0 && bestQty > 0 && bestRate > 0) bestAmount = Math.round(bestQty * bestRate);
 
@@ -448,50 +478,28 @@ if (SKIP_STARTS.some(k => lineLower.startsWith(k))) continue;
 if (lineLower.startsWith('say ') || lineLower === 'say') continue;
 if (line.match(/^[\d\s.,]+$/) && line.trim().split(/\s+/).length <= 5) continue;
 
-// Sr.No detection — must have letters in rest (not just numbers)
-const srNoMatch = line.match(/^(\d{1,3}(?:\.\d{1,2})?)\s+(.+)/);
-if (srNoMatch) {
-const srNo = parseFloat(srNoMatch[1]);
-const rest = srNoMatch[2].trim();
-if (srNo >= 1 && srNo <= 500 && rest.length > 8 && /[a-zA-Z]{4,}/.test(rest) && !/^(st|nd|rd|th|floor|level|nos|no\.|sqm|cum)/i.test(rest)) {
-
+// UNIVERSAL RULE: Only start new item if line has Sr.No + unit + numbers all on same line
+const newItem = isNewBoqItem(line);
+if (newItem) {
 saveCurrentItem();
-
-// KEY FIX: Split description from numbers at the unit boundary
-let cleanDescription = rest;
-let numbersLine = rest;
-for (const u of UNIT_PATTERNS) {
-const unitMatch = rest.match(new RegExp(`\\b${u}\\b`, 'i'));
-if (unitMatch) {
-// Description is everything BEFORE the unit
-cleanDescription = rest.substring(0, unitMatch.index).trim();
-// Numbers line is from the unit onwards
-numbersLine = rest.substring(unitMatch.index);
-break;
-}
-}
-
 currentItem = {
-srNo,
-desc: cleanDescription || rest,
-numLines: [{ line: numbersLine, numbers: extractNumbersFromLine(numbersLine) }]
+srNo: newItem.srNo,
+desc: newItem.desc,
+numLines: [{ line: newItem.numbersLine, numbers: newItem.nums }]
 };
 continue;
 }
-}
 
+// Everything else: if we have a current item, append as description
 if (currentItem) {
-const numbers = extractNumbersFromLine(line);
-if (numbers.length >= 2) {
-currentItem.numLines.push({ line, numbers });
-} else if (isDescriptionText(line) && line.length > 5 && !/^\d/.test(line)) {
-// Skip page headers/footers
-const lowerLine = line.toLowerCase();
-if (!lowerLine.includes('sr.no') && !lowerLine.includes('description') &&
-!lowerLine.includes('amount') && !lowerLine.includes('page') &&
-!lowerLine.includes('total')) {
+// Skip lines that are clearly page headers/footers
+if (lineLower.includes('sr.no') || lineLower.includes('description') ||
+lineLower.includes('amount') || lineLower.includes('page no') ||
+lineLower.includes('bill of quantities')) continue;
+
+// Only append text lines to description — never treat as new item
+if (isDescriptionText(line) && !/^\d+\s*$/.test(line)) {
 currentItem.desc += ' ' + line;
-}
 }
 }
 }
