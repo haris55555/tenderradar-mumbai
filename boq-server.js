@@ -340,7 +340,7 @@ function isNewBoqItem(line) {
 const srNoMatch = line.match(/^(\d{1,3})\s+(.+)/);
 if (!srNoMatch) return null;
 
-const srNo = parseInt(srNoMatch[1]);
+const srNo = parseFloat(srNoMatch[1]);
 const rest = srNoMatch[2].trim();
 
 // Sr.No must be in valid range
