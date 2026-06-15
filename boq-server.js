@@ -254,6 +254,43 @@ return { headerRowIdx: i, descCol, unitCol, qtyCol, rateCol, amountCol };
 return null;
 }
 
+// ============ DERIVE COLUMN ORDER FROM TABLE HEADER ============
+// This is the key function — reads the table header to understand
+// whether Rate comes before Qty or after, then passes this to text parser
+function deriveColOrderFromTableHeader(tables) {
+for (const rows of tables) {
+if (!rows || rows.length === 0) continue;
+const header = detectHeader(rows);
+if (!header) continue;
+
+const { qtyCol, rateCol, amountCol } = header;
+
+// If both rate and qty columns found, determine order
+if (rateCol >= 0 && qtyCol >= 0) {
+const rateBeforeQty = rateCol < qtyCol;
+const hasRateInPdf = rateCol >= 0;
+console.log(`Column order from table header: rateCol=${rateCol} qtyCol=${qtyCol} rateBeforeQty=${rateBeforeQty}`);
+return { rateBeforeQty, hasRateInPdf, isZeroRate: false };
+}
+
+// Rate found but no qty column — rate before qty (DT1 style where qty header is split)
+if (rateCol >= 0 && qtyCol === -1) {
+console.log(`Rate found at col ${rateCol}, qty col not found — assuming rate before qty`);
+return { rateBeforeQty: true, hasRateInPdf: true, isZeroRate: false };
+}
+
+// Qty found but no rate column — zero rate BOQ
+if (qtyCol >= 0 && rateCol === -1) {
+console.log(`Qty found at col ${qtyCol}, no rate col — zero rate BOQ`);
+return { rateBeforeQty: false, hasRateInPdf: false, isZeroRate: true };
+}
+}
+
+// Default: standard format qty before rate
+console.log('No table header found for col order — using default: qty before rate');
+return { rateBeforeQty: false, hasRateInPdf: true, isZeroRate: false };
+}
+
 function parseTableClean(rows, stateMultiplier) {
 const header = detectHeader(rows);
 if (!header) { console.log(' -> No header found'); return []; }
@@ -329,155 +366,39 @@ if (match) return { unit: u.toUpperCase(), startIdx: match.index, endIdx: match.
 return null;
 }
 
-// ============ TEXT HEADER DETECTOR ============
-// Scans raw text pages to find the BOQ header line and determine
-// the ORDER of Rate vs Qty vs Amount columns
-function detectTextHeader(pages) {
-const allText = pages.join('\n');
-const lines = allText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+// ============ NUMBER ASSIGNMENT USING TABLE COLUMN ORDER ============
+function assignNumbers(nums, colOrder) {
+if (!nums || nums.length === 0) return { qty: 0, rate: 0, amount: 0 };
 
-// All possible ways qty and rate can appear in any BOQ header
-const QTY_KEYWORDS = ['total quantity', 'total qty', 'total quant', 'quantity', 'qty', 'quant', 'no. of units', 'nos'];
-const RATE_KEYWORDS = ['rate per unit', 'rate (rs)', 'rate(rs)', 'unit rate', 'basic rate', 'rate'];
-const AMOUNT_KEYWORDS = ['total amount', 'total cost', 'amount (rs)', 'amount(rs)', 'amount'];
-const DESC_KEYWORDS = ['description of work', 'description of item', 'particulars', 'description', 'item'];
-
-for (const line of lines) {
-const lower = line.toLowerCase();
-
-// Check if this looks like a BOQ header line
-const hasDesc = DESC_KEYWORDS.some(k => lower.includes(k));
-const hasAmount = AMOUNT_KEYWORDS.some(k => lower.includes(k));
-const hasRate = RATE_KEYWORDS.some(k => lower.includes(k));
-const hasQty = QTY_KEYWORDS.some(k => lower.includes(k));
-
-if (hasDesc && hasAmount && (hasRate || hasQty)) {
-// Find positions of rate and qty keywords
-let rateIdx = -1;
-let qtyIdx = -1;
-
-for (const k of RATE_KEYWORDS) {
-const idx = lower.indexOf(k);
-if (idx >= 0) { rateIdx = idx; break; }
-}
-
-for (const k of QTY_KEYWORDS) {
-const idx = lower.indexOf(k);
-if (idx >= 0) { qtyIdx = idx; break; }
-}
-
-const hasRateInPdf = rateIdx >= 0;
-const hasQtyInPdf = qtyIdx >= 0;
-
-let rateBeforeQty = false;
-if (hasRateInPdf && hasQtyInPdf) {
-rateBeforeQty = rateIdx < qtyIdx;
-} else if (hasRateInPdf && !hasQtyInPdf) {
-// Rate found but qty keyword not found — rate likely before qty (DT1 style)
-rateBeforeQty = true;
-}
-
-// Zero-rate BOQ: has qty variations but no rate keyword
-const isZeroRateBOQ = hasQtyInPdf && !hasRateInPdf;
-
-console.log(`Text header found: rate@${rateIdx} qty@${qtyIdx} rateBeforeQty=${rateBeforeQty} hasRate=${hasRateInPdf} zeroRate=${isZeroRateBOQ}`);
-return { rateBeforeQty, hasRateInPdf: !isZeroRateBOQ, hasQtyInPdf, hasAmountInPdf: hasAmount };
-}
-}
-
-console.log('Text header not found, using default: qty before rate');
-return { rateBeforeQty: false, hasRateInPdf: true, hasQtyInPdf: true, hasAmountInPdf: true };
-}
-
-
-
-// Default: assume qty before rate (most common format)
-console.log('Text header not found, using default: qty before rate');
-return { rateBeforeQty: false, hasRateInPdf: true, hasQtyInPdf: true, hasAmountInPdf: true };
-}
-
-// ============ TEXT ITEM DETECTOR ============
-// A new BOQ item starts ONLY when a line has:
-// 1. Whole integer OR decimal Sr.No at start (1, 2, 3 or 1.1, 1.2)
-// 2. A known unit on the SAME line
-// 3. At least 2 numbers after the unit on the SAME line
-function isNewBoqItem(line) {
-const srNoMatch = line.match(/^(\d{1,3}(?:\.\d{1,2})?)\s+(.+)/);
-if (!srNoMatch) return null;
-
-const srNo = parseFloat(srNoMatch[1]);
-const rest = srNoMatch[2].trim();
-
-if (srNo < 1 || srNo > 500) return null;
-if (!/[a-zA-Z]{4,}/.test(rest)) return null;
-
-const unitPos = findUnitInLine(rest);
-if (!unitPos) return null;
-
-const afterUnit = rest.substring(unitPos.endIdx);
-const numsAfterUnit = (afterUnit.match(/[\d,]+\.?\d*/g) || [])
-.map(s => parseFloat(s.replace(/,/g, '')))
-.filter(n => n > 0 && n < 100000000);
-
-if (numsAfterUnit.length < 2) return null;
-
-const descPart = rest.substring(0, unitPos.startIdx).trim();
-
-return {
-srNo,
-desc: descPart || rest,
-numbersLine: rest.substring(unitPos.startIdx),
-unit: unitPos.unit,
-nums: numsAfterUnit
-};
-}
-
-// ============ NUMBER PARSER WITH COLUMN ORDER AWARENESS ============
-function parseNumbers(nums, unit, colOrder) {
-// colOrder tells us the structure from the PDF header:
-// rateBeforeQty: true → numbers after unit = [rate, qty, amount] (DT1 format)
-// rateBeforeQty: false → numbers after unit = [qty, rate, amount] (standard format)
-// hasRateInPdf: false → zero-rate BOQ, all numbers are quantity variants, last = total qty
-
-if (!colOrder.hasRateInPdf) {
-// Zero-rate BOQ — last number = total qty, no rate
+// Zero rate BOQ — last number is total qty
+if (colOrder.isZeroRate) {
 return { qty: nums[nums.length - 1], rate: 0, amount: 0 };
 }
 
+if (nums.length === 1) return { qty: nums[0], rate: 0, amount: 0 };
+
+if (nums.length === 2) {
+if (colOrder.rateBeforeQty) return { qty: nums[1], rate: nums[0], amount: 0 };
+return { qty: nums[0], rate: nums[1], amount: 0 };
+}
+
 if (nums.length >= 3) {
+// Try column-order-based assignment first
+let qty, rate, amount;
 if (colOrder.rateBeforeQty) {
-// Format: rate, qty, amount (DT1 style)
-const rate = nums[0];
-const qty = nums[1];
-const amount = nums[nums.length - 1];
-// Validate
-if (Math.abs(qty * rate - amount) / (amount + 1) < 0.20) {
-return { qty, rate, amount };
-}
-// Try with last 3
-const r2 = nums[nums.length - 3];
-const q2 = nums[nums.length - 2];
-const a2 = nums[nums.length - 1];
-if (Math.abs(q2 * r2 - a2) / (a2 + 1) < 0.20) {
-return { qty: q2, rate: r2, amount: a2 };
-}
+rate = nums[0]; qty = nums[1]; amount = nums[nums.length - 1];
 } else {
-// Format: qty, rate, amount (standard style)
-const qty = nums[0];
-const rate = nums[1];
-const amount = nums[nums.length - 1];
-if (Math.abs(qty * rate - amount) / (amount + 1) < 0.20) {
+qty = nums[0]; rate = nums[1]; amount = nums[nums.length - 1];
+}
+
+// Validate: qty * rate should ≈ amount
+if (qty > 0 && rate > 0 && amount > 0) {
+if (Math.abs(qty * rate - amount) / (amount + 1) < 0.25) {
 return { qty, rate, amount };
 }
-// Try with last 3
-const q2 = nums[nums.length - 3];
-const r2 = nums[nums.length - 2];
-const a2 = nums[nums.length - 1];
-if (Math.abs(q2 * r2 - a2) / (a2 + 1) < 0.20) {
-return { qty: q2, rate: r2, amount: a2 };
 }
-}
-// Fallback — try all combinations
+
+// Column order didn't validate — try all combinations
 for (let qi = 0; qi < nums.length - 1; qi++) {
 for (let ri = qi + 1; ri < nums.length; ri++) {
 for (let ai = ri + 1; ai < nums.length; ai++) {
@@ -487,39 +408,49 @@ return { qty: nums[qi], rate: nums[ri], amount: nums[ai] };
 }
 }
 }
-// No match found — use column order to assign
+
+// No validation match — use column order as-is
 if (colOrder.rateBeforeQty) {
-return { qty: nums[1] || nums[0], rate: nums[0], amount: nums[nums.length - 1] };
-} else {
+return { qty: nums[1] || 0, rate: nums[0], amount: nums[nums.length - 1] };
+}
 return { qty: nums[0], rate: nums[1] || 0, amount: nums[nums.length - 1] };
 }
-} else if (nums.length === 2) {
-if (colOrder.rateBeforeQty) {
-return { qty: nums[1], rate: nums[0], amount: 0 };
-} else {
-return { qty: nums[0], rate: nums[1], amount: 0 };
+
+return { qty: 0, rate: 0, amount: 0 };
 }
-} else {
-return { qty: nums[0], rate: 0, amount: 0 };
-}
+
+function isNewBoqItem(line) {
+const srNoMatch = line.match(/^(\d{1,3}(?:\.\d{1,2})?)\s+(.+)/);
+if (!srNoMatch) return null;
+const srNo = parseFloat(srNoMatch[1]);
+const rest = srNoMatch[2].trim();
+if (srNo < 1 || srNo > 500) return null;
+if (!/[a-zA-Z]{4,}/.test(rest)) return null;
+const unitPos = findUnitInLine(rest);
+if (!unitPos) return null;
+const afterUnit = rest.substring(unitPos.endIdx);
+const numsAfterUnit = (afterUnit.match(/[\d,]+\.?\d*/g) || [])
+.map(s => parseFloat(s.replace(/,/g, '')))
+.filter(n => n > 0 && n < 100000000);
+if (numsAfterUnit.length < 2) return null;
+return {
+srNo,
+desc: rest.substring(0, unitPos.startIdx).trim() || rest,
+unit: unitPos.unit,
+nums: numsAfterUnit
+};
 }
 
 function cleanDesc(desc) {
-return desc
-.replace(/^[A-Z0-9]{2,}-[A-Z0-9]+-?[A-Z0-9-]*/g, '')
-.replace(/\s+/g, ' ').trim().substring(0, 300);
+return desc.replace(/^[A-Z0-9]{2,}-[A-Z0-9]+-?[A-Z0-9-]*/g, '').replace(/\s+/g, ' ').trim().substring(0, 300);
 }
 
-function parseBoqFromText(pages, stateMultiplier) {
+function parseBoqFromText(pages, stateMultiplier, colOrder) {
 const items = [];
 const allText = pages.join('\n');
 const lines = allText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 const m = stateMultiplier || 1.0;
-console.log(`Text parser: ${pages.length} pages, ${lines.length} lines`);
-
-// STEP 1: Detect header to know column order
-const colOrder = detectTextHeader(pages);
-console.log(`Column order: rateBeforeQty=${colOrder.rateBeforeQty} hasRate=${colOrder.hasRateInPdf}`);
+console.log(`Text parser: ${pages.length} pages, ${lines.length} lines | colOrder: rateFirst=${colOrder.rateBeforeQty} zeroRate=${colOrder.isZeroRate}`);
 
 const STOP_KEYWORDS = ['estimated cost', 'grand total', 'contingency', 'supervision charges', 'total project cost'];
 const SKIP_STARTS = ['drk office', 'security room', 'pump room', 'rest room', 'prayer hall', 'wood storage', 'washing area', 'fire escape', 'lift lobby'];
@@ -528,10 +459,7 @@ let currentItem = null;
 
 const saveCurrentItem = () => {
 if (!currentItem || currentItem.desc.length < 5) { currentItem = null; return; }
-
-// Use column-order-aware number parsing
-const parsed = parseNumbers(currentItem.nums, currentItem.unit, colOrder);
-
+const parsed = assignNumbers(currentItem.nums, colOrder);
 if (parsed && parsed.qty > 0) {
 if (parsed.rate === 0 && parsed.amount > 0 && parsed.qty > 0) {
 parsed.rate = Math.round(parsed.amount / parsed.qty);
@@ -560,25 +488,17 @@ if (SKIP_STARTS.some(k => lineLower.startsWith(k))) continue;
 if (lineLower.startsWith('say ') || lineLower === 'say') continue;
 if (line.match(/^[\d\s.,]+$/) && line.trim().split(/\s+/).length <= 5) continue;
 
-// Check if this is a new BOQ item
 const newItem = isNewBoqItem(line);
 if (newItem) {
 saveCurrentItem();
-currentItem = {
-srNo: newItem.srNo,
-desc: newItem.desc,
-unit: newItem.unit,
-nums: newItem.nums
-};
+currentItem = { srNo: newItem.srNo, desc: newItem.desc, unit: newItem.unit, nums: newItem.nums };
 continue;
 }
 
-// Everything else: description continuation only
 if (currentItem) {
 if (lineLower.includes('sr.no') || lineLower.includes('description') ||
 lineLower.includes('amount') || lineLower.includes('page no') ||
 lineLower.includes('bill of quantities')) continue;
-
 if (isDescriptionText(line) && !/^\d+\s*$/.test(line)) {
 currentItem.desc += ' ' + line;
 }
@@ -618,6 +538,12 @@ let textItems = [];
 let tenderValue = 0;
 
 const tables = extracted && extracted.tables ? extracted.tables : (Array.isArray(extracted) ? extracted : []);
+
+// STEP 1: Derive column order from table header (works even if table parser can't extract all items)
+const colOrder = deriveColOrderFromTableHeader(tables);
+console.log(`Using column order: rateBeforeQty=${colOrder.rateBeforeQty} isZeroRate=${colOrder.isZeroRate}`);
+
+// STEP 2: Run table parser
 if (tables.length > 0) {
 const headerTableIndices = [];
 for (let t = 0; t < tables.length; t++) {
@@ -659,15 +585,17 @@ console.log(` -> Got ${items.length} items from BOQ section ${hi + 1}`);
 console.log(`Table parser total: ${tableItems.length} items`);
 }
 
+// STEP 3: Run text parser WITH column order from table header
 if (extracted && extracted.pages && extracted.pages.length > 0) {
 for (const page of extracted.pages) {
 const match = page.match(/(?:Total Amount|Estimated Cost)[^\d]*([\d,]+(?:\.\d+)?)/i);
 if (match) { const val = parseFloat(match[1].replace(/,/g, '')); if (val > tenderValue) tenderValue = val; }
 }
-textItems = parseBoqFromText(extracted.pages, m);
+textItems = parseBoqFromText(extracted.pages, m, colOrder);
 console.log(`Text parser total: ${textItems.length} items`);
 }
 
+// STEP 4: Pick winner
 const tableValid = validateItems(tableItems);
 const textValid = validateItems(textItems);
 console.log(`Validation — Table: ${tableValid}/${tableItems.length} | Text: ${textValid}/${textItems.length}`);
