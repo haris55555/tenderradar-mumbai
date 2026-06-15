@@ -430,43 +430,6 @@ return { qty: 0, rate: 0, amount: 0 };
 
 
 
-if (nums.length >= 3) {
-// Try column-order-based assignment first
-let qty, rate, amount;
-if (colOrder.rateBeforeQty) {
-rate = nums[0]; qty = nums[1]; amount = nums[nums.length - 1];
-} else {
-qty = nums[0]; rate = nums[1]; amount = nums[nums.length - 1];
-}
-
-// Validate: qty * rate should ≈ amount
-if (qty > 0 && rate > 0 && amount > 0) {
-if (Math.abs(qty * rate - amount) / (amount + 1) < 0.25) {
-return { qty, rate, amount };
-}
-}
-
-// Column order didn't validate — try all combinations
-for (let qi = 0; qi < nums.length - 1; qi++) {
-for (let ri = qi + 1; ri < nums.length; ri++) {
-for (let ai = ri + 1; ai < nums.length; ai++) {
-if (Math.abs(nums[qi] * nums[ri] - nums[ai]) / (nums[ai] + 1) < 0.20) {
-return { qty: nums[qi], rate: nums[ri], amount: nums[ai] };
-}
-}
-}
-}
-
-// No validation match — use column order as-is
-if (colOrder.rateBeforeQty) {
-return { qty: nums[1] || 0, rate: nums[0], amount: nums[nums.length - 1] };
-}
-return { qty: nums[0], rate: nums[1] || 0, amount: nums[nums.length - 1] };
-}
-
-return { qty: 0, rate: 0, amount: 0 };
-}
-
 function isNewBoqItem(line) {
 const srNoMatch = line.match(/^(\d{1,3}(?:\.\d{1,2})?)\s+(.+)/);
 if (!srNoMatch) return null;
