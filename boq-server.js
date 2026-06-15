@@ -370,7 +370,7 @@ return null;
 function assignNumbers(nums, colOrder) {
 if (!nums || nums.length === 0) return { qty: 0, rate: 0, amount: 0 };
 
-// Zero rate BOQ — last number is total qty
+// Zero rate BOQ explicitly detected — last number is total qty
 if (colOrder.isZeroRate) {
 return { qty: nums[nums.length - 1], rate: 0, amount: 0 };
 }
@@ -381,6 +381,54 @@ if (nums.length === 2) {
 if (colOrder.rateBeforeQty) return { qty: nums[1], rate: nums[0], amount: 0 };
 return { qty: nums[0], rate: nums[1], amount: 0 };
 }
+
+if (nums.length >= 3) {
+// Try column-order-based assignment first
+let qty, rate, amount;
+if (colOrder.rateBeforeQty) {
+// DT1 style: rate first, qty second, amount last
+rate = nums[0]; qty = nums[1]; amount = nums[nums.length - 1];
+} else {
+// Standard style: qty first, rate second, amount last
+qty = nums[0]; rate = nums[1]; amount = nums[nums.length - 1];
+}
+
+// Validate: qty * rate should ≈ amount
+if (qty > 0 && rate > 0 && amount > 0) {
+if (Math.abs(qty * rate - amount) / (amount + 1) < 0.25) {
+return { qty, rate, amount };
+}
+}
+
+// Validation failed — try all combinations
+for (let qi = 0; qi < nums.length - 1; qi++) {
+for (let ri = qi + 1; ri < nums.length; ri++) {
+for (let ai = ri + 1; ai < nums.length; ai++) {
+if (Math.abs(nums[qi] * nums[ri] - nums[ai]) / (nums[ai] + 1) < 0.20) {
+return { qty: nums[qi], rate: nums[ri], amount: nums[ai] };
+}
+}
+}
+}
+
+// No combination validates — means rate/amount columns are empty (building BOQ style)
+// Tower1, Tower2, Tower3, TotalQty pattern — last number is total qty
+if (nums.length >= 4) {
+console.log(`No qty*rate=amount match for ${nums.length} numbers — taking last as total qty`);
+return { qty: nums[nums.length - 1], rate: 0, amount: 0 };
+}
+
+// 3 numbers, no validation — use column order as-is
+if (colOrder.rateBeforeQty) {
+return { qty: nums[1], rate: nums[0], amount: nums[2] };
+}
+return { qty: nums[0], rate: nums[1], amount: nums[2] };
+}
+
+return { qty: 0, rate: 0, amount: 0 };
+}
+
+
 
 if (nums.length >= 3) {
 // Try column-order-based assignment first
