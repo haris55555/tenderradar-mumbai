@@ -336,39 +336,60 @@ function detectTextHeader(pages) {
 const allText = pages.join('\n');
 const lines = allText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
+// All possible ways qty and rate can appear in any BOQ header
+const QTY_KEYWORDS = ['total quantity', 'total qty', 'total quant', 'quantity', 'qty', 'quant', 'no. of units', 'nos'];
+const RATE_KEYWORDS = ['rate per unit', 'rate (rs)', 'rate(rs)', 'unit rate', 'basic rate', 'rate'];
+const AMOUNT_KEYWORDS = ['total amount', 'total cost', 'amount (rs)', 'amount(rs)', 'amount'];
+const DESC_KEYWORDS = ['description of work', 'description of item', 'particulars', 'description', 'item'];
+
 for (const line of lines) {
 const lower = line.toLowerCase();
-// Look for a line that contains both description/particulars AND qty/quantity AND rate
-const hasDesc = lower.includes('description') || lower.includes('particulars') || lower.includes('item');
-const hasQty = lower.includes('qty') || lower.includes('quantity');
-const hasRate = lower.includes('rate');
-const hasAmount = lower.includes('amount');
 
-if (hasDesc && (hasQty || hasRate) && hasAmount) {
-// Found header line — determine order of rate vs qty
-const rateIdx = lower.indexOf('rate');
-const qtyIdx = lower.includes('total qty') ? lower.indexOf('total qty') :
-lower.includes('total quantity') ? lower.indexOf('total quantity') :
-lower.includes('quantity') ? lower.indexOf('quantity') :
-lower.indexOf('qty');
-const amtIdx = lower.indexOf('amount');
+// Check if this looks like a BOQ header line
+const hasDesc = DESC_KEYWORDS.some(k => lower.includes(k));
+const hasAmount = AMOUNT_KEYWORDS.some(k => lower.includes(k));
+const hasRate = RATE_KEYWORDS.some(k => lower.includes(k));
+const hasQty = QTY_KEYWORDS.some(k => lower.includes(k));
 
-const hasRateCol = rateIdx >= 0;
-const hasQtyCol = qtyIdx >= 0;
+if (hasDesc && hasAmount && (hasRate || hasQty)) {
+// Find positions of rate and qty keywords
+let rateIdx = -1;
+let qtyIdx = -1;
 
-// Determine if rate comes before qty or after
+for (const k of RATE_KEYWORDS) {
+const idx = lower.indexOf(k);
+if (idx >= 0) { rateIdx = idx; break; }
+}
+
+for (const k of QTY_KEYWORDS) {
+const idx = lower.indexOf(k);
+if (idx >= 0) { qtyIdx = idx; break; }
+}
+
+const hasRateInPdf = rateIdx >= 0;
+const hasQtyInPdf = qtyIdx >= 0;
+
 let rateBeforeQty = false;
-let hasRateInPdf = hasRateCol;
-let hasQtyInPdf = hasQtyCol;
-
-if (hasRateCol && hasQtyCol) {
+if (hasRateInPdf && hasQtyInPdf) {
 rateBeforeQty = rateIdx < qtyIdx;
+} else if (hasRateInPdf && !hasQtyInPdf) {
+// Rate found but qty keyword not found — rate likely before qty (DT1 style)
+rateBeforeQty = true;
 }
 
-console.log(`Text header found: rate@${rateIdx} qty@${qtyIdx} amt@${amtIdx} rateBeforeQty=${rateBeforeQty} hasRate=${hasRateInPdf}`);
-return { rateBeforeQty, hasRateInPdf, hasQtyInPdf, hasAmountInPdf: hasAmount };
+// Zero-rate BOQ: has qty variations but no rate keyword
+const isZeroRateBOQ = hasQtyInPdf && !hasRateInPdf;
+
+console.log(`Text header found: rate@${rateIdx} qty@${qtyIdx} rateBeforeQty=${rateBeforeQty} hasRate=${hasRateInPdf} zeroRate=${isZeroRateBOQ}`);
+return { rateBeforeQty, hasRateInPdf: !isZeroRateBOQ, hasQtyInPdf, hasAmountInPdf: hasAmount };
 }
 }
+
+console.log('Text header not found, using default: qty before rate');
+return { rateBeforeQty: false, hasRateInPdf: true, hasQtyInPdf: true, hasAmountInPdf: true };
+}
+
+
 
 // Default: assume qty before rate (most common format)
 console.log('Text header not found, using default: qty before rate');
