@@ -255,7 +255,8 @@ const savingsPct = item.rate > 0 ? Math.round(((item.rate - aiRate) / item.rate)
 return (
 <tr key={idx} style={{ borderBottom: "1px solid #1A2A3A", background: item.needsRate ? "rgba(245,166,35,0.05)" : idx % 2 === 0 ? "transparent" : "rgba(26,42,58,0.3)" }}>
 <td style={{ padding: "12px 14px", color: "#3A5068", fontWeight: "700" }}>{idx + 1}</td>
-<td style={{ padding: "12px 14px", color: "#E8EDF2", maxWidth: "240px", lineHeight: "1.5" }}>
+<td style={{ padding: "12px 14px", color: "#E8EDF2", maxWidth: "240px", lineHeight: "1.5", wordBreak: "break-word", overflowWrap: "break-word", verticalAlign: "top" }}>
+
 {item.item}
 {item.needsRate && <span style={{ marginLeft: "6px", fontSize: "10px", background: "rgba(245,166,35,0.15)", color: "#F5A623", padding: "2px 6px", borderRadius: "4px", fontWeight: "700" }}>Enter rate</span>}
 </td>
