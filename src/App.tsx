@@ -556,7 +556,7 @@ return (
 </div>
 </div>
 
-<div style={{ position: "sticky", top: "24px" }}>
+<div style={{ position: 'sticky', top: '24px', backgroundColor: '#0F1923' }}>
 <div style={{ background: bidBg, border: `2px solid ${bidColor}40`, borderRadius: "16px", padding: "24px", marginBottom: "16px", textAlign: "center" }}>
 <div style={{ color: bidColor, fontSize: "11px", fontWeight: "800", letterSpacing: "2px", marginBottom: "8px" }}>BID DECISION</div>
 <div style={{ color: bidColor, fontSize: "48px", fontWeight: "900", letterSpacing: "-2px", marginBottom: "8px" }}>{bidDecision}</div>
