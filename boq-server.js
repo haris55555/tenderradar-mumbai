@@ -138,11 +138,36 @@ return pdfRate > 0 ? Math.round(pdfRate * 0.85 * m) : Math.round(500 * m * 0.85)
 
 function getDefaultsForType(type) {
 const t = (type || '').toLowerCase();
-if (t.includes('road') || t.includes('infrastructure')) return { keyMaterials: ['Bituminous Macadam DBM Grade II', 'WBM Aggregate 40mm', 'Cement Concrete M30', 'TMT Steel Fe500D'], majorEquipment: ['Road Roller 10T Vibratory', 'Sensor Paver Machine', 'JCB Excavator 3CX', 'Tipper Trucks 10MT'], riskFactors: ['Heavy monsoon damage to fresh bituminous surface', 'Underground utility conflicts in urban roads', 'Traffic diversion management in busy roads'], executionDays: 120 };
-if (t.includes('sewer') || t.includes('sewerage') || t.includes('drain')) return { keyMaterials: ['NP3 RCC Hume Pipes', 'Cement OPC 53 Grade', 'River Sand Zone II', 'Brick Masonry Class A'], majorEquipment: ['JCB 3CX Excavator', 'Dewatering Pump 10HP', 'Concrete Mixer 500L', 'Hydraulic Crane 10T'], riskFactors: ['High water table in coastal areas', 'Existing utility crossing at depth', 'Monsoon flooding risk for open trenches'], executionDays: 150 };
-if (t.includes('sanitary') || t.includes('water') || t.includes('pipeline') || t.includes('pump')) return { keyMaterials: ['DI Pipes K9 Class IS 8329', 'Sluice Valves IS 14846', 'Cement OPC 53 Grade', 'Coarse Sand Bedding'], majorEquipment: ['Pipe Laying Excavator', 'JCB 3CX Excavator', 'Hydraulic Pipe Bending Machine', 'Pressure Testing Equipment'], riskFactors: ['Water supply disruption to residents during work', 'Pressure testing failures at joints', 'Soil condition variations'], executionDays: 90 };
-if (t.includes('electrical') || t.includes('mechanical')) return { keyMaterials: ['Aluminium/Copper Cables IS 694', 'MS Conduit Pipes', 'Distribution Panels', 'Earthing Materials'], majorEquipment: ['Cable Laying Machine', 'Hydraulic Crane 5T', 'Cable Drum Trailer', 'Megger Testing Equipment'], riskFactors: ['Live electrical hazards during installation', 'Shutdown coordination required', 'Specialized licensed electricians required'], executionDays: 60 };
-return { keyMaterials: ['Cement OPC 53 Grade Ultratech', 'TMT Steel Fe500D TATA/JSW', 'River Sand Zone II', '20mm Graded Aggregate'], majorEquipment: ['JCB 3CX Excavator', 'Concrete Transit Mixer', 'Plate Compactor', 'Tipper Truck 10MT'], riskFactors: ['Urban area work with restricted access', 'Monsoon season work stoppage Jun-Sep', 'Utility shifting coordination required'], executionDays: 120 };
+if (t.includes('road') || t.includes('infrastructure')) return { keyMaterials: ['Bituminous Macadam DBM Grade II', 'WBM Aggregate 40mm', 'Cement Concrete M30', 'TMT Steel Fe500D'], majorEquipment: ['Road Roller 10T Vibratory', 'Sensor Paver Machine', 'JCB Excavator 3CX', 'Tipper Trucks 10MT'], executionDays: 120 };
+if (t.includes('sewer') || t.includes('sewerage') || t.includes('drain')) return { keyMaterials: ['NP3 RCC Hume Pipes', 'Cement OPC 53 Grade', 'River Sand Zone II', 'Brick Masonry Class A'], majorEquipment: ['JCB 3CX Excavator', 'Dewatering Pump 10HP', 'Concrete Mixer 500L', 'Hydraulic Crane 10T'], executionDays: 150 };
+if (t.includes('sanitary') || t.includes('water') || t.includes('pipeline') || t.includes('pump')) return { keyMaterials: ['DI Pipes K9 Class IS 8329', 'Sluice Valves IS 14846', 'Cement OPC 53 Grade', 'Coarse Sand Bedding'], majorEquipment: ['Pipe Laying Excavator', 'JCB 3CX Excavator', 'Hydraulic Pipe Bending Machine', 'Pressure Testing Equipment'], executionDays: 90 };
+if (t.includes('electrical') || t.includes('mechanical')) return { keyMaterials: ['Aluminium/Copper Cables IS 694', 'MS Conduit Pipes', 'Distribution Panels', 'Earthing Materials'], majorEquipment: ['Cable Laying Machine', 'Hydraulic Crane 5T', 'Cable Drum Trailer', 'Megger Testing Equipment'], executionDays: 60 };
+return { keyMaterials: ['Cement OPC 53 Grade Ultratech', 'TMT Steel Fe500D TATA/JSW', 'River Sand Zone II', '20mm Graded Aggregate'], majorEquipment: ['JCB 3CX Excavator', 'Concrete Transit Mixer', 'Plate Compactor', 'Tipper Truck 10MT'], executionDays: 120 };
+}
+
+function generateDynamicRisks(boqItems) {
+const risks = new Set();
+const allDesc = boqItems.map(it => (it.item || '').toLowerCase()).join(' ');
+
+if (allDesc.includes('excavat') || allDesc.includes('earth work')) risks.add('Underground utility conflicts during excavation — check existing services before digging');
+if (allDesc.includes('bitumen') || allDesc.includes('bituminous') || allDesc.includes('dbm') || allDesc.includes('asphalt')) risks.add('Monsoon damage to fresh bituminous surface — plan work in dry season only');
+if (allDesc.includes('steel') || allDesc.includes('reinforcement') || allDesc.includes('tmt') || allDesc.includes('fe500')) risks.add('Steel price escalation risk — rates may increase 10-15% during project duration');
+if (allDesc.includes('concrete') || allDesc.includes('rcc') || allDesc.includes('rmc')) risks.add('Cement and aggregate supply disruption possible during peak construction season');
+if (allDesc.includes('pipe') || allDesc.includes('sewer') || allDesc.includes('drain') || allDesc.includes('manhole')) risks.add('Water supply disruption to residents during pipeline work — coordinate with local body');
+if (allDesc.includes('electrical') || allDesc.includes('cable') || allDesc.includes('panel') || allDesc.includes('wiring')) risks.add('Shutdown coordination required for electrical work — planned outages needed');
+if (allDesc.includes('waterproof') || allDesc.includes('terrace') || allDesc.includes('basement')) risks.add('Waterproofing quality risk — defects visible only after monsoon season');
+if (allDesc.includes('marble') || allDesc.includes('granite') || allDesc.includes('tile') || allDesc.includes('flooring')) risks.add('Stone and tile procurement lead time 4-6 weeks — order early to avoid delays');
+if (allDesc.includes('demolition') || allDesc.includes('dismantl') || allDesc.includes('removing')) risks.add('Demolition debris disposal requires municipal clearance and designated dump yard');
+if (allDesc.includes('road') || allDesc.includes('footpath') || allDesc.includes('kerb')) risks.add('Traffic diversion management and NOC required during road works');
+if (allDesc.includes('plaster') || allDesc.includes('paint') || allDesc.includes('putty')) risks.add('Finishing works sensitive to dust and humidity — sequence after all civil work');
+if (allDesc.includes('foundation') || allDesc.includes('pile') || allDesc.includes('raft')) risks.add('Soil bearing capacity variation — geotechnical report recommended before starting');
+if (allDesc.includes('window') || allDesc.includes('door') || allDesc.includes('aluminium')) risks.add('Aluminium and UPVC fabrication lead time 3-4 weeks — confirm sizes early');
+
+// Universal risks always included
+risks.add('Monsoon season work stoppage June to September — factor in schedule');
+risks.add('Labour availability and rate escalation during peak season');
+
+return Array.from(risks).slice(0, 5);
 }
 
 function generateEstimatedBOQ(type, deptEstimate, stateMultiplier) {
@@ -254,40 +279,27 @@ return { headerRowIdx: i, descCol, unitCol, qtyCol, rateCol, amountCol };
 return null;
 }
 
-// ============ DERIVE COLUMN ORDER FROM TABLE HEADER ============
-// This is the key function — reads the table header to understand
-// whether Rate comes before Qty or after, then passes this to text parser
 function deriveColOrderFromTableHeader(tables) {
 for (const rows of tables) {
 if (!rows || rows.length === 0) continue;
 const header = detectHeader(rows);
 if (!header) continue;
-
 const { qtyCol, rateCol, amountCol } = header;
-
-// If both rate and qty columns found, determine order
 if (rateCol >= 0 && qtyCol >= 0) {
 const rateBeforeQty = rateCol < qtyCol;
-const hasRateInPdf = rateCol >= 0;
 console.log(`Column order from table header: rateCol=${rateCol} qtyCol=${qtyCol} rateBeforeQty=${rateBeforeQty}`);
-return { rateBeforeQty, hasRateInPdf, isZeroRate: false };
+return { rateBeforeQty, hasRateInPdf: true, isZeroRate: false };
 }
-
-// Rate found but no qty column — rate before qty (DT1 style where qty header is split)
 if (rateCol >= 0 && qtyCol === -1) {
 console.log(`Rate found at col ${rateCol}, qty col not found — assuming rate before qty`);
 return { rateBeforeQty: true, hasRateInPdf: true, isZeroRate: false };
 }
-
-// Qty found but no rate column — zero rate BOQ
 if (qtyCol >= 0 && rateCol === -1) {
 console.log(`Qty found at col ${qtyCol}, no rate col — zero rate BOQ`);
 return { rateBeforeQty: false, hasRateInPdf: false, isZeroRate: true };
 }
 }
-
-// Default: standard format qty before rate
-console.log('No table header found for col order — using default: qty before rate');
+console.log('No table header found — using default: qty before rate');
 return { rateBeforeQty: false, hasRateInPdf: true, isZeroRate: false };
 }
 
@@ -366,69 +378,32 @@ if (match) return { unit: u.toUpperCase(), startIdx: match.index, endIdx: match.
 return null;
 }
 
-// ============ NUMBER ASSIGNMENT USING TABLE COLUMN ORDER ============
 function assignNumbers(nums, colOrder) {
 if (!nums || nums.length === 0) return { qty: 0, rate: 0, amount: 0 };
-
-// Zero rate BOQ explicitly detected — last number is total qty
-if (colOrder.isZeroRate) {
-return { qty: nums[nums.length - 1], rate: 0, amount: 0 };
-}
-
+if (colOrder.isZeroRate) return { qty: nums[nums.length - 1], rate: 0, amount: 0 };
 if (nums.length === 1) return { qty: nums[0], rate: 0, amount: 0 };
-
 if (nums.length === 2) {
 if (colOrder.rateBeforeQty) return { qty: nums[1], rate: nums[0], amount: 0 };
 return { qty: nums[0], rate: nums[1], amount: 0 };
 }
-
 if (nums.length >= 3) {
-// Try column-order-based assignment first
 let qty, rate, amount;
-if (colOrder.rateBeforeQty) {
-// DT1 style: rate first, qty second, amount last
-rate = nums[0]; qty = nums[1]; amount = nums[nums.length - 1];
-} else {
-// Standard style: qty first, rate second, amount last
-qty = nums[0]; rate = nums[1]; amount = nums[nums.length - 1];
-}
-
-// Validate: qty * rate should ≈ amount
-if (qty > 0 && rate > 0 && amount > 0) {
-if (Math.abs(qty * rate - amount) / (amount + 1) < 0.25) {
-return { qty, rate, amount };
-}
-}
-
-// Validation failed — try all combinations
+if (colOrder.rateBeforeQty) { rate = nums[0]; qty = nums[1]; amount = nums[nums.length - 1]; }
+else { qty = nums[0]; rate = nums[1]; amount = nums[nums.length - 1]; }
+if (qty > 0 && rate > 0 && amount > 0 && Math.abs(qty * rate - amount) / (amount + 1) < 0.25) return { qty, rate, amount };
 for (let qi = 0; qi < nums.length - 1; qi++) {
 for (let ri = qi + 1; ri < nums.length; ri++) {
 for (let ai = ri + 1; ai < nums.length; ai++) {
-if (Math.abs(nums[qi] * nums[ri] - nums[ai]) / (nums[ai] + 1) < 0.20) {
-return { qty: nums[qi], rate: nums[ri], amount: nums[ai] };
+if (Math.abs(nums[qi] * nums[ri] - nums[ai]) / (nums[ai] + 1) < 0.20) return { qty: nums[qi], rate: nums[ri], amount: nums[ai] };
 }
 }
 }
-}
-
-// No combination validates — means rate/amount columns are empty (building BOQ style)
-// Tower1, Tower2, Tower3, TotalQty pattern — last number is total qty
-if (nums.length >= 4) {
-console.log(`No qty*rate=amount match for ${nums.length} numbers — taking last as total qty`);
-return { qty: nums[nums.length - 1], rate: 0, amount: 0 };
-}
-
-// 3 numbers, no validation — use column order as-is
-if (colOrder.rateBeforeQty) {
-return { qty: nums[1], rate: nums[0], amount: nums[2] };
-}
+if (nums.length >= 4) return { qty: nums[nums.length - 1], rate: 0, amount: 0 };
+if (colOrder.rateBeforeQty) return { qty: nums[1], rate: nums[0], amount: nums[2] };
 return { qty: nums[0], rate: nums[1], amount: nums[2] };
 }
-
 return { qty: 0, rate: 0, amount: 0 };
 }
-
-
 
 function isNewBoqItem(line) {
 const srNoMatch = line.match(/^(\d{1,3}(?:\.\d{1,2})?)\s+(.+)/);
@@ -440,16 +415,9 @@ if (!/[a-zA-Z]{4,}/.test(rest)) return null;
 const unitPos = findUnitInLine(rest);
 if (!unitPos) return null;
 const afterUnit = rest.substring(unitPos.endIdx);
-const numsAfterUnit = (afterUnit.match(/[\d,]+\.?\d*/g) || [])
-.map(s => parseFloat(s.replace(/,/g, '')))
-.filter(n => n > 0 && n < 100000000);
+const numsAfterUnit = (afterUnit.match(/[\d,]+\.?\d*/g) || []).map(s => parseFloat(s.replace(/,/g, ''))).filter(n => n > 0 && n < 100000000);
 if (numsAfterUnit.length < 2) return null;
-return {
-srNo,
-desc: rest.substring(0, unitPos.startIdx).trim() || rest,
-unit: unitPos.unit,
-nums: numsAfterUnit
-};
+return { srNo, desc: rest.substring(0, unitPos.startIdx).trim() || rest, unit: unitPos.unit, nums: numsAfterUnit };
 }
 
 function cleanDesc(desc) {
@@ -461,30 +429,19 @@ const items = [];
 const allText = pages.join('\n');
 const lines = allText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 const m = stateMultiplier || 1.0;
-console.log(`Text parser: ${pages.length} pages, ${lines.length} lines | colOrder: rateFirst=${colOrder.rateBeforeQty} zeroRate=${colOrder.isZeroRate}`);
+console.log(`Text parser: ${pages.length} pages, ${lines.length} lines | rateFirst=${colOrder.rateBeforeQty} zeroRate=${colOrder.isZeroRate}`);
 
 const STOP_KEYWORDS = ['estimated cost', 'grand total', 'contingency', 'supervision charges', 'total project cost'];
 const SKIP_STARTS = ['drk office', 'security room', 'pump room', 'rest room', 'prayer hall', 'wood storage', 'washing area', 'fire escape', 'lift lobby'];
-
 let currentItem = null;
 
 const saveCurrentItem = () => {
 if (!currentItem || currentItem.desc.length < 5) { currentItem = null; return; }
 const parsed = assignNumbers(currentItem.nums, colOrder);
 if (parsed && parsed.qty > 0) {
-if (parsed.rate === 0 && parsed.amount > 0 && parsed.qty > 0) {
-parsed.rate = Math.round(parsed.amount / parsed.qty);
-}
+if (parsed.rate === 0 && parsed.amount > 0 && parsed.qty > 0) parsed.rate = Math.round(parsed.amount / parsed.qty);
 const aiRate = classifyAndEstimate(currentItem.desc, currentItem.unit, parsed.rate, m);
-items.push({
-item: cleanDesc(currentItem.desc),
-unit: currentItem.unit,
-quantity: Math.round(parsed.qty * 100) / 100,
-rate: Math.round(parsed.rate * 100) / 100,
-amount: Math.round(parsed.amount * 100) / 100,
-aiRate,
-needsRate: false
-});
+items.push({ item: cleanDesc(currentItem.desc), unit: currentItem.unit, quantity: Math.round(parsed.qty * 100) / 100, rate: Math.round(parsed.rate * 100) / 100, amount: Math.round(parsed.amount * 100) / 100, aiRate, needsRate: false });
 }
 currentItem = null;
 };
@@ -492,7 +449,6 @@ currentItem = null;
 for (let i = 0; i < lines.length; i++) {
 const line = lines[i];
 const lineLower = line.toLowerCase();
-
 if (STOP_KEYWORDS.some(k => lineLower.includes(k))) { saveCurrentItem(); continue; }
 if (lineLower.includes('length') && lineLower.includes('width') && lineLower.includes('height')) continue;
 if (SKIP_STARTS.some(k => lineLower.startsWith(k))) continue;
@@ -507,12 +463,8 @@ continue;
 }
 
 if (currentItem) {
-if (lineLower.includes('sr.no') || lineLower.includes('description') ||
-lineLower.includes('amount') || lineLower.includes('page no') ||
-lineLower.includes('bill of quantities')) continue;
-if (isDescriptionText(line) && !/^\d+\s*$/.test(line)) {
-currentItem.desc += ' ' + line;
-}
+if (lineLower.includes('sr.no') || lineLower.includes('description') || lineLower.includes('amount') || lineLower.includes('page no') || lineLower.includes('bill of quantities')) continue;
+if (isDescriptionText(line) && !/^\d+\s*$/.test(line)) currentItem.desc += ' ' + line;
 }
 }
 saveCurrentItem();
@@ -549,12 +501,9 @@ let textItems = [];
 let tenderValue = 0;
 
 const tables = extracted && extracted.tables ? extracted.tables : (Array.isArray(extracted) ? extracted : []);
-
-// STEP 1: Derive column order from table header (works even if table parser can't extract all items)
 const colOrder = deriveColOrderFromTableHeader(tables);
 console.log(`Using column order: rateBeforeQty=${colOrder.rateBeforeQty} isZeroRate=${colOrder.isZeroRate}`);
 
-// STEP 2: Run table parser
 if (tables.length > 0) {
 const headerTableIndices = [];
 for (let t = 0; t < tables.length; t++) {
@@ -596,7 +545,6 @@ console.log(` -> Got ${items.length} items from BOQ section ${hi + 1}`);
 console.log(`Table parser total: ${tableItems.length} items`);
 }
 
-// STEP 3: Run text parser WITH column order from table header
 if (extracted && extracted.pages && extracted.pages.length > 0) {
 for (const page of extracted.pages) {
 const match = page.match(/(?:Total Amount|Estimated Cost)[^\d]*([\d,]+(?:\.\d+)?)/i);
@@ -606,7 +554,6 @@ textItems = parseBoqFromText(extracted.pages, m, colOrder);
 console.log(`Text parser total: ${textItems.length} items`);
 }
 
-// STEP 4: Pick winner
 const tableValid = validateItems(tableItems);
 const textValid = validateItems(textItems);
 console.log(`Validation — Table: ${tableValid}/${tableItems.length} | Text: ${textValid}/${textItems.length}`);
@@ -706,12 +653,6 @@ const parsed = processExtracted(extracted, stateMultiplier);
 console.log('Result - success:', parsed.extractionSuccess, 'items:', parsed.boqItems?.length, 'value:', parsed.tenderValue);
 
 let deptEstimate = parsed.tenderValue > 0 ? parsed.tenderValue : 5000000;
-// For zero-rate BOQs where tender value not in PDF, use AI execution cost as estimate
-if (deptEstimate === 5000000 && parsed.boqItems && parsed.boqItems.length > 0) {
-const aiBasedEstimate = parsed.boqItems.reduce((sum, item) => sum + (item.quantity * (item.aiRate || 0)), 0);
-if (aiBasedEstimate > 5000000) deptEstimate = Math.round(aiBasedEstimate / 0.85); // Add ~15% for overhead
-}
-
 let boqItems = [];
 let pdfRead = false;
 let dataSource = 'estimation';
@@ -725,11 +666,18 @@ boqItems = generateEstimatedBOQ(tenderType, deptEstimate, stateMultiplier);
 dataSource = parsed.tenderValue > 100000 ? 'pdf_value_estimated_boq' : 'estimation';
 }
 
+// For zero-rate BOQs where tender value not in PDF, derive from AI execution cost
+if (deptEstimate === 5000000 && boqItems.length > 0) {
+const aiBasedEstimate = boqItems.reduce((sum, item) => sum + (item.quantity * (item.aiRate || 0)), 0);
+if (aiBasedEstimate > 5000000) deptEstimate = Math.round(aiBasedEstimate / 0.85);
+}
+
 const executionCost = boqItems.reduce((sum, item) => sum + (item.quantity * (item.aiRate || item.rate || 0)), 0);
 const expectedWinningBid = Math.round(deptEstimate * 0.92);
 const expectedProfit = expectedWinningBid - executionCost;
 const profitMargin = expectedWinningBid > 0 ? Math.round((expectedProfit / expectedWinningBid) * 100) : 0;
 const defaults = getDefaultsForType(tenderType);
+const dynamicRisks = boqItems.length > 0 ? generateDynamicRisks(boqItems) : [];
 const bidReason = await getBidReason(tenderType, deptEstimate, profitMargin, selectedState);
 
 const needsRateCount = boqItems.filter(it => it.needsRate).length;
@@ -751,7 +699,8 @@ bidRecommendationReason: bidReason || `${profitMargin}% margin on ${tenderType} 
 boqItems, materialCost: Math.round(executionCost * 0.45), labourCost: Math.round(executionCost * 0.25),
 equipmentCost: Math.round(executionCost * 0.15), overheadCost: Math.round(executionCost * 0.10),
 contingency: Math.round(executionCost * 0.05), keyMaterials: defaults.keyMaterials,
-majorEquipment: defaults.majorEquipment, executionDays: defaults.executionDays, riskFactors: defaults.riskFactors,
+majorEquipment: defaults.majorEquipment, executionDays: defaults.executionDays,
+riskFactors: dynamicRisks,
 },
 pdfRead, message
 }));
