@@ -350,9 +350,21 @@ boqItems.push({ item: finalDesc.substring(0, 300), unit: fUnit.toUpperCase(), qu
 }
 if (!isSubItem) pendingDescription = '';
 } else if (desc && isDescriptionText(desc)) {
-if (isMainItem || (!isSubItem && !pendingDescription)) { pendingDescription = desc; parentDescription = desc; }
-else { pendingDescription += ' ' + desc; }
-} else if (!desc && !hasNumericData) {
+if (isMainItem) {
+pendingDescription = desc; parentDescription = desc;
+} else if (isSubItem) {
+pendingDescription += ' ' + desc;
+} else if (!pendingDescription && boqItems.length > 0) {
+// Trailing overflow text with no Sr.No - belongs to the last pushed item, not a new one
+// Silently ignore to avoid corrupting the next item's description
+} else if (!pendingDescription) {
+pendingDescription = desc; parentDescription = desc;
+} else {
+pendingDescription += ' ' + desc;
+}
+}
+
+ else if (!desc && !hasNumericData) {
 const anyDesc = row.find((v, idx) => idx !== 0 && isDescriptionText(v || '') && (v || '').length > 10);
 if (anyDesc && !isSubItem) {
 if (pendingDescription) pendingDescription += ' ' + anyDesc;
