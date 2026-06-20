@@ -214,8 +214,18 @@ style={{ border: `2px dashed ${dragging ? "#F5A623" : "#2A3F54"}`, borderRadius:
 <div style={{ color: "#E8EDF2", fontSize: "20px", fontWeight: "700", marginBottom: "8px" }}>Upload your BOQ PDF</div>
 <div style={{ color: "#6B7F8E", fontSize: "14px", marginBottom: "20px", lineHeight: "1.6" }}>Upload the BOQ PDF from any tender portal — public or private, any department, any state</div>
 <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: "#F5A623", color: "#0F1923", padding: "12px 28px", borderRadius: "10px", fontSize: "15px", fontWeight: "700" }}>Select PDF File</div>
-<div style={{ color: "#3A5068", fontSize: "12px", marginTop: "12px" }}>or drag and drop your PDF here</div>
+<div style={{ color: '#3A5068', fontSize: '12px', marginTop: '16px' }}>
+or drag and drop your PDF here
 </div>
+<div style={{ marginTop: '20px', textAlign: 'left', maxWidth: '420px', marginLeft: 'auto', marginRight: 'auto' }}>
+<div style={{ color: '#6B7F8E', fontSize: '11px', fontWeight: '700', marginBottom: '8px' }}>WORKS BEST WITH</div>
+<div style={{ color: '#3A5068', fontSize: '12px', lineHeight: '1.8' }}>
+✓ BOQ tables with Sr.No, Description, Unit, Qty, Rate, Amount columns<br />
+✓ Government tender PDFs — BMC, PWD, MMRDA, CPWD, municipal corporations<br />
+✓ Both rate-filled BOQs and zero-rate BOQs (we estimate rates using AI)
+</div>
+</div>
+
 </div>
 );
 }
