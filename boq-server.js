@@ -569,8 +569,9 @@ console.log(`Winner: table parser`);
 boqItems = tableItems;
 }
 
-const estimatedCost = boqItems.reduce((sum, item) => sum + (item.amount || 0), 0);
+const estimatedCost = boqItems.reduce((sum, item) => sum + (item.quantity * item.rate || 0), 0);
 if (boqItems.length > 0) return { extractionSuccess: true, boqItems, tenderValue: estimatedCost > 0 ? estimatedCost : tenderValue };
+
 return { extractionSuccess: false, boqItems: [], tenderValue };
 }
 
