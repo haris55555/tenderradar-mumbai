@@ -505,6 +505,100 @@ catch (e) { reject(new Error('Failed to parse extraction output')); }
 py.on('error', (err) => { reject(new Error('Failed to start Python: ' + err.message)); });
 });
 }
+// ============ QUANTITY-FIRST FORMAT PARSER ============
+// Handles PWD-style PDFs where structure is:
+// Qty | SrNo. | Description | Rate | "Rupees...Per One [Unit]" | Amount | Ref | Notes
+// A new item starts when a line begins with [number] [small integer].
+function parseQuantityFirstFormat(pages, stateMultiplier) {
+const items = [];
+const allText = pages.join('\n');
+const lines = allText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+const m = stateMultiplier || 1.0;
+
+console.log(`Qty-first parser: ${lines.length} lines`);
+
+const itemStartPattern = /^(\d+\.?\d*)\s+(\d{1,3})\s*\.\s+(.+)/;
+const UNIT_WORDS = ['Square Metre', 'Square Metres', 'Cubic Metre', 'Cubic Metres', 'Running Metre', 'Running Metres', 'Metric Tonne', 'Kilogram', 'Each', 'Number'];
+
+let currentItem = null;
+
+const saveCurrentItem = () => {
+if (!currentItem) { return; }
+items.push(currentItem);
+currentItem = null;
+};
+
+for (let i = 0; i < lines.length; i++) {
+const line = lines[i];
+const match = line.match(itemStartPattern);
+
+if (match) {
+const qty = parseFloat(match[1]);
+const srNo = parseInt(match[2]);
+const rest = match[3];
+
+// Validate this looks like a real item line (must have Rupees and rate pattern)
+const rateMatch = rest.match(/(\d+\.\d+)\s+Rupees/);
+if (!rateMatch || qty <= 0 || srNo < 1 || srNo > 200) continue;
+
+saveCurrentItem();
+
+const rate = parseFloat(rateMatch[1]);
+const rateIdx = rest.indexOf(rateMatch[0]);
+const description = rest.substring(0, rateIdx).trim();
+
+// Find amount - appears after "Per One [something]" pattern
+const amountMatch = rest.match(/Per\s+One\s+(?:[A-Za-z]+\s*)?(\d+\.\d+)/);
+const amount = amountMatch ? parseFloat(amountMatch[1]) : 0;
+
+currentItem = {
+srNo,
+qty,
+rate,
+amount: amount > 0 ? amount : Math.round(qty * rate * 100) / 100,
+desc: description,
+unit: 'Nos', // will refine below
+};
+continue;
+}
+
+// Continuation line - check for unit words and append to description
+if (currentItem) {
+let foundUnit = false;
+for (const u of UNIT_WORDS) {
+const uWords = u.split(' ');
+if (uWords.some(w => line.includes(w))) {
+if (u.toLowerCase().includes('square')) currentItem.unit = 'SQM';
+else if (u.toLowerCase().includes('cubic')) currentItem.unit = 'CUM';
+else if (u.toLowerCase().includes('running')) currentItem.unit = 'RMT';
+else if (u.toLowerCase().includes('metric tonne')) currentItem.unit = 'MT';
+else if (u.toLowerCase().includes('kilogram')) currentItem.unit = 'KG';
+foundUnit = true;
+break;
+}
+}
+// Append meaningful continuation text to description (skip very short lines, unit-only lines)
+if (!foundUnit && line.length > 10 && /[a-zA-Z]{4,}/.test(line) && !line.match(/^\d/)) {
+currentItem.desc += ' ' + line;
+}
+}
+}
+saveCurrentItem();
+
+const finalItems = items.map(it => ({
+item: it.desc.replace(/\s+/g, ' ').trim().substring(0, 300),
+unit: it.unit,
+quantity: Math.round(it.qty * 100) / 100,
+rate: Math.round(it.rate * 100) / 100,
+amount: Math.round(it.amount * 100) / 100,
+aiRate: classifyAndEstimate(it.desc, it.unit, it.rate, m),
+needsRate: false
+}));
+
+console.log(`Qty-first parser found ${finalItems.length} items`);
+return finalItems;
+}
+
 
 function processExtracted(extracted, stateMultiplier) {
 const m = stateMultiplier || 1.0;
@@ -564,6 +658,15 @@ if (match) { const val = parseFloat(match[1].replace(/,/g, '')); if (val > tende
 }
 textItems = parseBoqFromText(extracted.pages, m, colOrder);
 console.log(`Text parser total: ${textItems.length} items`);
+
+// Fallback: try quantity-first format if standard parsers found very few items
+if (textItems.length < 3 && tableItems.length < 3) {
+const qtyFirstItems = parseQuantityFirstFormat(extracted.pages, m);
+if (qtyFirstItems.length > textItems.length) {
+console.log(`Quantity-first parser found more items (${qtyFirstItems.length}) - using it`);
+textItems = qtyFirstItems;
+}
+}
 }
 
 const tableValid = validateItems(tableItems);
