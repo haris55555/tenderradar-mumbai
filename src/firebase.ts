@@ -42,9 +42,18 @@ const FREE_LIMIT = 2;
 
 export async function canUserUpload(uid: string, email: string): Promise<boolean> {
 if (ALLOWLIST_EMAILS.includes(email)) return true;
+const userDoc = await getDoc(doc(db, "users", uid));
+if (userDoc.exists() && userDoc.data().subscribed) return true;
 const count = await getUploadCount(uid);
 return count < FREE_LIMIT;
 }
+
+export async function markUserSubscribed(uid: string, paymentId: string) {
+const userRef = doc(db, "users", uid);
+await setDoc(userRef, { subscribed: true, subscribedAt: new Date().toISOString(), lastPaymentId: paymentId }, { merge: true });
+}
+
+
 
 
 
