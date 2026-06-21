@@ -1,0 +1,157 @@
+import { useState, useEffect } from "react";
+import { auth, signInWithGoogle, logOut, onAuthStateChanged } from "./firebase";
+import type { User } from "firebase/auth";
+
+interface AuthGateProps {
+children: (user: User, phoneNumber: string) => React.ReactNode;
+}
+
+export default function AuthGate({ children }: AuthGateProps) {
+const [user, setUser] = useState<User | null>(null);
+const [loading, setLoading] = useState(true);
+const [phoneNumber, setPhoneNumber] = useState<string>("");
+const [needsPhone, setNeedsPhone] = useState(false);
+const [phoneInput, setPhoneInput] = useState("");
+const [error, setError] = useState("");
+
+useEffect(() => {
+const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+setUser(firebaseUser);
+setLoading(false);
+if (firebaseUser) {
+const savedPhone = localStorage.getItem(`phone_${firebaseUser.uid}`);
+if (savedPhone) {
+setPhoneNumber(savedPhone);
+setNeedsPhone(false);
+} else {
+setNeedsPhone(true);
+}
+}
+});
+return () => unsubscribe();
+}, []);
+
+const handleGoogleSignIn = async () => {
+setError("");
+try {
+await signInWithGoogle();
+} catch (err) {
+setError("Sign in failed. Please try again.");
+console.error(err);
+}
+};
+
+const handlePhoneSubmit = () => {
+const cleaned = phoneInput.replace(/\D/g, "");
+if (cleaned.length !== 10) {
+setError("Please enter a valid 10-digit mobile number");
+return;
+}
+if (user) {
+localStorage.setItem(`phone_${user.uid}`, cleaned);
+setPhoneNumber(cleaned);
+setNeedsPhone(false);
+}
+};
+
+const handleLogout = async () => {
+await logOut();
+setUser(null);
+setPhoneNumber("");
+};
+
+if (loading) {
+return (
+<div style={{ minHeight: "100vh", backgroundColor: "#0F1923", display: "flex", alignItems: "center", justifyContent: "center" }}>
+<div style={{ color: "#F5A623", fontSize: "16px" }}>Loading...</div>
+</div>
+);
+}
+
+if (!user) {
+return (
+<div style={{ minHeight: "100vh", backgroundColor: "#0F1923", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+<div style={{ maxWidth: "400px", width: "100%", textAlign: "center" }}>
+<div style={{ fontSize: "28px", fontWeight: "800", color: "#F5A623", marginBottom: "8px" }}>TenderRadar</div>
+<div style={{ color: "#6B7F8E", fontSize: "14px", marginBottom: "40px" }}>BOQ Profit Calculator - Any Tender, Pan India</div>
+<button
+onClick={handleGoogleSignIn}
+style={{
+width: "100%",
+padding: "14px 20px",
+backgroundColor: "#FFFFFF",
+color: "#1a1a1a",
+border: "none",
+borderRadius: "10px",
+fontSize: "15px",
+fontWeight: "600",
+cursor: "pointer",
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+gap: "10px"
+}}
+>
+<svg width="20" height="20" viewBox="0 0 48 48">
+<path fill="#FFC107" d="M43.6 20.5H42V20.4H24v7.2h11.3c-1.6 4.6-6 7.9-11.3 7.9-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 8 3l5.1-5.1C33.5 6.2 29 4.4 24 4.4 13.2 4.4 4.4 13.2 4.4 24S13.2 43.6 24 43.6 43.6 34.8 43.6 24c0-1.2-.1-2.4-.4-3.5z"/>
+<path fill="#FF3D00" d="M6.3 14.7l5.9 4.3C13.9 15.6 18.6 12.4 24 12.4c3 0 5.8 1.1 8 3l5.1-5.1C33.5 6.2 29 4.4 24 4.4c-7.5 0-14 4.2-17.7 10.3z"/>
+<path fill="#4CAF50" d="M24 43.6c4.9 0 9.4-1.9 12.8-4.9l-5.9-5c-2 1.5-4.6 2.4-6.9 2.4-5.2 0-9.7-3.3-11.3-7.9l-5.9 4.6C9.9 39.4 16.4 43.6 24 43.6z"/>
+<path fill="#1976D2" d="M43.6 20.5H42V20.4H24v7.2h11.3c-.8 2.2-2.2 4.1-4 5.5l5.9 5c-.4.4 6.4-4.7 6.4-14.1 0-1.2-.1-2.4-.4-3.5z"/>
+</svg>
+Sign in with Google
+</button>
+{error && <div style={{ color: "#FF6B6B", fontSize: "13px", marginTop: "12px" }}>{error}</div>}
+</div>
+</div>
+);
+}
+
+if (needsPhone) {
+return (
+<div style={{ minHeight: "100vh", backgroundColor: "#0F1923", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+<div style={{ maxWidth: "400px", width: "100%" }}>
+<div style={{ fontSize: "22px", fontWeight: "700", color: "#E8EDF2", marginBottom: "8px", textAlign: "center" }}>One last step</div>
+<div style={{ color: "#6B7F8E", fontSize: "13px", marginBottom: "24px", textAlign: "center" }}>Enter your mobile number so we can reach you for support and updates</div>
+<input
+type="tel"
+value={phoneInput}
+onChange={(e) => setPhoneInput(e.target.value)}
+placeholder="10-digit mobile number"
+maxLength={10}
+style={{
+width: "100%",
+padding: "14px 16px",
+backgroundColor: "#1A2733",
+border: "1px solid #2A3F4F",
+borderRadius: "10px",
+color: "#E8EDF2",
+fontSize: "15px",
+marginBottom: "16px",
+boxSizing: "border-box"
+}}
+/>
+{error && <div style={{ color: "#FF6B6B", fontSize: "13px", marginBottom: "12px" }}>{error}</div>}
+<button
+onClick={handlePhoneSubmit}
+style={{
+width: "100%",
+padding: "14px 20px",
+backgroundColor: "#F5A623",
+color: "#0F1923",
+border: "none",
+borderRadius: "10px",
+fontSize: "15px",
+fontWeight: "700",
+cursor: "pointer"
+}}
+>
+Continue
+</button>
+</div>
+</div>
+);
+}
+
+return <>{children(user, phoneNumber)}</>;
+}
+
