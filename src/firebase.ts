@@ -12,9 +12,32 @@ appId: "1:411037714893:web:a23424e7cb75508ae45c84"
 
 import { GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
 
+import { getFirestore, doc, getDoc, setDoc, increment } from "firebase/firestore";
+
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+export const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
+
+export async function getUploadCount(uid: string): Promise<number> {
+const userDoc = await getDoc(doc(db, "users", uid));
+if (userDoc.exists()) {
+return userDoc.data().uploadCount || 0;
+}
+return 0;
+}
+
+export async function incrementUploadCount(uid: string, phoneNumber: string) {
+const userRef = doc(db, "users", uid);
+const userDoc = await getDoc(userRef);
+if (userDoc.exists()) {
+await setDoc(userRef, { uploadCount: increment(1) }, { merge: true });
+} else {
+await setDoc(userRef, { uploadCount: 1, phoneNumber, createdAt: new Date().toISOString() });
+}
+}
+
+
 
 export function signInWithGoogle() {
 return signInWithPopup(auth, googleProvider);
