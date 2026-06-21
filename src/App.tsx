@@ -360,7 +360,17 @@ const [projectMonths, setProjectMonths] = useState(6);
 const [raCycleDays, setRaCycleDays] = useState(60);
 
 const handleUpload = async (file: File) => {
-setUploadState("loading"); setLoadingStep(0); setErrorMsg("");
+const allowed = await canUserUpload(userId, userEmail);
+if (!allowed) {
+setErrorMsg('You have used your free analyses. Please upgrade to continue.');
+setUploadState('error');
+return;
+}
+setUploadState('loading');
+setLoadingStep(0);
+setErrorMsg('');
+
+
 let step = 0;
 const advanceStep = () => { step = Math.min(step + 1, 4); setLoadingStep(step); if (step < 4) stepTimer.current = setTimeout(advanceStep, 12000); };
 stepTimer.current = setTimeout(advanceStep, 8000);
