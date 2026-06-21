@@ -339,7 +339,7 @@ return (
 
 import AuthGate from "./AuthGate";
 
-function MainApp({ userId, phoneNumber, userEmail }: { userId: string; phoneNumber: string; userEmail: string }) {
+function MainApp({ userId, phoneNumber, userEmail, triggerPaywall }: { userId: string; phoneNumber: string; userEmail: string; triggerPaywall: () => void }) {
 
 const [uploadState, setUploadState] = useState<"idle" | "loading" | "done" | "error">("idle");
 const [loadingStep, setLoadingStep] = useState(0);
@@ -667,7 +667,7 @@ body * { visibility: hidden; }
 export default function App() {
 return (
 <AuthGate>
-{(user, phoneNumber) => <MainApp userId={user.uid} phoneNumber={phoneNumber} userEmail={user.email || ""} />}
+{(user, phoneNumber, triggerPaywall) => <MainApp userId={user.uid} phoneNumber={phoneNumber} userEmail={user.email || ""} triggerPaywall={triggerPaywall} />}
 </AuthGate>
 );
 }
