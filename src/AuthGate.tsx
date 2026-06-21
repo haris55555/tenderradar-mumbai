@@ -166,6 +166,40 @@ Continue
 );
 }
 
+if (showPaywall) {
+return (
+<div style={{ minHeight: "100vh", backgroundColor: "#0F1923", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+<div style={{ maxWidth: "420px", width: "100%", textAlign: "center" }}>
+<div style={{ fontSize: "24px", fontWeight: "800", color: "#F5A623", marginBottom: "8px" }}>You've used your free analyses</div>
+<div style={{ color: "#6B7F8E", fontSize: "14px", marginBottom: "32px" }}>Upgrade to continue analyzing unlimited BOQs</div>
+
+<div style={{ backgroundColor: "#1A2733", border: "1px solid #2A3F4F", borderRadius: "14px", padding: "24px", marginBottom: "16px", textAlign: "left" }}>
+<div style={{ color: "#E8EDF2", fontSize: "16px", fontWeight: "700", marginBottom: "4px" }}>Monthly Plan</div>
+<div style={{ color: "#F5A623", fontSize: "28px", fontWeight: "800", marginBottom: "12px" }}>₹3,000<span style={{ fontSize: "14px", color: "#6B7F8E", fontWeight: "400" }}>/month</span></div>
+<div style={{ color: "#6B7F8E", fontSize: "13px" }}>Unlimited BOQ uploads and analysis</div>
+</div>
+
+<div style={{ backgroundColor: "#1A2733", border: "1px solid #2A3F4F", borderRadius: "14px", padding: "24px", marginBottom: "24px", textAlign: "left" }}>
+<div style={{ color: "#E8EDF2", fontSize: "16px", fontWeight: "700", marginBottom: "4px" }}>6 Month Plan</div>
+<div style={{ color: "#F5A623", fontSize: "28px", fontWeight: "800", marginBottom: "12px" }}>₹15,000<span style={{ fontSize: "14px", color: "#6B7F8E", fontWeight: "400" }}>/6 months</span></div>
+<div style={{ color: "#6B7F8E", fontSize: "13px" }}>Unlimited BOQ uploads and analysis</div>
+</div>
+
+<div style={{ color: "#6B7F8E", fontSize: "12px", marginBottom: "16px" }}>Payment integration coming soon. Contact us to upgrade.</div>
+
+<button
+onClick={handleLogout}
+style={{ background: "none", border: "none", color: "#6B7F8E", fontSize: "13px", cursor: "pointer", textDecoration: "underline" }}
+>
+Sign out
+</button>
+</div>
+</div>
+);
+}
+
 return <>{children(user, phoneNumber)}</>;
 }
+
+
 
