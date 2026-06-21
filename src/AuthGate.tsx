@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { auth, signInWithGoogle, logOut, onAuthStateChanged, getUploadCount } from "./firebase";
+import { auth, signInWithGoogle, logOut, onAuthStateChanged, getUploadCount, markUserSubscribed } from "./firebase";
 import type { User } from "firebase/auth";
 
 interface AuthGateProps {
@@ -73,6 +73,33 @@ await logOut();
 setUser(null);
 setPhoneNumber("");
 };
+
+const handlePayment = () => {
+if (!user) return;
+const options = {
+key: "rzp_test_T4SeHEZra7RAGo",
+amount: 300000,
+currency: "INR",
+name: "TenderRadar",
+description: "Monthly Subscription",
+handler: async function (response: any) {
+await markUserSubscribed(user.uid, response.razorpay_payment_id);
+setShowPaywall(false);
+window.location.reload();
+},
+prefill: {
+email: user.email || "",
+contact: phoneNumber,
+},
+theme: {
+color: "#F5A623",
+},
+};
+const rzp = new (window as any).Razorpay(options);
+rzp.open();
+};
+
+
 
 if (loading) {
 return (
