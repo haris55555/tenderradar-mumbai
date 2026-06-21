@@ -16,7 +16,7 @@ const [error, setError] = useState("");
 const [uploadCount, setUploadCount] = useState(0);
 const [showPaywall, setShowPaywall] = useState(false);
 
-const ALLOWLIST_EMAILS = ["harisinamdar555@gmail.com", "hai.advisoryservices@gmail.com", "mubarisinamdar@gmail.com"]; 
+const ALLOWLIST_EMAILS = ["hai.advisoryservices@gmail.com", "mubarisinamdar@gmail.com"]; 
 const FREE_LIMIT = 2;
 
 
