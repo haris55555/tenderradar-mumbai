@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { auth, signInWithGoogle, logOut, onAuthStateChanged } from "./firebase";
+import { auth, signInWithGoogle, logOut, onAuthStateChanged, getUploadCount } from "./firebase";
 import type { User } from "firebase/auth";
 
 interface AuthGateProps {
@@ -13,9 +13,15 @@ const [phoneNumber, setPhoneNumber] = useState<string>("");
 const [needsPhone, setNeedsPhone] = useState(false);
 const [phoneInput, setPhoneInput] = useState("");
 const [error, setError] = useState("");
+const [uploadCount, setUploadCount] = useState(0);
+const [showPaywall, setShowPaywall] = useState(false);
+
+const ALLOWLIST_EMAILS = ["harisinamdar555@gmail.com", "hai.advisoryservices@gmail.com", "mubarisinamdar@gmail.com"]; 
+const FREE_LIMIT = 2;
+
 
 useEffect(() => {
-const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
 setUser(firebaseUser);
 setLoading(false);
 if (firebaseUser) {
@@ -26,10 +32,18 @@ setNeedsPhone(false);
 } else {
 setNeedsPhone(true);
 }
+const count = await getUploadCount(firebaseUser.uid);
+setUploadCount(count);
+const isAllowlisted = ALLOWLIST_EMAILS.includes(firebaseUser.email || "");
+if (count >= FREE_LIMIT && !isAllowlisted) {
+setShowPaywall(true);
+}
 }
 });
 return () => unsubscribe();
 }, []);
+
+
 
 const handleGoogleSignIn = async () => {
 setError("");
