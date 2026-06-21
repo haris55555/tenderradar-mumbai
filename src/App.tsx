@@ -378,8 +378,9 @@ if (data.success && data.boq) {
 setResult(data);
 setItems(data.boq.boqItems.map(item => ({ ...item, editedRate: item.needsRate ? 0 : (item.aiRate ?? item.rate) })));
 if (data.boq.executionDays) setProjectMonths(Math.ceil(data.boq.executionDays / 30));
-setUploadState("done");
-} else { throw new Error("Analysis failed"); }
+setUploadState('done');
+if (userId) incrementUploadCount(userId, phoneNumber);
+} else { throw new Error('Analysis failed'); }
 } catch (err: any) { clearTimeout(stepTimer.current); setErrorMsg(err.message || "Something went wrong"); setUploadState("error"); }
 };
 
