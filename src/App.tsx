@@ -362,8 +362,7 @@ const [raCycleDays, setRaCycleDays] = useState(60);
 const handleUpload = async (file: File) => {
 const allowed = await canUserUpload(userId, userEmail);
 if (!allowed) {
-setErrorMsg('You have used your free analyses. Please upgrade to continue.');
-setUploadState('error');
+triggerPaywall();
 return;
 }
 setUploadState('loading');
