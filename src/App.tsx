@@ -657,7 +657,7 @@ body * { visibility: hidden; }
 export default function App() {
 return (
 <AuthGate>
-{(user, phoneNumber) => <MainApp userId={user.uid} phoneNumber={phoneNumber} />}
+{(user, phoneNumber) => <MainApp userId={user.uid} phoneNumber={phoneNumber} userEmail={user.email || ""} />}
 </AuthGate>
 );
 }
