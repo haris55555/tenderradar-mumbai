@@ -337,7 +337,9 @@ return (
 );
 }
 
-export default function App() {
+import AuthGate from "./AuthGate";
+
+function MainApp() {
 const [uploadState, setUploadState] = useState<"idle" | "loading" | "done" | "error">("idle");
 const [loadingStep, setLoadingStep] = useState(0);
 const [result, setResult] = useState<UploadResult | null>(null);
@@ -649,3 +651,13 @@ body * { visibility: hidden; }
 </div>
 );
 }
+
+export default function App() {
+return (
+<AuthGate>
+{(user, phoneNumber) => <MainApp />}
+</AuthGate>
+);
+}
+
+
