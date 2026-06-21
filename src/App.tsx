@@ -339,7 +339,8 @@ return (
 
 import AuthGate from "./AuthGate";
 
-function MainApp() {
+function MainApp({ userId, phoneNumber }: { userId: string; phoneNumber: string }) {
+
 const [uploadState, setUploadState] = useState<"idle" | "loading" | "done" | "error">("idle");
 const [loadingStep, setLoadingStep] = useState(0);
 const [result, setResult] = useState<UploadResult | null>(null);
