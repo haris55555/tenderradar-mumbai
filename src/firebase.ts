@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
+import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
 apiKey: "AIzaSyAju6GsF8WJau14BcPgnKhpjgZgCn4V8p4",
@@ -10,6 +10,20 @@ messagingSenderId: "411037714893",
 appId: "1:411037714893:web:a23424e7cb75508ae45c84"
 };
 
+import { GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
+
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export { RecaptchaVerifier, signInWithPhoneNumber };
+const googleProvider = new GoogleAuthProvider();
+
+export function signInWithGoogle() {
+return signInWithPopup(auth, googleProvider);
+}
+
+export function logOut() {
+return signOut(auth);
+}
+
+export { onAuthStateChanged };
+
+
