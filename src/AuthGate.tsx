@@ -3,7 +3,7 @@ import { auth, signInWithGoogle, logOut, onAuthStateChanged, getUploadCount } fr
 import type { User } from "firebase/auth";
 
 interface AuthGateProps {
-children: (user: User, phoneNumber: string) => React.ReactNode;
+children: (user: User, phoneNumber: string, triggerPaywall: () => void) => React.ReactNode;
 }
 
 export default function AuthGate({ children }: AuthGateProps) {
@@ -198,7 +198,7 @@ Sign out
 );
 }
 
-return <>{children(user, phoneNumber)}</>;
+return <>{children(user, phoneNumber, () => setShowPaywall(true))}</>;
 }
 
 
