@@ -212,7 +212,23 @@ return (
 <div style={{ color: "#6B7F8E", fontSize: "13px" }}>Unlimited BOQ uploads and analysis</div>
 </div>
 
-<div style={{ color: "#6B7F8E", fontSize: "12px", marginBottom: "16px" }}>Payment integration coming soon. Contact us to upgrade.</div>
+<button
+onClick={handlePayment}
+style={{
+width: "100%",
+padding: "14px 20px",
+backgroundColor: "#F5A623",
+color: "#0F1923",
+border: "none",
+borderRadius: "10px",
+fontSize: "15px",
+fontWeight: "700",
+cursor: "pointer",
+marginBottom: "16px"
+}}
+>
+Pay ₹3,000 - Subscribe Now
+</button>
 
 <button
 onClick={handleLogout}
