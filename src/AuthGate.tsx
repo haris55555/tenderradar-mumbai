@@ -15,6 +15,7 @@ const [phoneInput, setPhoneInput] = useState("");
 const [error, setError] = useState("");
 const [uploadCount, setUploadCount] = useState(0);
 const [showPaywall, setShowPaywall] = useState(false);
+const [showWelcome , setShowWelcome] = useState(false);
 
 const ALLOWLIST_EMAILS = ["hai.advisoryservices@gmail.com", "mubarisinamdar@gmail.com"]; 
 const FREE_LIMIT = 3;
@@ -65,6 +66,9 @@ if (user) {
 localStorage.setItem(`phone_${user.uid}`, cleaned);
 setPhoneNumber(cleaned);
 setNeedsPhone(false);
+// Show welcome screen for first time users
+const seenWelcome = localStorage.getItem(`welcome_${user.uid}`);
+if (!seenWelcome) setShowWelcome(true);
 }
 };
 
@@ -241,8 +245,161 @@ Sign out
 );
 }
 
+if (showWelcome) {
+return (
+<div style={{ minHeight: "100vh", backgroundColor: "#0F1923", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+<div style={{ maxWidth: "480px", width: "100%" }}>
+<div style={{ textAlign: "center", marginBottom: "28px" }}>
+<div style={{ fontSize: "28px", fontWeight: "800", color: "#F5A623", marginBottom: "6px" }}>Welcome to TenderRadar 🎯</div>
+<div style={{ color: "#6B7F8E", fontSize: "13px" }}>Before you start, here's what to know</div>
+</div>
+
+<div style={{ backgroundColor: "#1A2733", borderRadius: "14px", padding: "20px", marginBottom: "16px", border: "1px solid #2A3F4F" }}>
+<div style={{ color: "#F5A623", fontSize: "11px", fontWeight: "700", letterSpacing: "1px", marginBottom: "12px" }}>WHAT WE DO</div>
+{[
+"Extract BOQ items directly from government tender PDFs",
+"Calculate real profit after facilitation, overhead and wastage",
+"AI estimated execution rates — state-wise calibrated across India",
+"Edit any rate yourself if you know better from your own experience",
+"Rate Analysis (Annexure-D) per item — ready to print",
+"Working capital estimate to plan your cash flow before bidding"
+].map((item, i) => (
+<div key={i} style={{ color: "#E8EDF2", fontSize: "13px", marginBottom: "8px", display: "flex", gap: "8px" }}>
+<span style={{ color: "#00C896", flexShrink: 0 }}>✓</span>{item}
+</div>
+))}
+</div>
+
+<div style={{ backgroundColor: "#1A2733", borderRadius: "14px", padding: "20px", marginBottom: "16px", border: "1px solid #2A3F4F" }}>
+<div style={{ color: "#F5A623", fontSize: "11px", fontWeight: "700", letterSpacing: "1px", marginBottom: "12px" }}>WORKS BEST WITH</div>
+{[
+"PDFs with Sr.No, Description, Unit, Rate, Qty, Amount columns",
+"Government tenders — BMC, PWD, MMRDA, CPWD, municipal corporations",
+"Both rate-filled and zero-rate BOQs (we estimate rates using AI)"
+].map((item, i) => (
+<div key={i} style={{ color: "#E8EDF2", fontSize: "13px", marginBottom: "8px", display: "flex", gap: "8px" }}>
+<span style={{ color: "#F5A623", flexShrink: 0 }}>→</span>{item}
+</div>
+))}
+</div>
+
+<div style={{ backgroundColor: "#1A2733", borderRadius: "14px", padding: "20px", marginBottom: "24px", border: "1px solid #2A3F4F" }}>
+<div style={{ color: "#FF6B6B", fontSize: "11px", fontWeight: "700", letterSpacing: "1px", marginBottom: "12px" }}>PLEASE NOTE</div>
+{[
+"Text-based PDFs only — scanned or image PDFs won't work",
+"AI rates and working capital figures are estimates, not guaranteed values",
+"Always verify critical numbers with your own site knowledge before bidding",
+"First 2 analyses are free, then a simple monthly subscription applies"
+].map((item, i) => (
+<div key={i} style={{ color: "#6B7F8E", fontSize: "13px", marginBottom: "8px", display: "flex", gap: "8px" }}>
+<span style={{ color: "#FF6B6B", flexShrink: 0 }}>!</span>{item}
+</div>
+))}
+</div>
+
+<button
+onClick={() => {
+if (user) localStorage.setItem(`welcome_${user.uid}`, "seen");
+setShowWelcome(false);
+}}
+style={{
+width: "100%",
+padding: "16px 20px",
+backgroundColor: "#F5A623",
+color: "#0F1923",
+border: "none",
+borderRadius: "10px",
+fontSize: "16px",
+fontWeight: "800",
+cursor: "pointer"
+}}
+>
+Let's Get Started →
+</button>
+</div>
+</div>
+);
+}
+
+if (showWelcome) {
+return (
+<div style={{ minHeight: "100vh", backgroundColor: "#0F1923", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+<div style={{ maxWidth: "480px", width: "100%" }}>
+<div style={{ textAlign: "center", marginBottom: "28px" }}>
+<div style={{ fontSize: "28px", fontWeight: "800", color: "#F5A623", marginBottom: "6px" }}>Welcome to TenderRadar 🎯</div>
+<div style={{ color: "#6B7F8E", fontSize: "13px" }}>Before you start, here's what to know</div>
+</div>
+
+<div style={{ backgroundColor: "#1A2733", borderRadius: "14px", padding: "20px", marginBottom: "16px", border: "1px solid #2A3F4F" }}>
+<div style={{ color: "#F5A623", fontSize: "11px", fontWeight: "700", letterSpacing: "1px", marginBottom: "12px" }}>WHAT WE DO</div>
+{[
+"Extract BOQ items directly from government tender PDFs",
+"Calculate real profit after facilitation, overhead and wastage",
+"AI estimated execution rates — state-wise calibrated across India",
+"Edit any rate yourself if you know better from your own experience",
+"Rate Analysis (Annexure-D) per item — ready to print",
+"Working capital estimate to plan your cash flow before bidding"
+].map((item, i) => (
+<div key={i} style={{ color: "#E8EDF2", fontSize: "13px", marginBottom: "8px", display: "flex", gap: "8px" }}>
+<span style={{ color: "#00C896", flexShrink: 0 }}>✓</span>{item}
+</div>
+))}
+</div>
+
+<div style={{ backgroundColor: "#1A2733", borderRadius: "14px", padding: "20px", marginBottom: "16px", border: "1px solid #2A3F4F" }}>
+<div style={{ color: "#F5A623", fontSize: "11px", fontWeight: "700", letterSpacing: "1px", marginBottom: "12px" }}>WORKS BEST WITH</div>
+{[
+"PDFs with Sr.No, Description, Unit, Rate, Qty, Amount columns",
+"Government tenders — BMC, PWD, MMRDA, CPWD, municipal corporations",
+"Both rate-filled and zero-rate BOQs (we estimate rates using AI)"
+].map((item, i) => (
+<div key={i} style={{ color: "#E8EDF2", fontSize: "13px", marginBottom: "8px", display: "flex", gap: "8px" }}>
+<span style={{ color: "#F5A623", flexShrink: 0 }}>→</span>{item}
+</div>
+))}
+</div>
+
+<div style={{ backgroundColor: "#1A2733", borderRadius: "14px", padding: "20px", marginBottom: "24px", border: "1px solid #2A3F4F" }}>
+<div style={{ color: "#FF6B6B", fontSize: "11px", fontWeight: "700", letterSpacing: "1px", marginBottom: "12px" }}>PLEASE NOTE</div>
+{[
+"Text-based PDFs only — scanned or image PDFs won't work",
+"AI rates and working capital figures are estimates, not guaranteed values",
+"Always verify critical numbers with your own site knowledge before bidding",
+"First 2 analyses are free, then a simple monthly subscription applies"
+].map((item, i) => (
+<div key={i} style={{ color: "#6B7F8E", fontSize: "13px", marginBottom: "8px", display: "flex", gap: "8px" }}>
+<span style={{ color: "#FF6B6B", flexShrink: 0 }}>!</span>{item}
+</div>
+))}
+</div>
+
+<button
+onClick={() => {
+if (user) localStorage.setItem(`welcome_${user.uid}`, "seen");
+setShowWelcome(false);
+}}
+style={{
+width: "100%",
+padding: "16px 20px",
+backgroundColor: "#F5A623",
+color: "#0F1923",
+border: "none",
+borderRadius: "10px",
+fontSize: "16px",
+fontWeight: "800",
+cursor: "pointer"
+}}
+>
+Let's Get Started →
+</button>
+</div>
+</div>
+);
+}
+
 return <>{children(user, phoneNumber, () => setShowPaywall(true))}</>;
 }
+
 
 
 
