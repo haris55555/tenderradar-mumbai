@@ -77,7 +77,7 @@ setPhoneNumber("");
 const handlePayment = () => {
 if (!user) return;
 const options = {
-key: "rzp_test_T4SeHEZra7RAGo",
+key: "rzp_live_T4Tl2WyVuV7Szs",
 amount: 300000,
 currency: "INR",
 name: "TenderRadar",
