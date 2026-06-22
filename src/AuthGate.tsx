@@ -17,7 +17,7 @@ const [uploadCount, setUploadCount] = useState(0);
 const [showPaywall, setShowPaywall] = useState(false);
 
 const ALLOWLIST_EMAILS = ["hai.advisoryservices@gmail.com", "mubarisinamdar@gmail.com"]; 
-const FREE_LIMIT = 2;
+const FREE_LIMIT = 3;
 
 
 useEffect(() => {
