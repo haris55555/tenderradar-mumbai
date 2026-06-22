@@ -38,7 +38,7 @@ await setDoc(userRef, { uploadCount: 1, phoneNumber, createdAt: new Date().toISO
 }
 
 const ALLOWLIST_EMAILS = ["hai.advisoryservices@gmail.com", "mubarisinamdar@gmail.com"];
-const FREE_LIMIT = 2;
+const FREE_LIMIT = 3;
 
 export async function canUserUpload(uid: string, email: string): Promise<boolean> {
 if (ALLOWLIST_EMAILS.includes(email)) return true;
