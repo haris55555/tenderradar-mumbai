@@ -12,7 +12,7 @@ appId: "1:411037714893:web:a23424e7cb75508ae45c84"
 
 import { GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
 
-import { getFirestore, doc, getDoc, setDoc, increment } from "firebase/firestore";
+import { getFirestore, doc, getDoc, setDoc, increment, collection } from "firebase/firestore";
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
@@ -48,10 +48,29 @@ const count = await getUploadCount(uid);
 return count < FREE_LIMIT;
 }
 
-export async function markUserSubscribed(uid: string, paymentId: string) {
-const userRef = doc(db, "users", uid);
-await setDoc(userRef, { subscribed: true, subscribedAt: new Date().toISOString(), lastPaymentId: paymentId }, { merge: true });
+export async function saveUploadHistory(uid: string, state: string, boqItems: any[]) {
+try {
+const uploadRef = doc(collection(db, "uploads"));
+await setDoc(uploadRef, {
+userId: uid,
+state,
+date: new Date().toISOString(),
+itemCount: boqItems.length,
+items: boqItems.map(item => ({
+description: (item.item || "").substring(0, 100),
+unit: item.unit || "",
+pdfRate: item.rate || 0,
+aiRate: item.aiRate || 0,
+contractorRate: item.editedRate || item.aiRate || item.rate || 0
+}))
+});
+console.log("Upload history saved");
+} catch (e) {
+console.log("Failed to save upload history — non-critical", e);
 }
+}
+
+
 
 
 
