@@ -384,11 +384,15 @@ clearTimeout(stepTimer.current);
 if (!response.ok) { const err = await response.json(); throw new Error(err.error || "Upload failed"); }
 const data: UploadResult = await response.json();
 if (data.success && data.boq) {
+const mappedItems = data.boq.boqItems.map(item => ({ ...item, editedRate: item.needsRate ? 0 : (item.aiRate ?? item.rate) }));
 setResult(data);
-setItems(data.boq.boqItems.map(item => ({ ...item, editedRate: item.needsRate ? 0 : (item.aiRate ?? item.rate) })));
+setItems(mappedItems);
 if (data.boq.executionDays) setProjectMonths(Math.ceil(data.boq.executionDays / 30));
 setUploadState('done');
-if (userId) incrementUploadCount(userId, phoneNumber);
+if (userId) {
+incrementUploadCount(userId, phoneNumber);
+saveUploadHistory(userId, data.boq.selectedState || 'Maharashtra', mappedItems);
+}
 } else { throw new Error('Analysis failed'); }
 } catch (err: any) { clearTimeout(stepTimer.current); setErrorMsg(err.message || "Something went wrong"); setUploadState("error"); }
 };
