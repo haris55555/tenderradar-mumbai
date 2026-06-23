@@ -674,6 +674,11 @@ return (
 {selectedItemIdx !== null && items[selectedItemIdx] && (
 <ItemRateAnalysis item={items[selectedItemIdx]} itemNumber={selectedItemIdx + 1} state={activeState} onClose={() => setSelectedItemIdx(null)} />
 )}
+<div style={{ textAlign: "center", padding: "20px", borderTop: "1px solid #1A2A3A", marginTop: "20px" }}>
+<a href="mailto:hai.advisoryservices@gmail.com?subject=TenderRadar Support" style={{ color: "#3A5068", fontSize: "12px", textDecoration: "none" }}>
+Contact Support
+</a>
+</div>
 
 <style>{`
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
