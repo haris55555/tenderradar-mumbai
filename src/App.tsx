@@ -431,7 +431,7 @@ return (
 <div style={{ width: "40px", height: "40px", background: "linear-gradient(135deg, #F5A623, #FF8C00)", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px" }}>📐</div>
 <div>
 <div style={{ fontSize: "20px", fontWeight: "800", letterSpacing: "-0.5px" }}>Tender<span style={{ color: "#F5A623" }}>Radar</span></div>
-<div style={{ fontSize: "12px", color: "#3A5068", fontWeight: "500" }}>BOQ Profit Calculator - Any Tender, Pan India</div>
+<div style={{ fontSize: "12px", color: "#3A5068", fontWeight: "500" }}>From BOQ to Bid Decision - Pan India</div>
 </div>
 </div>
 {uploadState === "done" && (
