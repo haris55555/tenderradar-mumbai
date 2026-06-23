@@ -48,6 +48,13 @@ const count = await getUploadCount(uid);
 return count < FREE_LIMIT;
 }
 
+export async function markUserSubscribed(uid: string, paymentId: string) {
+const userRef = doc(db, "users", uid);
+await setDoc(userRef, { subscribed: true, subscribedAt: new Date().toISOString(), lastPaymentId: paymentId }, { merge: true });
+}
+
+
+
 export async function saveUploadHistory(uid: string, state: string, boqItems: any[]) {
 try {
 const uploadRef = doc(collection(db, "uploads"));
