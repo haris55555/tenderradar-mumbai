@@ -118,7 +118,7 @@ return (
 <div style={{ minHeight: "100vh", backgroundColor: "#0F1923", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
 <div style={{ maxWidth: "400px", width: "100%", textAlign: "center" }}>
 <div style={{ fontSize: "28px", fontWeight: "800", color: "#F5A623", marginBottom: "8px" }}>TenderRadar</div>
-<div style={{ color: "#6B7F8E", fontSize: "14px", marginBottom: "40px" }}>BOQ Profit Calculator - Any Tender, Pan India</div>
+<div style={{ color: "#6B7F8E", fontSize: "14px", marginBottom: "40px" }}>Your Digital Quantity Surveyor - Pan India</div>
 <button
 onClick={handleGoogleSignIn}
 style={{
