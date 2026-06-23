@@ -514,9 +514,34 @@ return (
 <div style={{ fontSize: "12px", color: "#5b9bd5" }}><span style={{ color: "#5b9bd5", fontWeight: "700" }}>Rate Analysis</span> = Detailed breakdown per item</div>
 </div>
 
-<div style={{ background: "#1A2A3A", borderRadius: "12px", border: "1px solid #2A3F54", overflow: "hidden", marginBottom: "12px" }}>
+<div style={{ background: '#1A2A3A', borderRadius: '12px', border: '1px solid #2A3F54', padding: '16px', marginBottom: '12px' }}>
+<div style={{ color: '#6B7F8E', fontSize: '11px', fontWeight: '700', letterSpacing: '1px', marginBottom: '12px' }}>RATE COMPARISON (TOTAL BOQ)</div>
+<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+<div style={{ background: '#0F1923', borderRadius: '8px', padding: '12px', border: '1px solid #2A3F54' }}>
+<div style={{ color: '#6B7F8E', fontSize: '10px', fontWeight: '700', marginBottom: '4px' }}>PDF RATE TOTAL</div>
+<div style={{ color: '#6B7F8E', fontSize: '14px', fontWeight: '800' }}>{fmt(pdfBasedCost)}</div>
+</div>
+<div style={{ background: '#0F1923', borderRadius: '8px', padding: '12px', border: '1px solid rgba(0,200,150,0.2)' }}>
+<div style={{ color: '#6B7F8E', fontSize: '10px', fontWeight: '700', marginBottom: '4px' }}>AI RATE TOTAL</div>
+<div style={{ color: '#00C896', fontSize: '14px', fontWeight: '800' }}>{fmt(aiExecutionCost)}</div>
+<div style={{ color: pdfBasedCost > 0 ? (aiExecutionCost < pdfBasedCost ? '#00C896' : '#FF4D4D') : '#6B7F8E', fontSize: '10px', marginTop: '2px' }}>
+{pdfBasedCost > 0 ? `${aiExecutionCost < pdfBasedCost ? '-' : '+'}${Math.abs(Math.round(((aiExecutionCost - pdfBasedCost) / pdfBasedCost) * 100))}% vs PDF` : ''}
+</div>
+</div>
+<div style={{ background: '#0F1923', borderRadius: '8px', padding: '12px', border: '1px solid rgba(245,166,35,0.2)' }}>
+<div style={{ color: '#6B7F8E', fontSize: '10px', fontWeight: '700', marginBottom: '4px' }}>YOUR RATE TOTAL</div>
+<div style={{ color: '#F5A623', fontSize: '14px', fontWeight: '800' }}>{fmt(executionCost)}</div>
+<div style={{ color: aiExecutionCost > 0 ? (executionCost < aiExecutionCost ? '#00C896' : '#FF4D4D') : '#6B7F8E', fontSize: '10px', marginTop: '2px' }}>
+{aiExecutionCost > 0 ? `${executionCost < aiExecutionCost ? '-' : '+'}${Math.abs(Math.round(((executionCost - aiExecutionCost) / aiExecutionCost) * 100))}% vs AI` : ''}
+</div>
+</div>
+</div>
+</div>
+
+<div style={{ background: '#1A2A3A', borderRadius: '12px', border: '1px solid #2A3F54', overflow: 'hidden', marginBottom: '12px' }}>
 <BOQTable items={items} onRateChange={handleRateChange} onViewAnalysis={(idx) => setSelectedItemIdx(idx)} />
 </div>
+
 
 <div style={{ display: "flex", gap: "12px", marginBottom: "32px", flexWrap: "wrap" }}>
 <button onClick={() => setItems(prev => prev.map(item => ({ ...item, editedRate: item.needsRate ? 0 : (item.aiRate ?? item.rate) })))} style={{ background: "transparent", border: "1px solid #2A3F54", color: "#6B7F8E", padding: "8px 16px", borderRadius: "8px", cursor: "pointer", fontSize: "12px" }}>Reset to AI Estimates</button>
