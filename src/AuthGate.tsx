@@ -13,13 +13,11 @@ const [phoneNumber, setPhoneNumber] = useState<string>("");
 const [needsPhone, setNeedsPhone] = useState(false);
 const [phoneInput, setPhoneInput] = useState("");
 const [error, setError] = useState("");
-const [uploadCount, setUploadCount] = useState(0);
 const [showPaywall, setShowPaywall] = useState(false);
-const [showWelcome , setShowWelcome] = useState(false);
+const [showWelcome, setShowWelcome] = useState(false);
 
-const ALLOWLIST_EMAILS = ["hai.advisoryservices@gmail.com", "mubarisinamdar@gmail.com"]; 
+const ALLOWLIST_EMAILS = ["hai.advisoryservices@gmail.com", "mubarisinamdar@gmail.com"];
 const FREE_LIMIT = 3;
-
 
 useEffect(() => {
 const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -34,7 +32,6 @@ setNeedsPhone(false);
 setNeedsPhone(true);
 }
 const count = await getUploadCount(firebaseUser.uid);
-setUploadCount(count);
 const isAllowlisted = ALLOWLIST_EMAILS.includes(firebaseUser.email || "");
 if (count >= FREE_LIMIT && !isAllowlisted) {
 setShowPaywall(true);
@@ -43,8 +40,6 @@ setShowPaywall(true);
 });
 return () => unsubscribe();
 }, []);
-
-
 
 const handleGoogleSignIn = async () => {
 setError("");
@@ -66,7 +61,6 @@ if (user) {
 localStorage.setItem(`phone_${user.uid}`, cleaned);
 setPhoneNumber(cleaned);
 setNeedsPhone(false);
-// Show welcome screen for first time users
 const seenWelcome = localStorage.getItem(`welcome_${user.uid}`);
 if (!seenWelcome) setShowWelcome(true);
 }
@@ -103,8 +97,6 @@ const rzp = new (window as any).Razorpay(options);
 rzp.open();
 };
 
-
-
 if (loading) {
 return (
 <div style={{ minHeight: "100vh", backgroundColor: "#0F1923", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -118,24 +110,10 @@ return (
 <div style={{ minHeight: "100vh", backgroundColor: "#0F1923", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
 <div style={{ maxWidth: "400px", width: "100%", textAlign: "center" }}>
 <div style={{ fontSize: "28px", fontWeight: "800", color: "#F5A623", marginBottom: "8px" }}>TenderRadar</div>
-<div style={{ color: "#6B7F8E", fontSize: "14px", marginBottom: "40px" }}>Your Digital Quantity Surveyor - Pan India</div>
+<div style={{ color: "#6B7F8E", fontSize: "14px", marginBottom: "40px" }}>Your Digital Quantity Surveyor — Pan India</div>
 <button
 onClick={handleGoogleSignIn}
-style={{
-width: "100%",
-padding: "14px 20px",
-backgroundColor: "#FFFFFF",
-color: "#1a1a1a",
-border: "none",
-borderRadius: "10px",
-fontSize: "15px",
-fontWeight: "600",
-cursor: "pointer",
-display: "flex",
-alignItems: "center",
-justifyContent: "center",
-gap: "10px"
-}}
+style={{ width: "100%", padding: "14px 20px", backgroundColor: "#FFFFFF", color: "#1a1a1a", border: "none", borderRadius: "10px", fontSize: "15px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}
 >
 <svg width="20" height="20" viewBox="0 0 48 48">
 <path fill="#FFC107" d="M43.6 20.5H42V20.4H24v7.2h11.3c-1.6 4.6-6 7.9-11.3 7.9-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 8 3l5.1-5.1C33.5 6.2 29 4.4 24 4.4 13.2 4.4 4.4 13.2 4.4 24S13.2 43.6 24 43.6 43.6 34.8 43.6 24c0-1.2-.1-2.4-.4-3.5z"/>
@@ -163,32 +141,12 @@ value={phoneInput}
 onChange={(e) => setPhoneInput(e.target.value)}
 placeholder="10-digit mobile number"
 maxLength={10}
-style={{
-width: "100%",
-padding: "14px 16px",
-backgroundColor: "#1A2733",
-border: "1px solid #2A3F4F",
-borderRadius: "10px",
-color: "#E8EDF2",
-fontSize: "15px",
-marginBottom: "16px",
-boxSizing: "border-box"
-}}
+style={{ width: "100%", padding: "14px 16px", backgroundColor: "#1A2733", border: "1px solid #2A3F4F", borderRadius: "10px", color: "#E8EDF2", fontSize: "15px", marginBottom: "16px", boxSizing: "border-box" }}
 />
 {error && <div style={{ color: "#FF6B6B", fontSize: "13px", marginBottom: "12px" }}>{error}</div>}
 <button
 onClick={handlePhoneSubmit}
-style={{
-width: "100%",
-padding: "14px 20px",
-backgroundColor: "#F5A623",
-color: "#0F1923",
-border: "none",
-borderRadius: "10px",
-fontSize: "15px",
-fontWeight: "700",
-cursor: "pointer"
-}}
+style={{ width: "100%", padding: "14px 20px", backgroundColor: "#F5A623", color: "#0F1923", border: "none", borderRadius: "10px", fontSize: "15px", fontWeight: "700", cursor: "pointer" }}
 >
 Continue
 </button>
@@ -218,51 +176,25 @@ return (
 
 <button
 onClick={handlePayment}
-style={{
-width: "100%",
-padding: "14px 20px",
-backgroundColor: "#F5A623",
-color: "#0F1923",
-border: "none",
-borderRadius: "10px",
-fontSize: "15px",
-fontWeight: "700",
-cursor: "pointer",
-marginBottom: "16px"
-}}
+style={{ width: "100%", padding: "14px 20px", backgroundColor: "#F5A623", color: "#0F1923", border: "none", borderRadius: "10px", fontSize: "15px", fontWeight: "700", cursor: "pointer", marginBottom: "16px" }}
 >
-Pay ₹3,000 - Subscribe Now
+Pay Now
 </button>
 
-<div style={{ background: '#1A2A3A', borderRadius: '12px', border: '1px solid #2A3F54', padding: '16px', marginBottom: '12px' }}>
-<div style={{ color: '#6B7F8E', fontSize: '11px', fontWeight: '700', letterSpacing: '1px', marginBottom: '12px' }}>RATE COMPARISON (TOTAL BOQ)</div>
-<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '12px' }}>
-<div style={{ background: '#0F1923', borderRadius: '8px', padding: '12px', border: '1px solid #2A3F54' }}>
-<div style={{ color: '#6B7F8E', fontSize: '10px', fontWeight: '700', marginBottom: '4px' }}>PDF RATE TOTAL</div>
-<div style={{ color: '#6B7F8E', fontSize: '14px', fontWeight: '800' }}>{fmt(pdfBasedCost)}</div>
+<div style={{ display: "flex", gap: "24px", justifyContent: "center", marginBottom: "16px" }}>
+<button
+onClick={handleLogout}
+style={{ background: "none", border: "none", color: "#6B7F8E", fontSize: "13px", cursor: "pointer", textDecoration: "underline" }}
+>
+Sign out
+</button>
+<a
+href="mailto:hai.advisoryservices@gmail.com?subject=TenderRadar Support"
+style={{ color: "#6B7F8E", fontSize: "13px", textDecoration: "underline" }}
+>
+Contact Support
+</a>
 </div>
-<div style={{ background: '#0F1923', borderRadius: '8px', padding: '12px', border: '1px solid rgba(0,200,150,0.2)' }}>
-<div style={{ color: '#6B7F8E', fontSize: '10px', fontWeight: '700', marginBottom: '4px' }}>AI RATE TOTAL</div>
-<div style={{ color: '#00C896', fontSize: '14px', fontWeight: '800' }}>{fmt(aiExecutionCost)}</div>
-<div style={{ color: pdfBasedCost > 0 ? (aiExecutionCost < pdfBasedCost ? '#00C896' : '#FF4D4D') : '#6B7F8E', fontSize: '10px', marginTop: '2px' }}>
-{pdfBasedCost > 0 ? `${aiExecutionCost < pdfBasedCost ? '-' : '+'}${Math.abs(Math.round(((aiExecutionCost - pdfBasedCost) / pdfBasedCost) * 100))}% vs PDF` : ''}
-</div>
-</div>
-<div style={{ background: '#0F1923', borderRadius: '8px', padding: '12px', border: '1px solid rgba(245,166,35,0.2)' }}>
-<div style={{ color: '#6B7F8E', fontSize: '10px', fontWeight: '700', marginBottom: '4px' }}>YOUR RATE TOTAL</div>
-<div style={{ color: '#F5A623', fontSize: '14px', fontWeight: '800' }}>{fmt(executionCost)}</div>
-<div style={{ color: aiExecutionCost > 0 ? (executionCost < aiExecutionCost ? '#00C896' : '#FF4D4D') : '#6B7F8E', fontSize: '10px', marginTop: '2px' }}>
-{aiExecutionCost > 0 ? `${executionCost < aiExecutionCost ? '-' : '+'}${Math.abs(Math.round(((executionCost - aiExecutionCost) / aiExecutionCost) * 100))}% vs AI` : ''}
-</div>
-</div>
-</div>
-</div>
-
-<div style={{ background: '#1A2A3A', borderRadius: '12px', border: '1px solid #2A3F54', overflow: 'hidden', marginBottom: '12px' }}>
-<BOQTable items={items} onRateChange={handleRateChange} onViewAnalysis={(idx) => setSelectedItemIdx(idx)} />
-</div>
-
-
 </div>
 </div>
 );
@@ -312,7 +244,7 @@ return (
 "Text-based PDFs only — scanned or image PDFs won't work",
 "AI rates and working capital figures are estimates, not guaranteed values",
 "Always verify critical numbers with your own site knowledge before bidding",
-"First 2 analyses are free, then a simple monthly subscription applies"
+"First 3 analyses are free, then a simple monthly subscription applies"
 ].map((item, i) => (
 <div key={i} style={{ color: "#6B7F8E", fontSize: "13px", marginBottom: "8px", display: "flex", gap: "8px" }}>
 <span style={{ color: "#FF6B6B", flexShrink: 0 }}>!</span>{item}
@@ -325,169 +257,7 @@ onClick={() => {
 if (user) localStorage.setItem(`welcome_${user.uid}`, "seen");
 setShowWelcome(false);
 }}
-style={{
-width: "100%",
-padding: "16px 20px",
-backgroundColor: "#F5A623",
-color: "#0F1923",
-border: "none",
-borderRadius: "10px",
-fontSize: "16px",
-fontWeight: "800",
-cursor: "pointer"
-}}
->
-Let's Get Started →
-</button>
-</div>
-</div>
-);
-}
-
-if (showWelcome) {
-return (
-<div style={{ minHeight: "100vh", backgroundColor: "#0F1923", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
-<div style={{ maxWidth: "480px", width: "100%" }}>
-<div style={{ textAlign: "center", marginBottom: "28px" }}>
-<div style={{ fontSize: "28px", fontWeight: "800", color: "#F5A623", marginBottom: "6px" }}>Welcome to TenderRadar 🎯</div>
-<div style={{ color: "#6B7F8E", fontSize: "13px" }}>Before you start, here's what to know</div>
-</div>
-
-<div style={{ backgroundColor: "#1A2733", borderRadius: "14px", padding: "20px", marginBottom: "16px", border: "1px solid #2A3F4F" }}>
-<div style={{ color: "#F5A623", fontSize: "11px", fontWeight: "700", letterSpacing: "1px", marginBottom: "12px" }}>WHAT WE DO</div>
-{[
-"Extract BOQ items directly from government tender PDFs",
-"Calculate real profit after facilitation, overhead and wastage",
-"AI estimated execution rates — state-wise calibrated across India",
-"Edit any rate yourself if you know better from your own experience",
-"Rate Analysis (Annexure-D) per item — ready to print",
-"Working capital estimate to plan your cash flow before bidding"
-].map((item, i) => (
-<div key={i} style={{ color: "#E8EDF2", fontSize: "13px", marginBottom: "8px", display: "flex", gap: "8px" }}>
-<span style={{ color: "#00C896", flexShrink: 0 }}>✓</span>{item}
-</div>
-))}
-</div>
-
-<div style={{ backgroundColor: "#1A2733", borderRadius: "14px", padding: "20px", marginBottom: "16px", border: "1px solid #2A3F4F" }}>
-<div style={{ color: "#F5A623", fontSize: "11px", fontWeight: "700", letterSpacing: "1px", marginBottom: "12px" }}>WORKS BEST WITH</div>
-{[
-"PDFs with Sr.No, Description, Unit, Rate, Qty, Amount columns",
-"Government tenders — BMC, PWD, MMRDA, CPWD, municipal corporations",
-"Both rate-filled and zero-rate BOQs (we estimate rates using AI)"
-].map((item, i) => (
-<div key={i} style={{ color: "#E8EDF2", fontSize: "13px", marginBottom: "8px", display: "flex", gap: "8px" }}>
-<span style={{ color: "#F5A623", flexShrink: 0 }}>→</span>{item}
-</div>
-))}
-</div>
-
-<div style={{ backgroundColor: "#1A2733", borderRadius: "14px", padding: "20px", marginBottom: "24px", border: "1px solid #2A3F4F" }}>
-<div style={{ color: "#FF6B6B", fontSize: "11px", fontWeight: "700", letterSpacing: "1px", marginBottom: "12px" }}>PLEASE NOTE</div>
-{[
-"Text-based PDFs only — scanned or image PDFs won't work",
-"AI rates and working capital figures are estimates, not guaranteed values",
-"Always verify critical numbers with your own site knowledge before bidding",
-"First 2 analyses are free, then a simple monthly subscription applies"
-].map((item, i) => (
-<div key={i} style={{ color: "#6B7F8E", fontSize: "13px", marginBottom: "8px", display: "flex", gap: "8px" }}>
-<span style={{ color: "#FF6B6B", flexShrink: 0 }}>!</span>{item}
-</div>
-))}
-</div>
-
-<button
-onClick={() => {
-if (user) localStorage.setItem(`welcome_${user.uid}`, "seen");
-setShowWelcome(false);
-}}
-style={{
-width: "100%",
-padding: "16px 20px",
-backgroundColor: "#F5A623",
-color: "#0F1923",
-border: "none",
-borderRadius: "10px",
-fontSize: "16px",
-fontWeight: "800",
-cursor: "pointer"
-}}
->
-Let's Get Started →
-</button>
-</div>
-</div>
-);
-}
-
-if (showWelcome) {
-return (
-<div style={{ minHeight: "100vh", backgroundColor: "#0F1923", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
-<div style={{ maxWidth: "480px", width: "100%" }}>
-<div style={{ textAlign: "center", marginBottom: "28px" }}>
-<div style={{ fontSize: "28px", fontWeight: "800", color: "#F5A623", marginBottom: "6px" }}>Welcome to TenderRadar 🎯</div>
-<div style={{ color: "#6B7F8E", fontSize: "13px" }}>Before you start, here's what to know</div>
-</div>
-
-<div style={{ backgroundColor: "#1A2733", borderRadius: "14px", padding: "20px", marginBottom: "16px", border: "1px solid #2A3F4F" }}>
-<div style={{ color: "#F5A623", fontSize: "11px", fontWeight: "700", letterSpacing: "1px", marginBottom: "12px" }}>WHAT WE DO</div>
-{[
-"Extract BOQ items directly from government tender PDFs",
-"Calculate real profit after facilitation, overhead and wastage",
-"AI estimated execution rates — state-wise calibrated across India",
-"Edit any rate yourself if you know better from your own experience",
-"Rate Analysis (Annexure-D) per item — ready to print",
-"Working capital estimate to plan your cash flow before bidding"
-].map((item, i) => (
-<div key={i} style={{ color: "#E8EDF2", fontSize: "13px", marginBottom: "8px", display: "flex", gap: "8px" }}>
-<span style={{ color: "#00C896", flexShrink: 0 }}>✓</span>{item}
-</div>
-))}
-</div>
-
-<div style={{ backgroundColor: "#1A2733", borderRadius: "14px", padding: "20px", marginBottom: "16px", border: "1px solid #2A3F4F" }}>
-<div style={{ color: "#F5A623", fontSize: "11px", fontWeight: "700", letterSpacing: "1px", marginBottom: "12px" }}>WORKS BEST WITH</div>
-{[
-"PDFs with Sr.No, Description, Unit, Rate, Qty, Amount columns",
-"Government tenders — BMC, PWD, MMRDA, CPWD, municipal corporations",
-"Both rate-filled and zero-rate BOQs (we estimate rates using AI)"
-].map((item, i) => (
-<div key={i} style={{ color: "#E8EDF2", fontSize: "13px", marginBottom: "8px", display: "flex", gap: "8px" }}>
-<span style={{ color: "#F5A623", flexShrink: 0 }}>→</span>{item}
-</div>
-))}
-</div>
-
-<div style={{ backgroundColor: "#1A2733", borderRadius: "14px", padding: "20px", marginBottom: "24px", border: "1px solid #2A3F4F" }}>
-<div style={{ color: "#FF6B6B", fontSize: "11px", fontWeight: "700", letterSpacing: "1px", marginBottom: "12px" }}>PLEASE NOTE</div>
-{[
-"Text-based PDFs only — scanned or image PDFs won't work",
-"AI rates and working capital figures are estimates, not guaranteed values",
-"Always verify critical numbers with your own site knowledge before bidding",
-"First 2 analyses are free, then a simple monthly subscription applies"
-].map((item, i) => (
-<div key={i} style={{ color: "#6B7F8E", fontSize: "13px", marginBottom: "8px", display: "flex", gap: "8px" }}>
-<span style={{ color: "#FF6B6B", flexShrink: 0 }}>!</span>{item}
-</div>
-))}
-</div>
-
-<button
-onClick={() => {
-if (user) localStorage.setItem(`welcome_${user.uid}`, "seen");
-setShowWelcome(false);
-}}
-style={{
-width: "100%",
-padding: "16px 20px",
-backgroundColor: "#F5A623",
-color: "#0F1923",
-border: "none",
-borderRadius: "10px",
-fontSize: "16px",
-fontWeight: "800",
-cursor: "pointer"
-}}
+style={{ width: "100%", padding: "16px 20px", backgroundColor: "#F5A623", color: "#0F1923", border: "none", borderRadius: "10px", fontSize: "16px", fontWeight: "800", cursor: "pointer" }}
 >
 Let's Get Started →
 </button>
@@ -498,9 +268,4 @@ Let's Get Started →
 
 return <>{children(user, phoneNumber, () => setShowPaywall(true))}</>;
 }
-
-
-
-
-
 
