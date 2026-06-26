@@ -552,7 +552,7 @@ return (
 <h3 style={{ fontSize: "15px", fontWeight: "800", marginBottom: "4px" }}>Additional Costs</h3>
 <p style={{ color: "#6B7F8E", fontSize: "13px", marginBottom: "24px" }}>Real costs not shown in BOQ - adjust to match your situation</p>
 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-<PctInput label="Officer Facilitation" sublabel="Payments to clear work orders, inspections, approvals" value={facilitation} onChange={setFacilitation} basis="% of winning bid" color="#FF4D4D" />
+<PctInput label="Administrative Cost" sublabel="Payments to clear work orders, inspections, approvals" value={facilitation} onChange={setFacilitation} basis="% of winning bid" color="#FF4D4D" />
 <PctInput label="Office Overhead" sublabel="Admin, staff, transport, site office costs" value={overhead} onChange={setOverhead} basis="% of execution cost" color="#F5A623" />
 <PctInput label="Material Wastage" sublabel="On-site wastage, theft, spoilage allowance" value={wastage} onChange={setWastage} basis="% of execution cost" color="#F5A623" />
 <PctInput label="Labour Escalation" sublabel="Rate increase over project duration" value={labourEscalation} onChange={setLabourEscalation} basis="% of execution cost" color="#F5A623" />
