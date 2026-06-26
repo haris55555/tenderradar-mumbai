@@ -630,7 +630,7 @@ return (
 { label: "Tender Estimate", value: fmt(deptEstimate), color: "#E8EDF2", sub: "Sum of BOQ at tender SOR rates" },
 { label: "Your Winning Bid", value: fmt(expectedWinningBid), color: "#00C896", sub: `${bidPercent}% of estimate` },
 { label: "Execution Cost", value: fmt(executionCost), color: "#E8EDF2", sub: "At your edited rates" },
-{ label: "Facilitation Cost", value: fmt(facilitationCost), color: "#FF4D4D", sub: `${facilitation}% of bid` },
+{ label: "Administrative Cost", value: fmt(facilitationCost), color: "#FF4D4D", sub: `${facilitation}% of bid` },
 { label: "Overhead Wastage Escalation", value: fmt(overheadCost + wastageCost + labourEscCost), color: "#F5A623", sub: "All additional costs" },
 { label: "Total Real Cost", value: fmt(totalRealCost), color: "#E8EDF2", sub: "Everything you spend", bold: true },
 { label: realProfit >= 0 ? "Net Profit" : "Net Loss", value: fmt(Math.abs(realProfit)), color: realProfit >= 0 ? "#00C896" : "#FF4D4D", sub: realProfit >= 0 ? "You keep this" : "You lose this", bold: true },
